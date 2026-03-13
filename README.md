@@ -45,7 +45,7 @@ Key features include **AI Interviewer** interactions, **Real-time Video Streamin
 - **Streaming**: RTMP (Real-Time Messaging Protocol), FFmpeg
 - **Database**: SQLite (default), extensible to PostgreSQL/MySQL
 
-## �� Getting Started
+## 🚀 Getting Started
 
 ### Prerequisites
 - Python 3.8+
