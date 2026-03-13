@@ -1,0 +1,24 @@
+
+# Ignore git files
+.git/
+.gitignore
+
+# Ignore build artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.env
+
+# Ignore IDE files
+.vscode/
+.idea/
+*.swp
+
+# Ignore persistent data
+instance/
+uploads/
+

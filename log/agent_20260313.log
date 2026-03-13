@@ -1,0 +1,392 @@
+2026-03-13 10:40:07,696 - INFO - app.py:25 - Database tables created successfully.
+2026-03-13 10:40:09,202 - INFO - app.py:25 - Database tables created successfully.
+2026-03-13 10:50:30,569 - ERROR - resume_service.py:27 - Error parsing resume: `pypdf` package not found, please install it with `pip install pypdf`
+2026-03-13 10:50:40,371 - INFO - interview_window.py:693 - Starting push to: rtmp://116.62.11.13:1935/live/test using /usr/local/bin/ffmpeg
+2026-03-13 10:50:40,434 - INFO - interview_window.py:720 - FFmpeg process started.
+2026-03-13 11:10:48,094 - ERROR - resume_service.py:27 - Error parsing resume: `pypdf` package not found, please install it with `pip install pypdf`
+2026-03-13 11:11:01,889 - INFO - interview_window.py:693 - Starting push to: rtmp://116.62.11.13:1935/live/test using /usr/local/bin/ffmpeg
+2026-03-13 11:11:01,928 - INFO - interview_window.py:720 - FFmpeg process started.
+2026-03-13 11:16:56,955 - ERROR - resume_service.py:27 - Error parsing resume: `pypdf` package not found, please install it with `pip install pypdf`
+2026-03-13 11:16:56,962 - INFO - routes.py:114 - Auto-closing previous interview 8 for user 1
+2026-03-13 11:17:07,872 - INFO - interview_window.py:693 - Starting push to: rtmp://116.62.11.13:1935/live/test using /usr/local/bin/ffmpeg
+2026-03-13 11:17:07,939 - INFO - interview_window.py:720 - FFmpeg process started.
+2026-03-13 11:17:26,905 - ERROR - interview_window.py:873 - Error processing audio: Audio file could not be read as PCM WAV, AIFF/AIFF-C, or Native FLAC; check if file is corrupted or in another format
+2026-03-13 11:24:53,642 - INFO - app.py:25 - Database tables created successfully.
+2026-03-13 11:24:54,808 - INFO - app.py:25 - Database tables created successfully.
+2026-03-13 11:25:51,454 - ERROR - resume_service.py:27 - Error parsing resume: `pypdf` package not found, please install it with `pip install pypdf`
+2026-03-13 11:25:51,471 - ERROR - resume_service.py:27 - Error parsing resume: `pypdf` package not found, please install it with `pip install pypdf`
+2026-03-13 11:25:51,475 - INFO - routes.py:114 - Auto-closing previous interview 9 for user 1
+2026-03-13 11:26:01,752 - INFO - interview_window.py:693 - Starting push to: rtmp://116.62.11.13:1935/live/test using /usr/local/bin/ffmpeg
+2026-03-13 11:26:01,794 - INFO - interview_window.py:720 - FFmpeg process started.
+2026-03-13 11:32:38,354 - INFO - app.py:25 - Database tables created successfully.
+2026-03-13 11:37:05,201 - INFO - app.py:25 - Database tables created successfully.
+2026-03-13 11:37:54,552 - INFO - app.py:25 - Database tables created successfully.
+2026-03-13 11:39:12,814 - INFO - app.py:25 - Database tables created successfully.
+2026-03-13 11:39:14,222 - INFO - app.py:25 - Database tables created successfully.
+2026-03-13 11:39:52,620 - INFO - app.py:25 - Database tables created successfully.
+2026-03-13 11:42:28,116 - INFO - app.py:25 - Database tables created successfully.
+2026-03-13 11:42:28,171 - ERROR - resume_service.py:27 - Error parsing resume: `pypdf` package not found, please install it with `pip install pypdf`
+2026-03-13 11:42:37,224 - INFO - interview_window.py:693 - Starting push to: rtmp://116.62.11.13:1935/live/test using /usr/local/bin/ffmpeg
+2026-03-13 11:42:37,262 - INFO - interview_window.py:720 - FFmpeg process started.
+2026-03-13 11:42:47,540 - ERROR - interview_window.py:869 - Error processing audio: Audio file could not be read as PCM WAV, AIFF/AIFF-C, or Native FLAC; check if file is corrupted or in another format
+2026-03-13 11:46:19,663 - INFO - app.py:25 - Database tables created successfully.
+2026-03-13 11:50:15,236 - INFO - interview_window.py:878 - Closing window, finishing interview...
+2026-03-13 11:51:46,185 - INFO - app.py:25 - Database tables created successfully.
+2026-03-13 11:51:47,872 - INFO - app.py:25 - Database tables created successfully.
+2026-03-13 11:53:16,526 - INFO - interview_window.py:699 - Starting push to: rtmp://116.62.11.13:1935/live/test using /usr/local/bin/ffmpeg
+2026-03-13 11:53:16,545 - INFO - interview_window.py:726 - FFmpeg process started.
+2026-03-13 11:59:44,870 - INFO - app.py:25 - Database tables created successfully.
+2026-03-13 12:02:10,372 - INFO - app.py:25 - Database tables created successfully.
+2026-03-13 12:02:12,814 - INFO - app.py:25 - Database tables created successfully.
+2026-03-13 12:07:27,048 - INFO - app.py:25 - Database tables created successfully.
+2026-03-13 12:08:17,039 - INFO - app.py:25 - Database tables created successfully.
+2026-03-13 12:51:50,806 - INFO - app.py:25 - Database tables created successfully.
+2026-03-13 12:51:52,571 - INFO - app.py:25 - Database tables created successfully.
+2026-03-13 12:53:48,305 - INFO - interview_window.py:699 - Starting push to: rtmp://116.62.11.13:1935/live/test using /usr/local/bin/ffmpeg
+2026-03-13 12:53:48,342 - INFO - interview_window.py:726 - FFmpeg process started.
+2026-03-13 12:54:08,411 - INFO - interview_window.py:870 - Google Speech failed, trying Sphinx...
+2026-03-13 12:54:08,414 - ERROR - interview_window.py:884 - Speech Recognition Error: missing PocketSphinx module: ensure that PocketSphinx is set up correctly.
+2026-03-13 12:54:27,065 - INFO - interview_window.py:898 - Closing window, finishing interview...
+2026-03-13 12:54:57,074 - INFO - interview_window.py:699 - Starting push to: rtmp://116.62.11.13:1935/live/test using /usr/local/bin/ffmpeg
+2026-03-13 12:54:57,093 - INFO - interview_window.py:726 - FFmpeg process started.
+2026-03-13 12:55:04,928 - INFO - interview_window.py:870 - Google Speech failed, trying Sphinx...
+2026-03-13 12:55:04,929 - ERROR - interview_window.py:884 - Speech Recognition Error: missing PocketSphinx module: ensure that PocketSphinx is set up correctly.
+2026-03-13 12:57:24,085 - INFO - app.py:25 - Database tables created successfully.
+2026-03-13 12:58:11,916 - ERROR - interview_window.py:761 - Error pushing frame: [Errno 32] Broken pipe
+2026-03-13 12:58:11,930 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:11,944 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:11,949 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:11,960 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:11,967 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:11,975 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:11,979 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:11,987 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:11,991 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:11,997 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,006 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,012 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,018 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,024 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,027 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,036 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,048 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,052 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,058 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,064 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,073 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,078 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,085 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,089 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,091 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,096 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,100 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,105 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,109 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,114 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,117 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,121 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,125 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,128 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,133 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,142 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,148 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,157 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,162 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,166 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,170 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,175 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,178 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,182 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,188 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,192 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,195 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,199 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,204 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,208 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,212 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,217 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,222 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,226 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,230 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,234 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,238 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,243 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,247 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,251 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,254 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,256 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,260 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,263 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,269 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,273 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,277 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,280 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,284 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,288 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,291 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,294 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,298 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,301 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,306 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,310 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,313 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,316 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,320 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,324 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,327 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,331 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,335 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,340 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,345 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,349 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,352 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,356 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,360 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,364 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,368 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,372 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,376 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,416 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,423 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,428 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,437 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,441 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,470 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,603 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,737 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:12,873 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:13,003 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:13,138 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:13,237 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:13,340 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:13,470 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:13,574 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:13,701 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:13,839 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:13,971 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:14,107 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:14,237 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:14,342 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:14,472 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:14,607 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:14,738 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:14,876 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:15,006 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:15,105 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:15,239 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:15,368 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:15,506 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:15,639 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:15,771 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:15,907 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:16,037 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:16,172 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:16,304 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:16,442 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:16,573 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:16,707 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:16,841 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:16,975 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:17,107 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:17,238 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:17,370 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:17,502 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:17,600 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:17,740 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:17,870 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:18,002 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:18,147 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:18,268 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:18,401 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:18,541 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:18,677 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:18,804 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:18,938 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:19,068 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:19,201 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:19,336 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:19,472 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:19,603 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:19,735 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:19,870 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:20,002 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:20,136 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:20,267 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:20,404 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:20,537 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:20,669 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:20,802 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:20,936 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:21,069 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:21,170 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:21,302 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:21,434 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:21,572 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:21,704 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:21,832 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:21,968 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:22,102 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:22,238 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:22,366 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:22,516 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:22,637 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:22,779 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:22,908 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:23,034 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:23,164 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:23,269 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:23,398 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:23,497 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:23,632 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:23,767 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:23,898 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:24,036 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:24,168 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:24,300 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:24,442 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:24,713 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:24,833 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:25,133 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:25,233 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:25,364 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:25,465 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:25,598 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:25,734 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:25,870 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:26,004 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:26,136 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:26,263 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:26,431 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:26,567 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:26,701 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:26,833 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:26,968 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:27,105 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:27,233 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:27,365 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:27,501 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:27,636 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:27,799 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:27,933 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:28,066 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:28,202 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:28,332 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:28,469 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:28,600 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:28,736 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:28,868 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:28,998 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:29,130 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:29,262 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:29,395 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:29,530 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:29,668 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:29,803 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:29,929 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:30,066 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:30,196 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:30,329 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:30,430 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:30,568 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:30,697 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:30,837 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:30,967 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:31,102 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:31,233 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:31,368 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:31,496 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:31,630 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:31,763 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:31,899 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:32,032 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:32,172 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:32,304 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:32,543 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:32,664 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:32,864 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:33,205 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:33,360 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:33,495 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:33,631 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:33,759 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:33,861 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:33,994 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:34,133 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:34,263 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:34,403 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:34,527 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:34,630 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:34,761 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:34,900 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:35,031 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:35,171 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:35,297 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:35,435 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:35,565 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:35,700 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:35,831 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:35,969 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:36,097 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:36,233 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:36,364 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:36,502 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:36,630 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:36,730 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:36,861 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:36,966 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:37,098 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:37,230 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:37,364 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:37,501 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:37,649 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:37,829 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:37,957 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:38,025 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:38,127 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:38,273 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:38,395 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:38,526 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:38,850 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:38,993 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:39,125 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:39,257 - ERROR - interview_window.py:758 - FFmpeg process has exited unexpectedly.
+2026-03-13 12:58:39,321 - INFO - interview_window.py:898 - Closing window, finishing interview...
+2026-03-13 12:59:17,010 - INFO - app.py:25 - Database tables created successfully.
+2026-03-13 12:59:18,230 - INFO - app.py:25 - Database tables created successfully.
+2026-03-13 13:00:01,256 - INFO - interview_window.py:790 - Starting push to: rtmp://116.62.11.13:1935/live/test using /usr/local/bin/ffmpeg
+2026-03-13 13:00:01,270 - INFO - interview_window.py:817 - FFmpeg process started.
+2026-03-13 13:00:23,807 - INFO - interview_window.py:961 - Google Speech failed, trying Sphinx...
+2026-03-13 13:00:23,808 - ERROR - interview_window.py:975 - Speech Recognition Error: missing PocketSphinx module: ensure that PocketSphinx is set up correctly.
+2026-03-13 13:06:54,272 - INFO - interview_window.py:961 - Google Speech failed, trying Sphinx...
+2026-03-13 13:06:54,279 - ERROR - interview_window.py:975 - Speech Recognition Error: missing PocketSphinx module: ensure that PocketSphinx is set up correctly.
+2026-03-13 13:10:07,502 - INFO - interview_window.py:999 - Closing window, finishing interview...
+2026-03-13 13:11:36,274 - INFO - app.py:25 - Database tables created successfully.
+2026-03-13 13:34:12,643 - INFO - app.py:25 - Database tables created successfully.
+2026-03-13 13:34:15,560 - INFO - app.py:25 - Database tables created successfully.
+2026-03-13 13:36:00,940 - INFO - app.py:25 - Database tables created successfully.
+2026-03-13 13:37:34,476 - INFO - interview_window.py:806 - Starting push to: rtmp://116.62.11.13:1935/live/test using /usr/local/bin/ffmpeg
+2026-03-13 13:37:34,593 - INFO - interview_window.py:833 - FFmpeg process started.
+2026-03-13 13:37:49,049 - INFO - interview_window.py:977 - Google Speech failed, trying Sphinx...
+2026-03-13 13:37:49,051 - ERROR - interview_window.py:991 - Speech Recognition Error: missing PocketSphinx module: ensure that PocketSphinx is set up correctly.
+2026-03-13 13:40:02,783 - INFO - interview_window.py:977 - Google Speech failed, trying Sphinx...
+2026-03-13 13:40:02,785 - ERROR - interview_window.py:991 - Speech Recognition Error: missing PocketSphinx module: ensure that PocketSphinx is set up correctly.
+2026-03-13 13:44:51,220 - INFO - interview_window.py:1015 - Closing window, finishing interview...
+2026-03-13 13:48:56,162 - INFO - app.py:25 - Database tables created successfully.
+2026-03-13 16:41:33,599 - INFO - app.py:25 - Database tables created successfully.
+2026-03-13 16:41:35,186 - INFO - app.py:25 - Database tables created successfully.
+2026-03-13 16:42:58,005 - INFO - interview_window.py:806 - Starting push to: rtmp://116.62.11.13:1935/live/test using /usr/local/bin/ffmpeg
+2026-03-13 16:42:58,039 - INFO - interview_window.py:833 - FFmpeg process started.
+2026-03-13 16:50:51,280 - INFO - interview_window.py:977 - Google Speech failed, trying Sphinx...
+2026-03-13 16:50:51,285 - ERROR - interview_window.py:991 - Speech Recognition Error: missing PocketSphinx module: ensure that PocketSphinx is set up correctly.
+2026-03-13 17:00:47,278 - INFO - app.py:25 - Database tables created successfully.
+2026-03-13 17:08:00,624 - INFO - app.py:25 - Database tables created successfully.
+2026-03-13 17:16:14,302 - INFO - interview_window.py:1015 - Closing window, finishing interview...
+2026-03-13 17:16:44,844 - INFO - app.py:25 - Database tables created successfully.
+2026-03-13 17:16:46,053 - INFO - app.py:25 - Database tables created successfully.
+2026-03-13 17:18:12,734 - INFO - interview_window.py:808 - Starting push to: rtmp://116.62.11.13:1935/live/test using /usr/local/bin/ffmpeg
+2026-03-13 17:18:12,752 - INFO - interview_window.py:835 - FFmpeg process started.
+2026-03-13 17:21:33,787 - INFO - interview_window.py:1017 - Closing window, finishing interview...
+2026-03-13 19:02:37,894 - INFO - interview_window.py:808 - Starting push to: rtmp://116.62.11.13:1935/live/test using /usr/local/bin/ffmpeg
+2026-03-13 19:02:37,994 - INFO - interview_window.py:835 - FFmpeg process started.
+2026-03-13 19:03:00,596 - INFO - interview_window.py:1017 - Closing window, finishing interview...
+2026-03-13 19:03:08,057 - ERROR - ai_service.py:193 - Error generating feedback: HTTPSConnectionPool(host='dashscope.aliyuncs.com', port=443): Max retries exceeded with url: /api/v1/services/aigc/text-generation/generation (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1016)')))
