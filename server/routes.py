@@ -192,17 +192,18 @@ def handle_messages(interview_id):
             
             def generate():
                 # Get context
-                with current_app.app_context():
-                    interview = Interview.query.get(interview_id)
-                    job_position = interview.job_position if interview else "General"
-                    
-                    messages = Message.query.filter_by(interview_id=interview_id).order_by(Message.created_at).all()
-                    context_str = "\n".join([f"{m.role}: {m.content}" for m in messages])
-                    
-                    full_response = ""
-                    for chunk in ai_service.chat_response_stream(context_str, user_content, job_position):
-                        full_response += chunk
-                        yield f"data: {json.dumps({'content': chunk})}\n\n"
+                    with current_app.app_context():
+                        interview = Interview.query.get(interview_id)
+                        job_position = interview.job_position if interview else "General"
+                        
+                        messages = Message.query.filter_by(interview_id=interview_id).order_by(Message.created_at).all()
+                        # Pass structured messages list instead of string
+                        messages_list = [{'role': m.role, 'content': m.content} for m in messages]
+                        
+                        full_response = ""
+                        for chunk in ai_service.chat_response_stream(messages_list, user_content, job_position):
+                            full_response += chunk
+                            yield f"data: {json.dumps({'content': chunk})}\n\n"
                     
                     # Save full AI response
                     ai_msg = Message(
