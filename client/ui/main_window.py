@@ -706,46 +706,10 @@ class MainWindow(QMainWindow):
     def show_resume_dialog(self):
         # Open dialog to upload resume
         dialog = ResumeUploadDialog(self.api_client, self)
-        
-        # Check result: Accepted means Uploaded or Skipped (via Accept button if we had one for skip, but current skip calls reject)
-        # Actually in resume_dialog:
-        # Upload -> accept()
-        # Skip -> reject()
-        # Close -> reject()
-        
-        # Wait, if user skips, they still want to interview?
-        # If user closes, they probably cancelled the action.
-        
-        # Let's check the dialog result
-        result = dialog.exec_()
-        
-        # If we want "Skip" to also proceed, we should make Skip call accept() or use a custom code.
-        # But if Close (X) calls reject(), we need to distinguish Skip from Close.
-        
-        # Current implementation in ResumeUploadDialog:
-        # Skip button -> reject()
-        # Close button -> reject()
-        # Upload success -> accept()
-        
-        # We should change ResumeUploadDialog to have Skip call accept() or a different method?
-        # Or better: Just check if we should proceed.
-        
-        # If we want to strictly stop on Close but proceed on Skip/Upload:
-        # We need to change ResumeUploadDialog.
-        
-        # Let's assume for now we only proceed if result is Accepted (Upload success)
-        # But wait, Skip should also allow proceeding.
-        
-        # I will modify this to only proceed if Accepted.
-        # AND I need to go to ResumeUploadDialog and make "Skip" return Accepted (or a specific code).
-        
-        if result == QDialog.Accepted:
-             self.start_interview()
-        else:
-            # If rejected (Skip or Close), currently we don't start.
-            # But the user might want to Skip and start.
-            # I will modify ResumeUploadDialog to handle Skip as a positive action to proceed without resume.
-            pass
+        # We don't necessarily need the result, just that they closed it (uploaded or skipped)
+        # Then we start the interview
+        dialog.exec_()
+        self.start_interview()
 
     def start_interview(self):
         # job_position is now fetched from user profile on server

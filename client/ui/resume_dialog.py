@@ -54,28 +54,14 @@ class ResumeUploadDialog(QDialog):
         container = QFrame()
         container.setObjectName("dialogContainer")
         container_layout = QVBoxLayout(container)
-        container_layout.setContentsMargins(30, 20, 30, 30)
-        container_layout.setSpacing(15)
+        container_layout.setContentsMargins(30, 30, 30, 30)
+        container_layout.setSpacing(20)
         
-        # Header Row (Title + Close Button)
-        header_layout = QHBoxLayout()
-        header_layout.setContentsMargins(0, 0, 0, 0)
-        
+        # Title
         title = QLabel("Enhance Your Interview")
         title.setObjectName("dialogTitle")
-        # title.setAlignment(Qt.AlignCenter) # Align left looks better with close button on right
-        
-        close_btn = QPushButton("✕")
-        close_btn.setObjectName("closeButton")
-        close_btn.setFixedSize(30, 30)
-        close_btn.setCursor(Qt.PointingHandCursor)
-        close_btn.clicked.connect(self.reject)
-        
-        header_layout.addWidget(title)
-        header_layout.addStretch()
-        header_layout.addWidget(close_btn)
-        
-        container_layout.addLayout(header_layout)
+        title.setAlignment(Qt.AlignCenter)
+        container_layout.addWidget(title)
         
         # Description
         desc = QLabel("Would you like to upload your resume? This allows our AI to tailor questions specifically to your experience and projects.")
@@ -109,7 +95,7 @@ class ResumeUploadDialog(QDialog):
         skip_btn = QPushButton("Skip")
         skip_btn.setObjectName("textButton")
         skip_btn.setCursor(Qt.PointingHandCursor)
-        skip_btn.clicked.connect(self.skip_upload)
+        skip_btn.clicked.connect(self.reject)
         btn_layout.addWidget(skip_btn)
         
         self.upload_btn = QPushButton("Upload & Start")
@@ -195,18 +181,6 @@ class ResumeUploadDialog(QDialog):
                 background-color: #3b82f6;
                 border-radius: 4px;
             }
-            QPushButton#closeButton {
-                background-color: transparent;
-                color: #9ca3af;
-                font-size: 16px;
-                border: none;
-                padding: 0;
-            }
-            QPushButton#closeButton:hover {
-                color: #111827;
-                background-color: #f3f4f6;
-                border-radius: 15px;
-            }
         """)
 
     def select_file(self):
@@ -223,10 +197,6 @@ class ResumeUploadDialog(QDialog):
                 padding: 15px;
             """)
             self.upload_btn.setEnabled(True)
-
-    def skip_upload(self):
-        # User wants to skip upload but proceed with interview
-        self.accept()
 
     def upload_resume(self):
         if not self.selected_file:
