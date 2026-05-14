@@ -45,6 +45,23 @@ from server.config import Config
 import os
 import json
 
+def _is_interview_expired(interview):
+    if not interview or not interview.start_time:
+        return False
+    if interview.status == 3:
+        return False
+    ttl = getattr(Config, 'INTERVIEW_TTL_SECONDS', 3600)
+    return (datetime.utcnow() - interview.start_time).total_seconds() > ttl
+
+def _delete_interview(interview):
+    if not interview:
+        return
+    Message.query.filter_by(interview_id=interview.id).delete(synchronize_session=False)
+    InviteCode.query.filter_by(interview_id=interview.id).delete(synchronize_session=False)
+    Listener.query.filter_by(interview_id=interview.id).delete(synchronize_session=False)
+    db.session.delete(interview)
+    db.session.commit()
+
 @api.route('/user/<int:user_id>/upload_resume', methods=['POST'])
 def upload_resume(user_id):
     if 'resume' not in request.files:
@@ -98,7 +115,10 @@ def create_interview():
     # Check if user has active interview
     active_interview = Interview.query.filter_by(user_id=user_id, status=1).first()
     if active_interview:
-        return jsonify({'message': 'You have an ongoing interview. Please finish it before starting a new one.'}), 400
+        if _is_interview_expired(active_interview):
+            _delete_interview(active_interview)
+        else:
+            return jsonify({'message': 'You have an ongoing interview. Please finish it before starting a new one.'}), 400
 
     # Use user's job intention directly
     job_position = user.job_intention
@@ -174,6 +194,13 @@ def create_interview():
 @api.route('/interview/<int:interview_id>/messages', methods=['GET', 'POST'])
 def handle_messages(interview_id):
     if request.method == 'POST':
+        interview = Interview.query.get(interview_id)
+        if not interview:
+            return jsonify({'message': 'Interview not found'}), 404
+        if _is_interview_expired(interview):
+            _delete_interview(interview)
+            return jsonify({'message': 'Interview expired and has been deleted.'}), 410
+
         data = request.json
         user_msg = Message(
             interview_id=interview_id,
@@ -185,27 +212,23 @@ def handle_messages(interview_id):
         db.session.add(user_msg)
         db.session.commit() # Commit user message first
         
-        # Check if client wants stream
         if data.get('stream'):
             # Pre-fetch data to avoid DetachedInstanceError inside generator
             user_content = data.get('content')
             
             def generate():
-                # Get context
-                    with current_app.app_context():
-                        interview = Interview.query.get(interview_id)
-                        job_position = interview.job_position if interview else "General"
-                        
-                        messages = Message.query.filter_by(interview_id=interview_id).order_by(Message.created_at).all()
-                        # Pass structured messages list instead of string
-                        messages_list = [{'role': m.role, 'content': m.content} for m in messages]
-                        
-                        full_response = ""
-                        for chunk in ai_service.chat_response_stream(messages_list, user_content, job_position):
-                            full_response += chunk
-                            yield f"data: {json.dumps({'content': chunk})}\n\n"
+                with current_app.app_context():
+                    interview = Interview.query.get(interview_id)
+                    job_position = interview.job_position if interview else "General"
                     
-                    # Save full AI response
+                    messages = Message.query.filter_by(interview_id=interview_id).order_by(Message.created_at).all()
+                    messages_list = [{'role': m.role, 'content': m.content} for m in messages]
+                    
+                    full_response = ""
+                    for chunk in ai_service.chat_response_stream(messages_list, user_content, job_position):
+                        full_response += chunk
+                        yield f"data: {json.dumps({'content': chunk})}\n\n"
+                    
                     ai_msg = Message(
                         interview_id=interview_id,
                         role='agent',
@@ -213,7 +236,7 @@ def handle_messages(interview_id):
                     )
                     db.session.add(ai_msg)
                     db.session.commit()
-                        
+                    
                     yield f"data: {json.dumps({'done': True})}\n\n"
 
             return Response(stream_with_context(generate()), mimetype='text/event-stream')
@@ -223,15 +246,17 @@ def handle_messages(interview_id):
             # Evaluate user's answer
             last_agent_msg = Message.query.filter_by(interview_id=interview_id, role='agent').order_by(Message.created_at.desc()).first()
             if last_agent_msg:
-                evaluation = ai_service.evaluate_answer(last_agent_msg.content, user_msg.content, interview_id)
+                user_id = interview.user_id if interview else None
+                evaluation = ai_service.evaluate_answer(last_agent_msg.content, user_msg.content, user_id)
                 logger.info(f"Answer evaluation: {evaluation}")
 
             # Get context
+            job_position = interview.job_position if interview else "General"
             messages = Message.query.filter_by(interview_id=interview_id).order_by(Message.created_at).all()
-            context_str = "\n".join([f"{m.role}: {m.content}" for m in messages])
+            messages_list = [{'role': m.role, 'content': m.content} for m in messages]
             
             # Generate AI response
-            ai_response_content = ai_service.chat_response(context_str, user_msg.content)
+            ai_response_content = ai_service.chat_response(messages_list, user_msg.content, job_position)
             
             ai_msg = Message(
                 interview_id=interview_id,
@@ -244,6 +269,13 @@ def handle_messages(interview_id):
             return jsonify({'response': ai_response_content}), 201
         
     else:
+        interview = Interview.query.get(interview_id)
+        if not interview:
+            return jsonify({'message': 'Interview not found'}), 404
+        if _is_interview_expired(interview):
+            _delete_interview(interview)
+            return jsonify({'message': 'Interview expired and has been deleted.'}), 410
+
         messages = Message.query.filter_by(interview_id=interview_id).order_by(Message.created_at).all()
         return jsonify([{
             'role': m.role,
@@ -254,6 +286,10 @@ def handle_messages(interview_id):
 @api.route('/interview/<int:interview_id>/finish', methods=['POST'])
 def finish_interview(interview_id):
     interview = Interview.query.get_or_404(interview_id)
+    if _is_interview_expired(interview):
+        _delete_interview(interview)
+        return jsonify({'message': 'Interview expired and has been deleted.'}), 410
+
     interview.status = 2 # Ended
     interview.end_time = datetime.utcnow()
     
@@ -275,8 +311,12 @@ def finish_interview(interview_id):
 @api.route('/user/<int:user_id>/history', methods=['GET'])
 def get_interview_history(user_id):
     interviews = Interview.query.filter_by(user_id=user_id).order_by(Interview.created_at.desc()).all()
+    expired = []
     result = []
     for interview in interviews:
+        if _is_interview_expired(interview):
+            expired.append(interview)
+            continue
         result.append({
             'id': interview.id,
             'title': interview.title,
@@ -287,11 +327,16 @@ def get_interview_history(user_id):
             'overall_feedback': interview.overall_feedback,
             'rtmp_play_url': interview.rtmp_play_url
         })
+    for interview in expired:
+        _delete_interview(interview)
     return jsonify(result), 200
 
 @api.route('/interview/<int:interview_id>/rejoin', methods=['GET'])
 def rejoin_interview(interview_id):
     interview = Interview.query.get_or_404(interview_id)
+    if _is_interview_expired(interview):
+        _delete_interview(interview)
+        return jsonify({'message': 'Interview expired and has been deleted.'}), 410
     if interview.status != 1:
         return jsonify({'message': 'Interview is not active'}), 400
         
@@ -314,6 +359,9 @@ def get_interview_status(interview_id):
     interview = Interview.query.get(interview_id)
     if not interview:
         return jsonify({'message': 'Interview not found'}), 404
+    if _is_interview_expired(interview):
+        _delete_interview(interview)
+        return jsonify({'message': 'Interview expired and has been deleted.'}), 410
     return jsonify({'status': interview.status}), 200
 
 @api.route('/invite/create', methods=['POST'])
@@ -343,6 +391,9 @@ def join_interview():
         return jsonify({'message': 'Invalid code'}), 400
         
     interview = Interview.query.get(invite.interview_id)
+    if interview and _is_interview_expired(interview):
+        _delete_interview(interview)
+        return jsonify({'message': 'Interview is not live'}), 400
     if not interview or interview.status != 1: # Not ongoing
          return jsonify({'message': 'Interview is not live'}), 400
          
@@ -366,6 +417,10 @@ def join_interview():
 
 @api.route('/interview/<int:interview_id>/observers', methods=['GET'])
 def get_interview_observers(interview_id):
+    interview = Interview.query.get(interview_id)
+    if interview and _is_interview_expired(interview):
+        _delete_interview(interview)
+        return jsonify([]), 200
     listeners = Listener.query.filter_by(interview_id=interview_id).all()
     # Unique by name? Or just list all connections
     seen = set()

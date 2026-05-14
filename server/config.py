@@ -18,6 +18,8 @@ class Config:
     # Resume Configuration
     RESUME_UPLOAD_FOLDER = os.path.join(basedir, 'uploads', 'resumes')
     CHROMA_DB_DIR = os.path.join(basedir, 'instance', 'chroma_db')
+
+    INTERVIEW_TTL_SECONDS = int(os.environ.get('INTERVIEW_TTL_SECONDS') or 3600)
     
     # Ensure directories exist
     os.makedirs(RESUME_UPLOAD_FOLDER, exist_ok=True)
