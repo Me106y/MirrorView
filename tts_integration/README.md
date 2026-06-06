@@ -115,6 +115,16 @@ tts_integration/
 - Microphone + webcam
 - DeepSeek API Key ([get one](https://platform.deepseek.com/api_keys))
 - Boson.ai API Key ([get one](https://workspace.boson.ai))
+- Sherpa-ONNX STT model (~80MB, one-time download):
+
+```bash
+cd MirrorView-TTS
+
+# Download bilingual zh-en streaming model
+curl -L -o sherpa-model.tar.bz2 \
+  "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20.tar.bz2"
+tar -xjf sherpa-model.tar.bz2 && rm sherpa-model.tar.bz2
+```
 
 **One-click:**
 
@@ -302,6 +312,16 @@ tts_integration/
 - 麦克风和摄像头
 - DeepSeek API Key（[申请](https://platform.deepseek.com/api_keys)）
 - Boson.ai API Key（[申请](https://workspace.boson.ai)）
+- Sherpa-ONNX STT 模型（~80MB，一次性下载）：
+
+```bash
+cd MirrorView-TTS
+
+# 下载中英双语流式识别模型
+curl -L -o sherpa-model.tar.bz2 \
+  "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20.tar.bz2"
+tar -xjf sherpa-model.tar.bz2 && rm sherpa-model.tar.bz2
+```
 
 **一键启动：**
 
