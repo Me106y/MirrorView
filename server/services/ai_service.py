@@ -11,7 +11,7 @@ from server.factories.llm_factory import ModelFactory
 
 class AIService:
     def __init__(self):
-        self.llm = ModelFactory.get_model("dashscope", "qwen3-max", temperature=0.7)
+        self.llm = ModelFactory.get_model("deepseek", "deepseek-chat", temperature=0.7)
         self.resume_service = ResumeService()
 
     def analyze_resume_and_update_job(self, user_id, resume_text, current_job_intention):

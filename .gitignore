@@ -1,0 +1,57 @@
+# ── Python ──
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+venv/
+.venv/
+env/
+
+# ── API Keys & Secrets ──
+.env
+.env_tts
+*.env.local
+.env.*.local
+
+# ── Database ──
+*.db
+*.db-journal
+*.db-wal
+*.sqlite
+*.sqlite3
+server/instance/
+
+# ── IDE ──
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ── Runtime files ──
+log/
+*.log
+uploads/
+
+# ── Cache ──
+chroma_db/
+instance/
+
+# ── OS ──
+Thumbs.db
+.DS_Store
+
+# ── STT Models ──
+vosk-model*/
+sherpa-onnx-*/
+
+# ── Temporary ──
+/tmp/
+*.pcm
+*.wav
+test.pcm
+out.pcm
