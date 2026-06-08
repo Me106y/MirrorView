@@ -17,6 +17,17 @@ import speech_recognition as sr
 import tempfile
 import time
 
+# --- Voice Integration (TTS + STT) ---
+try:
+    from client.core.audio_player import AudioPlayer
+    from client.core.tts_client import TTSClient
+    from client.core.voice_integration import VoiceIntegration, TTSWorker
+    _VOICE_AVAILABLE = True
+except ImportError as e:
+    _VOICE_AVAILABLE = False
+    logger.warning(f"Voice integration not available: {e}")
+# --- End Voice Integration ---
+
 class AudioRecorderThread(QThread):
     finished_signal = pyqtSignal(str) # Emits path to wav file
     
@@ -657,7 +668,11 @@ class InterviewWindow(QWidget):
         self.mic_btn.setFixedSize(32, 32)
         self.mic_btn.setToolTip("Voice Input (Disabled)")
         self.mic_btn.clicked.connect(self.toggle_recording)
-        self.mic_btn.hide() # HIDING BUTTON AS REQUESTED
+        # Enable voice input with STT via microphone
+        if _VOICE_AVAILABLE:
+            VoiceIntegration.enable_mic(self)
+        else:
+            self.mic_btn.hide()  # Voice integration not available
         btn_overlay_layout.addWidget(self.mic_btn)
         
         # Send Button
@@ -886,17 +901,20 @@ class InterviewWindow(QWidget):
         text = self.message_input.toPlainText().strip()
         if not text:
             return
-            
+
         self.append_message("You", text)
         self.message_input.clear()
-        
+
         # Disable send button
         self.send_btn.setEnabled(False)
-        
+
+        # Reset full response accumulator for TTS
+        self._full_response = ""
+
         # Start AI message block
         # Use HTML to style the sender name
         self.chat_history.append(f"<b style='color:green'>AI:</b> ")
-        
+
         # Start streaming
         self.stream_worker = StreamWorker(self.api_client, self.interview_id, text)
         self.stream_worker.chunk_received.connect(self.handle_stream_chunk)
@@ -912,11 +930,41 @@ class InterviewWindow(QWidget):
         cursor.insertText(chunk)
         self.chat_history.setTextCursor(cursor)
         self.chat_history.ensureCursorVisible()
+        # Accumulate for TTS playback
+        if not hasattr(self, '_full_response'):
+            self._full_response = ""
+        self._full_response += chunk
 
     def handle_stream_finished(self):
         self.send_btn.setEnabled(True)
         # Add a newline for spacing after message is done
-        self.chat_history.append("") 
+        self.chat_history.append("")
+
+        # === Voice Integration: Speak the AI's response ===
+        if _VOICE_AVAILABLE and hasattr(self, '_full_response') and self._full_response.strip():
+            tts_enabled = getattr(self, '_tts_enabled', True)
+            if tts_enabled:
+                try:
+                    # Initialize TTS client on first use
+                    if not hasattr(self, '_tts_client') or self._tts_client is None:
+                        self._tts_client = TTSClient(
+                            base_url=self.api_client.base_url.replace('/api', ''),
+                            timeout=60,
+                        )
+
+                    voice = getattr(self, '_selected_voice', 'default')
+                    volume = (getattr(self, '_tts_volume_ref', None)
+                              and self._tts_volume_ref.value() / 100.0) or 1.0
+
+                    VoiceIntegration.speak_response(
+                        self,
+                        self._full_response,
+                        voice=voice,
+                        volume=volume,
+                    )
+                except Exception as e:
+                    logger.warning(f"TTS playback skipped: {e}")
+        # === End Voice Integration ===
         
     def handle_stream_error(self, error_msg):
         self.send_btn.setEnabled(True)
