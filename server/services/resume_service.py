@@ -1,18 +1,36 @@
 import os
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_core.documents import Document
-from langchain_community.embeddings import DashScopeEmbeddings
 from langchain_chroma import Chroma
 from server.config import Config
 from utils.logger_handler import logger
 
+
 class ResumeService:
     def __init__(self):
-        self.embedding = DashScopeEmbeddings(
-            model="text-embedding-v1",
-            dashscope_api_key=Config.DASHSCOPE_API_KEY
-        )
+        self._embedding_model = "sentence-transformers/all-MiniLM-L6-v2"
+        self.embedding = None  # lazy-load on first use
         self.chroma_dir = Config.CHROMA_DB_DIR
+
+    def _ensure_embedding(self):
+        """Lazy-load the embedding model (avoids blocking server startup)."""
+        if self.embedding is not None:
+            return True
+        try:
+            import os as _os
+            _os.environ.setdefault("HF_HUB_OFFLINE", "1")  # don't phone home
+            from langchain_huggingface import HuggingFaceEmbeddings
+            self.embedding = HuggingFaceEmbeddings(
+                model_name=self._embedding_model
+            )
+            logger.info(f"Local embeddings loaded: {self._embedding_model}")
+            return True
+        except ImportError:
+            logger.warning(
+                "langchain-huggingface not installed — "
+                "RAG resume search will not work."
+            )
+            return False
 
     def parse_resume(self, file_path):
         """
@@ -35,36 +53,30 @@ class ResumeService:
         text = self.parse_resume(file_path)
         if not text:
             return None
-            
+
+        if not self._ensure_embedding():
+            logger.warning("No embedding model — skipping vector storage")
+            return text
+
         try:
-            # Create a collection specific to the user or use metadata
-            # We'll use a single collection but filter by user_id metadata if needed, 
-            # or simpler: just recreate the vector store for the current session context.
-            # For simplicity in this demo, we'll store everything in one collection 
-            # but ideally we should manage user contexts.
-            
-            # Let's create a temporary vector store for this user's resume
-            # Or persist it with user_id metadata
-            
-            docs = [Document(page_content=text, metadata={"user_id": user_id, "source": "resume"})]
-            
-            # Initialize Chroma
+            docs = [Document(page_content=text,
+                             metadata={"user_id": user_id, "source": "resume"})]
+
             vectorstore = Chroma(
                 collection_name=f"resume_{user_id}",
                 embedding_function=self.embedding,
                 persist_directory=self.chroma_dir
             )
-            
-            # Clear old resume data for this user if exists (simple way: delete collection? Chroma handles upsert?)
-            # For now just add.
             vectorstore.add_documents(docs)
-            
+
             return text
         except Exception as e:
             logger.error(f"Error indexing resume: {e}")
-            return text # Return text even if indexing fails, so we can still use it for simple context
+            return text
 
     def get_vector_store(self, user_id):
+        if not self._ensure_embedding():
+            return None
         return Chroma(
             collection_name=f"resume_{user_id}",
             embedding_function=self.embedding,

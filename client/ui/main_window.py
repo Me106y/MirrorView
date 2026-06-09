@@ -3,7 +3,158 @@ from PyQt5.QtWidgets import (QWidget, QLabel, QPushButton, QVBoxLayout, QScrollA
                              QTextEdit)
 from PyQt5.QtCore import Qt
 from client.ui.interview_window import InterviewWindow
+from client.ui.voice_interview_window import VoiceInterviewWindow
 from client.ui.resume_dialog import ResumeUploadDialog
+
+
+# ---------------------------------------------------------------------------
+# Mode Selection Dialog
+# ---------------------------------------------------------------------------
+
+class ModeSelectDialog(QDialog):
+    """Let user choose between Classic (text) and Voice (TTS+avatar) interview."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Choose Interview Mode")
+        self.setFixedSize(620, 420)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.selected_mode = None  # "classic" or "voice"
+        self._init_ui()
+
+    def _init_ui(self):
+        layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        container = QFrame()
+        container.setObjectName("dialogContainer")
+        container_layout = QVBoxLayout(container)
+        container_layout.setContentsMargins(30, 35, 30, 30)
+        container_layout.setSpacing(18)
+
+        # Header
+        title = QLabel("🎯 Choose Your Interview Mode")
+        title.setObjectName("dialogTitle")
+        title.setAlignment(Qt.AlignCenter)
+        container_layout.addWidget(title)
+
+        subtitle = QLabel("Select how you want to interact with the AI interviewer")
+        subtitle.setObjectName("dialogDesc")
+        subtitle.setAlignment(Qt.AlignCenter)
+        subtitle.setWordWrap(True)
+        container_layout.addWidget(subtitle)
+
+        # --- Two cards side by side ---
+        cards_layout = QHBoxLayout()
+        cards_layout.setSpacing(18)
+
+        # Classic Mode Card
+        classic_card = self._create_card(
+            icon="💬",
+            title="Classic Mode",
+            desc="Text-based chat with AI interviewer.\nType your answers, read responses.\n\n✅ Best for quiet environments\n✅ Full chat history visible\n✅ Observer support",
+            color="#3b82f6",
+        )
+        classic_card.mousePressEvent = lambda e: self._select("classic")
+        classic_card.setCursor(Qt.PointingHandCursor)
+        cards_layout.addWidget(classic_card)
+
+        # Voice Mode Card
+        voice_card = self._create_card(
+            icon="🎙️",
+            title="Voice Mode",
+            desc="Real-time voice conversation!\nSpeak naturally, hear AI respond.\n\n🔊 TTS voice output\n🎤 Voice input (STT)\n🤖 Animated AI avatar\n⚡ Lower latency feel",
+            color="#10b981",
+        )
+        voice_card.mousePressEvent = lambda e: self._select("voice")
+        voice_card.setCursor(Qt.PointingHandCursor)
+        cards_layout.addWidget(voice_card)
+
+        container_layout.addLayout(cards_layout)
+
+        # Cancel
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.setObjectName("secondaryButton")
+        cancel_btn.setFixedWidth(100)
+        cancel_btn.clicked.connect(self.reject)
+        container_layout.addWidget(cancel_btn, 0, Qt.AlignCenter)
+
+        layout.addWidget(container)
+        self.setLayout(layout)
+
+        self.setStyleSheet("""
+            QFrame#dialogContainer {
+                background-color: white;
+                border-radius: 20px;
+                border: 1px solid #e5e7eb;
+            }
+            QLabel#dialogTitle {
+                font-size: 22px; font-weight: 800; color: #111827;
+            }
+            QLabel#dialogDesc {
+                font-size: 14px; color: #6b7280;
+            }
+            QPushButton#secondaryButton {
+                background-color: white; border: 1px solid #d1d5db;
+                color: #374151; border-radius: 8px; padding: 8px 20px;
+                font-size: 14px; font-weight: 600;
+            }
+            QPushButton#secondaryButton:hover {
+                background-color: #f9fafb; border-color: #9ca3af;
+            }
+        """)
+
+    def _create_card(self, icon, title, desc, color):
+        """Create a selectable mode card."""
+        card = QFrame()
+        card.setObjectName("modeCard")
+
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(16, 20, 16, 16)
+        card_layout.setSpacing(10)
+
+        # Icon
+        icon_label = QLabel(icon)
+        icon_label.setStyleSheet(f"font-size: 40px;")
+        icon_label.setAlignment(Qt.AlignCenter)
+        card_layout.addWidget(icon_label)
+
+        # Title
+        title_label = QLabel(title)
+        title_label.setStyleSheet(
+            f"font-size: 17px; font-weight: 700; color: {color};")
+        title_label.setAlignment(Qt.AlignCenter)
+        card_layout.addWidget(title_label)
+
+        # Description
+        desc_label = QLabel(desc)
+        desc_label.setStyleSheet(
+            "font-size: 12px; color: #6b7280; line-height: 1.6;")
+        desc_label.setAlignment(Qt.AlignCenter)
+        desc_label.setWordWrap(True)
+        card_layout.addWidget(desc_label)
+
+        card_layout.addStretch()
+
+        # Hover effect via stylesheet
+        card.setStyleSheet(f"""
+            QFrame#modeCard {{
+                background: white;
+                border: 2px solid #e5e7eb;
+                border-radius: 14px;
+            }}
+            QFrame#modeCard:hover {{
+                border-color: {color};
+                background: #f8fafc;
+            }}
+        """)
+
+        return card
+
+    def _select(self, mode):
+        self.selected_mode = mode
+        self.accept()
 
 
 class ProfileDialog(QDialog):
@@ -715,9 +866,21 @@ class MainWindow(QMainWindow):
         # job_position is now fetched from user profile on server
         success, response = self.api_client.create_interview()
         if success:
-            self.interview_window = InterviewWindow(self.api_client, response)
+            # Show mode selection dialog
+            mode_dlg = ModeSelectDialog(self)
+            if mode_dlg.exec_() != QDialog.Accepted:
+                return  # User cancelled
+
+            if mode_dlg.selected_mode == "voice":
+                # Open voice-first interview
+                self.interview_window = VoiceInterviewWindow(
+                    self.api_client, response)
+            else:
+                # Open classic text interview
+                self.interview_window = InterviewWindow(
+                    self.api_client, response)
+
             self.interview_window.show()
-            # self.hide() # Optional: hide main window
         else:
             if "ongoing interview" in str(response):
                 dlg = CustomMessageBox("Active Interview Exists", 

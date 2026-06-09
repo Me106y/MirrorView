@@ -7,13 +7,11 @@ from server.config import Config
 from server.services.resume_service import ResumeService
 from utils.logger_handler import logger
 
+from server.factories.llm_factory import ModelFactory
+
 class AIService:
     def __init__(self):
-        self.llm = ChatTongyi(
-            model="qwen3-max",
-            dashscope_api_key=Config.DASHSCOPE_API_KEY,
-            temperature=0.7
-        )
+        self.llm = ModelFactory.get_model("deepseek", "deepseek-chat", temperature=0.7)
         self.resume_service = ResumeService()
 
     def analyze_resume_and_update_job(self, user_id, resume_text, current_job_intention):
@@ -137,7 +135,14 @@ class AIService:
             
             Task:
             Evaluate the answer. Consider if it matches their resume context (if provided).
-            Give a brief constructive feedback and a score (0-10).
+            Provide a dynamic score (0-10) based on the quality, depth, and relevance of the answer.
+            - 9-10: Excellent, deep understanding, relevant examples.
+            - 7-8: Good, covers basics, some examples.
+            - 5-6: Average, correct but shallow.
+            - 3-4: Below average, missed key points.
+            - 0-2: Poor or irrelevant.
+            
+            Give a brief constructive feedback and a score.
             
             Output JSON:
             {{
@@ -154,7 +159,8 @@ class AIService:
             return chain.invoke({"question": question, "answer": answer, "context": context})
         except Exception as e:
             logger.error(f"Error evaluating answer: {e}")
-            return {"score": 5.0, "feedback": "Could not evaluate answer.", "improved_answer_suggestion": ""}
+            # Try to recover or just return default
+            return {"score": 5.0, "feedback": "Could not evaluate answer due to error.", "improved_answer_suggestion": ""}
 
     def generate_feedback(self, interview):
         """
@@ -193,28 +199,36 @@ class AIService:
             logger.error(f"Error generating feedback: {e}")
             return "Could not generate feedback due to an error."
 
-    def chat_response_stream(self, interview_context, user_input, job_position="General"):
+    def chat_response_stream(self, messages_list, user_input, job_position="General"):
         """
-        Streaming chat response for the interview loop.
-        Yields chunks of text.
+        Streaming chat response using structured message history.
+        messages_list: list of dicts [{'role': 'user'/'agent', 'content': '...'}]
         """
-        prompt = ChatPromptTemplate.from_template(
-            """
-            You are the AI Interviewer for a {job_position} role.
-            Current conversation context:
-            {history}
-            
-            User: {input}
-            
-            Reply naturally as an interviewer. If the user answered a question, acknowledge it and move to the next or probe deeper.
-            Keep responses concise and professional.
-            """
-        )
-        chain = prompt | self.llm | StrOutputParser()
+        from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+
+        system_template = "You are the AI Interviewer for a {job_position} role. Reply naturally. Keep responses concise."
+        chat_template = ChatPromptTemplate.from_messages([
+            ("system", system_template),
+            ("placeholder", "{chat_history}"),
+            ("human", "{input}")
+        ])
+        
+        # Convert history for placeholder
+        history_msgs = []
+        for msg in messages_list:
+            if msg['role'] == 'user':
+                history_msgs.append(HumanMessage(content=msg['content']))
+            elif msg['role'] == 'agent':
+                history_msgs.append(AIMessage(content=msg['content']))
+        
+        chain = chat_template | self.llm | StrOutputParser()
         
         try:
-            # Use .stream() instead of .invoke()
-            for chunk in chain.stream({"job_position": job_position, "history": interview_context, "input": user_input}):
+            for chunk in chain.stream({
+                "job_position": job_position, 
+                "chat_history": history_msgs, 
+                "input": user_input
+            }):
                 yield chunk
         except Exception as e:
             logger.error(f"Error generating chat response stream: {e}")

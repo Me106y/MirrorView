@@ -176,7 +176,7 @@ def generate_invite_code(interview_id, user_id, timestamp):
 - 大模型调用：阿里云百炼api
 
   ~~~
-  api_key="sk-8729b18340b84faa97760edd5ad2f0d2"
+  api_key="sk-your-dashscope-key"
   ~~~
 
 - Prompt工程：
