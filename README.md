@@ -64,13 +64,6 @@ Key features include **AI Interviewer** interactions, **Real-time Video Streamin
    pip install -r requirements.txt
    ```
 
-3. **Set environment variables (required)**
-   ```bash
-   export DEEPSEEK_API_KEY="your-deepseek-key"
-   export BOSON_API_KEY="your-boson-key"
-   ```
-   Deployment note: in production (Docker/systemd/K8s/cloud), you must also set the same environment variables instead of hardcoding keys in source code.
-
 ### Running the Application
 
 1. **Start the Server**
@@ -99,3 +92,4 @@ Key features include **AI Interviewer** interactions, **Real-time Video Streamin
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+

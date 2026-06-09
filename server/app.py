@@ -1,14 +1,8 @@
 from flask import Flask
-from dotenv import load_dotenv
-import os
-
-# Load project-level env file before importing modules that read env at import time.
-ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-load_dotenv(os.path.join(ROOT_DIR, ".env_tts"))
-
 from server.config import Config
 from server.models import db
 from server.routes import api
+import os
 # import pymysql
 from sqlalchemy import text
 from utils.logger_handler import logger

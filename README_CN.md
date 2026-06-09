@@ -64,13 +64,6 @@
    pip install -r requirements.txt
    ```
 
-3. **配置环境变量（必需）**
-   ```bash
-   export DEEPSEEK_API_KEY="你的 deepseek key"
-   export BOSON_API_KEY="你的 boson key"
-   ```
-   部署提醒：在生产环境（Docker/systemd/K8s/云平台）中，也必须设置同名环境变量，不要把密钥硬编码到源码里。
-
 ### 运行应用
 
 1. **启动服务端**
@@ -99,3 +92,4 @@
 ## 📄 许可证
 
 本项目采用 MIT 许可证 - 详情请参阅 [LICENSE](LICENSE) 文件。
+
