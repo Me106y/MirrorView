@@ -1,34 +1,20 @@
-"""
-Model Factory for LLM and TTS providers.
-
-Supports:
-- DeepSeek (via OpenAI-compatible API) — default for MirrorView
-- DashScope (Alibaba Cloud) — legacy
-- OpenAI — generic
-- Ollama — local
-- Boson.ai Higgs Audio v3 (TTS)
-
-Usage:
-    from server.factories.llm_factory import ModelFactory
-
-    llm = ModelFactory.get_model("deepseek", "deepseek-chat", temperature=0.7)
-"""
+"""Model Factory (DeepSeek only)."""
 
 import os
 import logging
+from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
 
+# Ensure DeepSeek key is available even when this module is imported directly.
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+load_dotenv(os.path.join(ROOT_DIR, ".env_tts"))
+
 
 class ModelFactory:
-    """Factory for creating LLM chat model instances."""
+    """Factory for creating DeepSeek chat model instances."""
 
-    _PROVIDERS = {
-        "deepseek":  None,  # handled specially — OpenAI-compatible
-        "openai":    ("langchain_openai", "ChatOpenAI"),
-        "dashscope": ("langchain_community.chat_models.tongyi", "ChatTongyi"),
-        "ollama":    ("langchain_ollama", "ChatOllama"),
-    }
+    _PROVIDER = "deepseek"
 
     # Default provider configs
     _DEFAULT_CONFIG = {
@@ -39,89 +25,68 @@ class ModelFactory:
         },
     }
 
+    @staticmethod
+    def _get_chat_openai_class():
+        """Resolve ChatOpenAI from available integrations."""
+        try:
+            from langchain_openai import ChatOpenAI
+            return ChatOpenAI
+        except ImportError:
+            try:
+                # Backward-compatible fallback when langchain_openai is not installed.
+                from langchain_community.chat_models import ChatOpenAI
+                logger.warning(
+                    "langchain_openai not installed, falling back to "
+                    "langchain_community.chat_models.ChatOpenAI"
+                )
+                return ChatOpenAI
+            except ImportError as exc:
+                raise ImportError(
+                    "ChatOpenAI backend is unavailable. Install one of:\n"
+                    "  pip install langchain-openai\n"
+                    "or\n"
+                    "  pip install langchain-community"
+                ) from exc
+
     @classmethod
     def get_model(cls, provider: str, model_name: str, **kwargs):
         """
-        Create a LangChain chat model instance.
+        Create a DeepSeek LangChain chat model instance.
 
         Args:
-            provider: "deepseek" | "openai" | "dashscope" | "ollama"
-            model_name: Model identifier
+            provider: must be "deepseek"
+            model_name: DeepSeek model identifier
             **kwargs: Overrides (temperature, base_url, api_key, etc.)
 
         Returns:
             LangChain BaseChatModel instance
         """
-        if provider not in cls._PROVIDERS:
+        if provider != cls._PROVIDER:
             raise ValueError(
                 f"Unsupported LLM provider: {provider}. "
-                f"Available: {list(cls._PROVIDERS.keys())}"
+                "Only 'deepseek' is supported in this project."
             )
 
-        # ── DeepSeek (OpenAI-compatible) ──
-        if provider == "deepseek":
-            from langchain_openai import ChatOpenAI
+        ChatOpenAI = cls._get_chat_openai_class()
 
-            api_key = kwargs.pop("api_key", os.environ.get("DEEPSEEK_API_KEY", ""))
-            base_url = kwargs.pop("base_url", "https://api.deepseek.com/v1")
+        api_key = kwargs.pop("api_key", os.environ.get("DEEPSEEK_API_KEY", "")).strip()
+        base_url = kwargs.pop("base_url", os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1"))
+        model = model_name or os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
 
-            return ChatOpenAI(
-                model=model_name,
-                openai_api_key=api_key,
-                openai_api_base=base_url,
-                temperature=kwargs.pop("temperature", 0.7),
-                max_tokens=kwargs.pop("max_tokens", 2048),
-                streaming=kwargs.pop("streaming", True),
-                **kwargs,
+        if not api_key:
+            raise ValueError(
+                "DEEPSEEK_API_KEY is empty. Set it in environment or .env_tts before starting the server."
             )
 
-        # ── Generic OpenAI ──
-        if provider == "openai":
-            from langchain_openai import ChatOpenAI
-
-            base_url = kwargs.pop("base_url", os.environ.get("OPENAI_BASE_URL", None))
-            api_key = kwargs.pop("api_key", os.environ.get("OPENAI_API_KEY", ""))
-
-            extra = {}
-            if base_url:
-                extra["openai_api_base"] = base_url
-
-            return ChatOpenAI(
-                model=model_name,
-                openai_api_key=api_key,
-                temperature=kwargs.pop("temperature", 0.7),
-                max_tokens=kwargs.pop("max_tokens", 2048),
-                **extra,
-                **kwargs,
-            )
-
-        # ── DashScope (legacy) ──
-        if provider == "dashscope":
-            module_path, class_name = cls._PROVIDERS[provider]
-            import importlib
-            module = importlib.import_module(module_path)
-            model_cls = getattr(module, class_name)
-
-            api_key = kwargs.pop("dashscope_api_key",
-                                 os.environ.get("DASHSCOPE_API_KEY", ""))
-            kwargs.setdefault("model", model_name)
-            kwargs.setdefault("temperature", 0.7)
-            if api_key:
-                kwargs["dashscope_api_key"] = api_key
-            return model_cls(**kwargs)
-
-        # ── Ollama ──
-        if provider == "ollama":
-            from langchain_ollama import ChatOllama
-
-            return ChatOllama(
-                model=model_name,
-                temperature=kwargs.pop("temperature", 0.7),
-                base_url=kwargs.pop("base_url",
-                                    os.environ.get("OLLAMA_BASE_URL",
-                                                   "http://localhost:11434")),
-                **kwargs,
-            )
+        return ChatOpenAI(
+            model=model,
+            openai_api_key=api_key,
+            openai_api_base=base_url,
+            temperature=kwargs.pop("temperature", 0.7),
+            max_tokens=kwargs.pop("max_tokens", 2048),
+            streaming=kwargs.pop("streaming", True),
+            **kwargs,
+        )
 
 
 # ── Singleton caches ──

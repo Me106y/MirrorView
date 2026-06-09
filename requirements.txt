@@ -17,7 +17,6 @@ charset-normalizer==3.4.5
 chromadb==1.5.2
 click==8.3.1
 cryptography==46.0.5
-dashscope==1.25.13
 dataclasses-json==0.6.7
 distro==1.9.0
 durationpy==0.10
@@ -58,9 +57,7 @@ langchain-chroma==1.1.0
 langchain-classic==1.0.2
 langchain-community==0.4.1
 langchain-core==1.2.18
-langchain-ollama==1.0.1
 langchain-text-splitters==1.1.1
-langchain_dashscope==0.1.8
 langgraph==1.0.10
 langgraph-checkpoint==4.0.1
 langgraph-prebuilt==1.0.8
@@ -90,7 +87,7 @@ opentelemetry-semantic-conventions==0.61b0
 orjson==3.11.7
 ormsgpack==1.12.2
 overrides==7.7.0
-packaging @ file:///opt/miniconda3/conda-bld/packaging_1761049079066/work
+packaging==25.0
 pandas==2.3.3
 pillow==12.1.1
 posthog==5.4.0
@@ -133,7 +130,6 @@ SQLAlchemy==2.0.48
 streamlit==1.55.0
 sympy==1.14.0
 tenacity==9.1.4
-tiktoken==0.7.0
 tokenizers==0.22.2
 toml==0.10.2
 tornado==6.5.4
