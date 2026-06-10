@@ -242,12 +242,10 @@ def _detect_language(history_text: str):
 def _is_final_confirmation_context(last_assistant: str):
     t = (last_assistant or "").lower()
     patterns = [
-        ("确认后", "生成"),
-        ("最后确认", "生成"),
-        ("没有其他补充", "生成"),
-        ("立即为您生成", "html"),
-        ("请稍等", "生成"),
-        ("生成完毕后", "链接"),
+        ("请回复", "确定生成"),
+        ("确认无误", "确定生成"),
+        ("如确认", "确定生成"),
+        ("最后确认", "确定生成"),
     ]
     return any(a in t and b in t for a, b in patterns)
 
@@ -257,30 +255,22 @@ def _should_save_output_for_turn(user_text: str):
     if not text:
         return False
 
-    direct_keywords = [
-        "生成简历",
-        "生成html",
-        "输出简历",
-        "导出简历",
-        "最终简历",
-        "最终版",
-        "定稿",
-        "请生成",
-        "generate resume",
-        "final resume",
+    # 仅显式口令触发最终 HTML 文件生成，避免“没有其他补充”等误触发。
+    explicit_commands = [
+        "确定生成",
+        "确认生成",
+        "开始生成",
+        "立即生成",
+        "confirm generate",
+        "generate now",
     ]
-    if any(k in text for k in direct_keywords):
+    if any(cmd in text for cmd in explicit_commands):
         return True
 
     last_assistant = _get_last_assistant_message()
-    if not _is_final_confirmation_context(last_assistant):
-        return False
-
-    deny_words = ["修改", "调整", "改成", "想改", "还有", "补充", "先不要", "等等", "等下"]
-    if any(w in text for w in deny_words):
-        return False
-
-    return True
+    if _is_final_confirmation_context(last_assistant):
+        return any(cmd in text for cmd in explicit_commands)
+    return False
 
 
 def _chunk_to_text(chunk):
@@ -395,6 +385,9 @@ def _build_dialog_prompt(user_text: str, sources: dict):
 3) 不得编造用户经历，不夸大资历；信息不完整时先追问。
 4) 当用户已经选择模板编号后，后续不要再次要求确认模板，除非用户主动更换。
 5) 不输出 JSON，不输出代码块，只输出给用户可直接阅读的话。
+6) 当信息已齐全时，你必须先输出“最终信息清单”，然后仅要求用户回复：确定生成。
+7) 在用户未明确回复“确定生成”前，禁止说“我现在开始生成/请稍等我生成/生成后我会提供链接”等已开始生成的话术。
+8) 用户若回复“没有其他补充/就这些/OK”，你仍需继续提示：请回复“确定生成”。
 
 [SKILL.md 核心规范]
 {skill_spec[:13000]}
