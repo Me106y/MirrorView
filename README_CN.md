@@ -48,7 +48,7 @@
 ## 🚀 快速开始
 
 ### 前置要求
-- Python 3.8+
+- Python 3.11
 - FFmpeg (用于视频流处理)
 
 ### 安装步骤
@@ -68,7 +68,7 @@
 
 1. **启动服务端**
    ```bash
-   python server/main.py
+   python server/app.py
    ```
    服务将在 `http://localhost:5001` 启动。
 
