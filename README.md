@@ -48,7 +48,7 @@ Key features include **AI Interviewer** interactions, **Real-time Video Streamin
 ## 🚀 Getting Started
 
 ### Prerequisites
-- Python 3.8+
+- Python 3.11
 - FFmpeg (for video streaming)
 
 ### Installation
