@@ -172,6 +172,67 @@ class APIClient:
         except Exception as e:
             return False, str(e)
 
+    def run_resume_match(self, resume_text, jd_text, target_role=""):
+        try:
+            response = requests.post(
+                f"{self.base_url}/careerforge/resume-match",
+                json={
+                    "resume_text": resume_text,
+                    "jd_text": jd_text,
+                    "target_role": target_role,
+                },
+            )
+            if response.status_code == 200:
+                return True, response.json()
+            try:
+                return False, response.json().get("message", "Resume match failed")
+            except ValueError:
+                return False, f"Server Error ({response.status_code}): {response.text[:100]}"
+        except Exception as e:
+            return False, str(e)
+
+    def run_resume_craft(self, resume_text, target_role="", language="zh", template="", optimization_goal=""):
+        try:
+            response = requests.post(
+                f"{self.base_url}/careerforge/resume-craft",
+                json={
+                    "resume_text": resume_text,
+                    "target_role": target_role,
+                    "language": language,
+                    "template": template,
+                    "optimization_goal": optimization_goal,
+                },
+            )
+            if response.status_code == 200:
+                return True, response.json()
+            try:
+                return False, response.json().get("message", "Resume craft failed")
+            except ValueError:
+                return False, f"Server Error ({response.status_code}): {response.text[:100]}"
+        except Exception as e:
+            return False, str(e)
+
+    def run_cover_letter(self, resume_text, jd_text, scenario="email", language="zh", company_name=""):
+        try:
+            response = requests.post(
+                f"{self.base_url}/careerforge/cover-letter",
+                json={
+                    "resume_text": resume_text,
+                    "jd_text": jd_text,
+                    "scenario": scenario,
+                    "language": language,
+                    "company_name": company_name,
+                },
+            )
+            if response.status_code == 200:
+                return True, response.json()
+            try:
+                return False, response.json().get("message", "Cover letter generation failed")
+            except ValueError:
+                return False, f"Server Error ({response.status_code}): {response.text[:100]}"
+        except Exception as e:
+            return False, str(e)
+
     def rejoin_interview(self, interview_id):
         try:
             response = requests.get(f"{self.base_url}/interview/{interview_id}/rejoin")

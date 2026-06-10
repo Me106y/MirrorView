@@ -2,9 +2,11 @@ from flask import Blueprint, request, jsonify, current_app, Response, stream_wit
 from server.models import db, User, Interview, Message, InviteCode, Listener
 from server.services.ai_service import AIService
 from server.services.rtmp_service import RTMPService
+from server.services.resume_service import ResumeService
 from utils.logger_handler import logger
 from datetime import datetime
 import uuid
+import tempfile
 
 api = Blueprint('api', __name__)
 
@@ -62,6 +64,49 @@ def _delete_interview(interview):
     db.session.delete(interview)
     db.session.commit()
 
+
+def _extract_resume_text(data):
+    """
+    Extract resume text from JSON field or uploaded file.
+    Supports:
+    - data["resume_text"] in JSON/form
+    - request.files["resume"] (pdf/txt/md/docx as plain fallback)
+    """
+    resume_text = (data or {}).get('resume_text', '') or ''
+    resume_text = resume_text.strip()
+    if resume_text:
+        return resume_text
+
+    if 'resume' not in request.files:
+        return ""
+
+    file = request.files['resume']
+    if not file or not file.filename:
+        return ""
+
+    suffix = os.path.splitext(file.filename)[1].lower() or ".txt"
+    temp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            file.save(tmp.name)
+            temp_path = tmp.name
+
+        if suffix == ".pdf":
+            resume_service = ResumeService()
+            return (resume_service.parse_resume(temp_path) or "").strip()
+
+        with open(temp_path, "rb") as f:
+            return f.read().decode("utf-8", errors="ignore").strip()
+    except Exception as e:
+        logger.error(f"Failed to parse uploaded resume: {e}")
+        return ""
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except Exception:
+                pass
+
 @api.route('/user/<int:user_id>/upload_resume', methods=['POST'])
 def upload_resume(user_id):
     if 'resume' not in request.files:
@@ -102,6 +147,117 @@ def update_profile(user_id):
         
     db.session.commit()
     return jsonify({'message': 'Profile updated successfully'}), 200
+
+
+@api.route('/careerforge/resume-match', methods=['POST'])
+def careerforge_resume_match():
+    data = request.get_json(silent=True)
+    if data is None:
+        data = request.form.to_dict() if request.form else {}
+
+    resume_text = _extract_resume_text(data)
+    jd_text = (data.get('jd_text') or '').strip()
+    target_role = (data.get('target_role') or '').strip()
+
+    if not resume_text:
+        return jsonify({'message': 'Please provide resume_text or upload a resume file.'}), 400
+    if not jd_text:
+        return jsonify({'message': 'Please provide jd_text.'}), 400
+
+    result = ai_service.run_resume_match(
+        {
+            "resume_text": resume_text[:20000],
+            "jd_text": jd_text[:12000],
+            "target_role": target_role,
+        }
+    )
+    return jsonify(
+        {
+            "skill": "resume-match",
+            "result": result,
+            "process": [
+                "Loaded CareerForge resume-match skill",
+                "Parsed resume and JD context",
+                "Generated matching report",
+            ],
+        }
+    ), 200
+
+
+@api.route('/careerforge/resume-craft', methods=['POST'])
+def careerforge_resume_craft():
+    data = request.get_json(silent=True)
+    if data is None:
+        data = request.form.to_dict() if request.form else {}
+
+    resume_text = _extract_resume_text(data)
+    target_role = (data.get('target_role') or '').strip()
+    language = (data.get('language') or 'zh').strip()
+    template_name = (data.get('template') or '').strip()
+    optimization_goal = (data.get('optimization_goal') or '').strip()
+
+    if not resume_text:
+        return jsonify({'message': 'Please provide resume_text or upload a resume file.'}), 400
+
+    result = ai_service.run_resume_craft(
+        {
+            "resume_text": resume_text[:24000],
+            "target_role": target_role,
+            "language": language,
+            "template": template_name,
+            "optimization_goal": optimization_goal,
+        }
+    )
+    return jsonify(
+        {
+            "skill": "resume-craft",
+            "result": result,
+            "process": [
+                "Loaded CareerForge resume-craft skill",
+                "Built optimized resume content",
+                "Prepared visual style and next actions",
+            ],
+        }
+    ), 200
+
+
+@api.route('/careerforge/cover-letter', methods=['POST'])
+def careerforge_cover_letter():
+    data = request.get_json(silent=True)
+    if data is None:
+        data = request.form.to_dict() if request.form else {}
+
+    resume_text = _extract_resume_text(data)
+    jd_text = (data.get('jd_text') or '').strip()
+    scenario = (data.get('scenario') or 'email').strip()
+    language = (data.get('language') or 'zh').strip()
+    company_name = (data.get('company_name') or '').strip()
+
+    if not jd_text:
+        return jsonify({'message': 'Please provide jd_text.'}), 400
+    if not resume_text:
+        return jsonify({'message': 'Please provide resume_text or upload a resume file.'}), 400
+
+    result = ai_service.run_cover_letter(
+        {
+            "resume_text": resume_text[:20000],
+            "jd_text": jd_text[:12000],
+            "scenario": scenario,
+            "language": language,
+            "company_name": company_name,
+        }
+    )
+    return jsonify(
+        {
+            "skill": "cover-letter",
+            "result": result,
+            "process": [
+                "Loaded CareerForge cover-letter skill",
+                "Matched resume highlights to JD",
+                "Generated tailored output",
+            ],
+        }
+    ), 200
 
 @api.route('/interview/create', methods=['POST'])
 def create_interview():
@@ -168,8 +324,11 @@ def create_interview():
     
     system_instruction = f"You are interviewing for {job_position}. Here is your question plan: {json.dumps(questions)}. Ask them one by one. Start with the first one."
     
-    # Initial greeting from AI
-    greeting = f"你好，我是你的面试官。我们现在开始进行{job_position}岗位的面试。请先做一个简单的自我介绍。"
+    # Initial greeting from mock-interview skill runtime
+    greeting = ai_service.generate_mock_interview_opening(
+        job_position=job_position,
+        resume_summary=(projects_summary or ""),
+    )
     
     # Store system instruction as a hidden message or just handle it in AI service state?
     # Stateless API: We need to store it.

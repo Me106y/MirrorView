@@ -39,6 +39,31 @@ class ModelFactory:
         },
     }
 
+    @staticmethod
+    def _get_chat_openai_cls():
+        """
+        Prefer modern `langchain_openai.ChatOpenAI`.
+        Fallback to `langchain_community.chat_models.ChatOpenAI` for environments
+        where langchain-openai is not installed.
+        """
+        try:
+            from langchain_openai import ChatOpenAI  # type: ignore
+            return ChatOpenAI
+        except ImportError:
+            logger.warning(
+                "langchain_openai is not installed, falling back to "
+                "langchain_community.chat_models.ChatOpenAI"
+            )
+            try:
+                from langchain_community.chat_models import ChatOpenAI  # type: ignore
+                return ChatOpenAI
+            except ImportError as e:
+                raise ModuleNotFoundError(
+                    "No ChatOpenAI backend available. "
+                    "Install one of: `pip install langchain-openai` (recommended) "
+                    "or ensure `langchain-community` includes ChatOpenAI."
+                ) from e
+
     @classmethod
     def get_model(cls, provider: str, model_name: str, **kwargs):
         """
@@ -60,7 +85,7 @@ class ModelFactory:
 
         # ── DeepSeek (OpenAI-compatible) ──
         if provider == "deepseek":
-            from langchain_openai import ChatOpenAI
+            ChatOpenAI = cls._get_chat_openai_cls()
 
             api_key = kwargs.pop("api_key", os.environ.get("DEEPSEEK_API_KEY", ""))
             base_url = kwargs.pop("base_url", "https://api.deepseek.com/v1")
@@ -77,7 +102,7 @@ class ModelFactory:
 
         # ── Generic OpenAI ──
         if provider == "openai":
-            from langchain_openai import ChatOpenAI
+            ChatOpenAI = cls._get_chat_openai_cls()
 
             base_url = kwargs.pop("base_url", os.environ.get("OPENAI_BASE_URL", None))
             api_key = kwargs.pop("api_key", os.environ.get("OPENAI_API_KEY", ""))

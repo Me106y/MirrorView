@@ -1,10 +1,19 @@
 from PyQt5.QtWidgets import (QWidget, QLabel, QPushButton, QVBoxLayout, QScrollArea,
                              QMessageBox, QInputDialog, QMainWindow, QFrame, QHBoxLayout, QDialog, QLineEdit, QComboBox,
-                             QTextEdit)
-from PyQt5.QtCore import Qt
+                             QTextEdit, QSizePolicy)
+from PyQt5.QtCore import Qt, QTimer
 from client.ui.interview_window import InterviewWindow
 from client.ui.voice_interview_window import VoiceInterviewWindow
 from client.ui.resume_dialog import ResumeUploadDialog
+from client.ui.careerforge_dialogs import (
+    CoverLetterDialog,
+    ResumeCraftDialog,
+)
+import os
+import socket
+import subprocess
+import sys
+import webbrowser
 
 
 # ---------------------------------------------------------------------------
@@ -16,7 +25,7 @@ class ModeSelectDialog(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Choose Interview Mode")
+        self.setWindowTitle("选择面试模式")
         self.setFixedSize(620, 420)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground)
@@ -34,12 +43,12 @@ class ModeSelectDialog(QDialog):
         container_layout.setSpacing(18)
 
         # Header
-        title = QLabel("🎯 Choose Your Interview Mode")
+        title = QLabel("🎯 请选择面试模式")
         title.setObjectName("dialogTitle")
         title.setAlignment(Qt.AlignCenter)
         container_layout.addWidget(title)
 
-        subtitle = QLabel("Select how you want to interact with the AI interviewer")
+        subtitle = QLabel("请选择你希望与 AI 面试官互动的方式")
         subtitle.setObjectName("dialogDesc")
         subtitle.setAlignment(Qt.AlignCenter)
         subtitle.setWordWrap(True)
@@ -52,8 +61,8 @@ class ModeSelectDialog(QDialog):
         # Classic Mode Card
         classic_card = self._create_card(
             icon="💬",
-            title="Classic Mode",
-            desc="Text-based chat with AI interviewer.\nType your answers, read responses.\n\n✅ Best for quiet environments\n✅ Full chat history visible\n✅ Observer support",
+            title="经典模式",
+            desc="与 AI 面试官进行文字对话。\n输入答案并查看回复。\n\n✅ 适合安静环境\n✅ 完整聊天记录可见\n✅ 支持旁听功能",
             color="#3b82f6",
         )
         classic_card.mousePressEvent = lambda e: self._select("classic")
@@ -63,8 +72,8 @@ class ModeSelectDialog(QDialog):
         # Voice Mode Card
         voice_card = self._create_card(
             icon="🎙️",
-            title="Voice Mode",
-            desc="Real-time voice conversation!\nSpeak naturally, hear AI respond.\n\n🔊 TTS voice output\n🎤 Voice input (STT)\n🤖 Animated AI avatar\n⚡ Lower latency feel",
+            title="语音模式",
+            desc="实时语音对话体验。\n自然开口，AI 实时回应。\n\n🔊 TTS 语音播报\n🎤 语音输入（STT）\n🤖 动态 AI 头像\n⚡ 更沉浸的互动感",
             color="#10b981",
         )
         voice_card.mousePressEvent = lambda e: self._select("voice")
@@ -74,7 +83,7 @@ class ModeSelectDialog(QDialog):
         container_layout.addLayout(cards_layout)
 
         # Cancel
-        cancel_btn = QPushButton("Cancel")
+        cancel_btn = QPushButton("取消")
         cancel_btn.setObjectName("secondaryButton")
         cancel_btn.setFixedWidth(100)
         cancel_btn.clicked.connect(self.reject)
@@ -161,7 +170,7 @@ class ProfileDialog(QDialog):
     def __init__(self, api_client, current_job, current_exp, parent=None):
         super().__init__(parent)
         self.api_client = api_client
-        self.setWindowTitle("Edit Profile")
+        self.setWindowTitle("编辑个人信息")
         self.setFixedSize(450, 350)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground)
@@ -180,7 +189,7 @@ class ProfileDialog(QDialog):
         container_layout.setContentsMargins(30, 30, 30, 30)
         container_layout.setSpacing(20)
         
-        title = QLabel("Edit Profile")
+        title = QLabel("编辑个人信息")
         title.setObjectName("dialogTitle")
         title.setAlignment(Qt.AlignCenter)
         container_layout.addWidget(title)
@@ -190,31 +199,38 @@ class ProfileDialog(QDialog):
         form_layout.setSpacing(15)
         
         # Job Intention
-        job_label = QLabel("Job Intention")
+        job_label = QLabel("求职意向")
         job_label.setObjectName("inputLabel")
         form_layout.addWidget(job_label)
         
         self.job_input = QLineEdit(self.job_intention)
-        self.job_input.setPlaceholderText("e.g. Java Developer, Product Manager")
+        self.job_input.setPlaceholderText("例如：Java 开发工程师 / 产品经理")
         self.job_input.setObjectName("inputField")
         form_layout.addWidget(self.job_input)
         
         # Work Experience (ComboBox)
-        exp_label = QLabel("Work Experience")
+        exp_label = QLabel("工作经验")
         exp_label.setObjectName("inputLabel")
         form_layout.addWidget(exp_label)
         
         self.exp_combo = QComboBox()
         self.exp_combo.setObjectName("inputField")
-        options = ["No experience", "1-2 years", "3-5 years", "5+ years"]
+        options = ["无经验", "1-2 年", "3-5 年", "5 年以上"]
+        legacy_map = {
+            "No experience": "无经验",
+            "1-2 years": "1-2 年",
+            "3-5 years": "3-5 年",
+            "5+ years": "5 年以上",
+        }
         self.exp_combo.addItems(options)
         
         # Set current selection
-        if self.work_experience in options:
-            self.exp_combo.setCurrentText(self.work_experience)
+        normalized_exp = legacy_map.get(self.work_experience, self.work_experience)
+        if normalized_exp in options:
+            self.exp_combo.setCurrentText(normalized_exp)
         else:
             # Try to match loosely or default to first
-            index = self.exp_combo.findText(self.work_experience)
+            index = self.exp_combo.findText(normalized_exp)
             if index >= 0:
                 self.exp_combo.setCurrentIndex(index)
         
@@ -227,12 +243,12 @@ class ProfileDialog(QDialog):
         btn_layout = QHBoxLayout()
         btn_layout.setSpacing(15)
         
-        cancel_btn = QPushButton("Cancel")
+        cancel_btn = QPushButton("取消")
         cancel_btn.setObjectName("secondaryButton")
         cancel_btn.setCursor(Qt.PointingHandCursor)
         cancel_btn.clicked.connect(self.reject)
         
-        save_btn = QPushButton("Save Changes")
+        save_btn = QPushButton("保存修改")
         save_btn.setObjectName("primaryButton")
         save_btn.setCursor(Qt.PointingHandCursor)
         save_btn.clicked.connect(self.save_profile)
@@ -306,14 +322,14 @@ class ProfileDialog(QDialog):
         job = self.job_input.text().strip()
         exp = self.exp_combo.currentText()
         if not job:
-            QMessageBox.warning(self, "Error", "Job intention cannot be empty")
+            QMessageBox.warning(self, "提示", "求职意向不能为空")
             return
             
         success, result = self.api_client.update_profile(job, exp)
         if success:
             msg = QMessageBox(self)
-            msg.setWindowTitle("Success")
-            msg.setText("Profile updated successfully!")
+            msg.setWindowTitle("成功")
+            msg.setText("个人信息更新成功！")
             msg.setIcon(QMessageBox.Information)
             msg.setStyleSheet("background-color: white;")
             msg.exec_()
@@ -322,7 +338,7 @@ class ProfileDialog(QDialog):
             self.work_experience = exp
             self.accept()
         else:
-            QMessageBox.warning(self, "Error", str(result))
+            QMessageBox.warning(self, "失败", str(result))
 
 
 
@@ -358,7 +374,7 @@ class CustomMessageBox(QDialog):
         container_layout.addWidget(msg_label)
         
         # Button
-        btn = QPushButton("OK")
+        btn = QPushButton("确定")
         btn.setObjectName("primaryButton")
         btn.setCursor(Qt.PointingHandCursor)
         btn.setFixedWidth(100)
@@ -403,7 +419,7 @@ class HistoryWindow(QDialog):
     def __init__(self, api_client, parent=None):
         super().__init__(parent)
         self.api_client = api_client
-        self.setWindowTitle("Interview History")
+        self.setWindowTitle("面试历史")
         self.setFixedSize(800, 600)
         self.init_ui()
         self.load_history()
@@ -414,7 +430,7 @@ class HistoryWindow(QDialog):
         layout.setContentsMargins(30, 30, 30, 30)
         layout.setSpacing(20)
         
-        header = QLabel("Your Interview History")
+        header = QLabel("你的面试历史")
         header.setObjectName("historyHeader")
         layout.addWidget(header)
         
@@ -431,7 +447,7 @@ class HistoryWindow(QDialog):
         scroll.setWidget(self.scroll_content)
         layout.addWidget(scroll)
         
-        close_btn = QPushButton("Close")
+        close_btn = QPushButton("关闭")
         close_btn.setObjectName("secondaryButton")
         close_btn.setFixedWidth(100)
         close_btn.clicked.connect(self.close)
@@ -440,7 +456,7 @@ class HistoryWindow(QDialog):
     def load_history(self):
         success, history = self.api_client.get_interview_history()
         if not success:
-            QMessageBox.warning(self, "Error", f"Failed to load history: {history}")
+            QMessageBox.warning(self, "错误", f"加载历史失败：{history}")
             return
             
         # Clear existing
@@ -448,7 +464,7 @@ class HistoryWindow(QDialog):
             self.scroll_layout.itemAt(i).widget().setParent(None)
             
         if not history:
-            lbl = QLabel("No interview history found.")
+            lbl = QLabel("暂无面试历史记录。")
             lbl.setStyleSheet("color: #6b7280; font-style: italic; margin-top: 20px;")
             lbl.setAlignment(Qt.AlignCenter)
             self.scroll_layout.addWidget(lbl)
@@ -466,19 +482,19 @@ class HistoryWindow(QDialog):
         
         # Info
         info_layout = QVBoxLayout()
-        title = QLabel(item.get('title', 'Interview'))
+        title = QLabel(item.get('title', '面试'))
         title.setObjectName("cardTitle")
         info_layout.addWidget(title)
         
         date_str = item.get('created_at', '')[:10]
-        meta = QLabel(f"Position: {item.get('job_position')} | Date: {date_str}")
+        meta = QLabel(f"岗位：{item.get('job_position')} | 日期：{date_str}")
         meta.setObjectName("cardMeta")
         info_layout.addWidget(meta)
         
         # Status
-        status_map = {0: "Pending", 1: "Ongoing", 2: "Ended", 3: "Reviewed"}
+        status_map = {0: "待开始", 1: "进行中", 2: "已结束", 3: "已评估"}
         status_code = item.get('status', 0)
-        status_text = status_map.get(status_code, "Unknown")
+        status_text = status_map.get(status_code, "未知")
         
         status_lbl = QLabel(status_text)
         if status_code == 1:
@@ -496,13 +512,13 @@ class HistoryWindow(QDialog):
         btn_layout = QVBoxLayout()
         
         if status_code == 1: # Ongoing
-            rejoin_btn = QPushButton("Rejoin")
+            rejoin_btn = QPushButton("继续面试")
             rejoin_btn.setObjectName("primaryButton")
             rejoin_btn.setCursor(Qt.PointingHandCursor)
             rejoin_btn.clicked.connect(lambda: self.rejoin_interview(item))
             btn_layout.addWidget(rejoin_btn)
         elif status_code == 3: # Reviewed
-            view_fb_btn = QPushButton("View Feedback")
+            view_fb_btn = QPushButton("查看反馈")
             view_fb_btn.setObjectName("secondaryButton")
             view_fb_btn.setCursor(Qt.PointingHandCursor)
             view_fb_btn.clicked.connect(lambda: self.show_feedback(item))
@@ -518,7 +534,7 @@ class HistoryWindow(QDialog):
             self.parent().interview_window.show()
             self.close()
         else:
-            QMessageBox.warning(self, "Error", f"Failed to rejoin: {response}")
+            QMessageBox.warning(self, "错误", f"继续面试失败：{response}")
 
     def show_feedback(self, item):
         feedback = item.get('overall_feedback')
@@ -528,7 +544,7 @@ class HistoryWindow(QDialog):
         # For simplicity, let's use a standard QMessageBox or a simple dialog.
         
         dlg = QDialog(self)
-        dlg.setWindowTitle("Feedback")
+        dlg.setWindowTitle("面试反馈")
         dlg.setFixedSize(500, 400)
         l = QVBoxLayout(dlg)
         t = QTextEdit()
@@ -560,7 +576,7 @@ class HistoryWindow(QDialog):
 class JoinDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Join Interview")
+        self.setWindowTitle("加入旁听")
         self.setFixedSize(400, 250)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground)
@@ -578,29 +594,29 @@ class JoinDialog(QDialog):
         container_layout.setContentsMargins(30, 30, 30, 30)
         container_layout.setSpacing(15)
         
-        title = QLabel("Join Interview")
+        title = QLabel("加入旁听")
         title.setObjectName("dialogTitle")
         title.setAlignment(Qt.AlignCenter)
         container_layout.addWidget(title)
         
         # Code Input
         self.code_input = QLineEdit()
-        self.code_input.setPlaceholderText("Enter Invite Code")
+        self.code_input.setPlaceholderText("请输入邀请码")
         self.code_input.setObjectName("inputField")
         container_layout.addWidget(self.code_input)
         
         # Name Input
         self.name_input = QLineEdit()
-        self.name_input.setPlaceholderText("Your Name (Optional)")
+        self.name_input.setPlaceholderText("你的昵称（可选）")
         self.name_input.setObjectName("inputField")
         container_layout.addWidget(self.name_input)
         
         btn_layout = QHBoxLayout()
-        cancel_btn = QPushButton("Cancel")
+        cancel_btn = QPushButton("取消")
         cancel_btn.setObjectName("secondaryButton")
         cancel_btn.clicked.connect(self.reject)
         
-        join_btn = QPushButton("Join")
+        join_btn = QPushButton("加入")
         join_btn.setObjectName("primaryButton")
         join_btn.clicked.connect(self.accept_join)
         
@@ -622,11 +638,11 @@ class JoinDialog(QDialog):
 
     def accept_join(self):
         self.code = self.code_input.text().strip()
-        self.name = self.name_input.text().strip() or "Anonymous"
+        self.name = self.name_input.text().strip() or "旁听者"
         if self.code:
             self.accept()
         else:
-            self.code_input.setPlaceholderText("Code is required!")
+            self.code_input.setPlaceholderText("请输入邀请码")
 
 
 class MainWindow(QMainWindow):
@@ -634,8 +650,10 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.api_client = api_client
         self.user_data = user_data
-        self.setWindowTitle(f"MirrorView - Dashboard")
-        self.setFixedSize(1000, 700)
+        self._resume_match_streamlit_proc = None
+        self._resume_match_streamlit_port = 8511
+        self.setWindowTitle("MirrorView - 控制台")
+        self.setFixedSize(1160, 760)
         self.init_ui()
         self.apply_styles()
 
@@ -662,20 +680,20 @@ class MainWindow(QMainWindow):
 
         
         # User Info in Sidebar
-        user_info = QLabel(f"Logged in as:\n{self.user_data.get('username')}")
+        user_info = QLabel(f"当前登录：\n{self.user_data.get('username')}")
         user_info.setObjectName("userInfo")
         user_info.setAlignment(Qt.AlignCenter)
         sidebar_layout.addWidget(user_info)
         
         # Logout Button (placeholder functionality)
                 # Edit Profile Button
-        profile_btn = QPushButton("Edit Profile")
+        profile_btn = QPushButton("编辑信息")
         profile_btn.setObjectName("secondaryButton")
         profile_btn.setCursor(Qt.PointingHandCursor)
         profile_btn.clicked.connect(self.edit_profile)
         sidebar_layout.addWidget(profile_btn)
         
-        logout_btn = QPushButton("Logout")
+        logout_btn = QPushButton("退出登录")
         logout_btn.setObjectName("logoutButton")
         logout_btn.setCursor(Qt.PointingHandCursor)
         logout_btn.clicked.connect(self.close)
@@ -690,44 +708,82 @@ class MainWindow(QMainWindow):
         content_layout.setSpacing(30)
         
         # Welcome Header
-        welcome_header = QLabel(f"Welcome back, {self.user_data.get('username')}!")
+        welcome_header = QLabel(f"欢迎回来，{self.user_data.get('username')}！")
         welcome_header.setObjectName("welcomeHeader")
         content_layout.addWidget(welcome_header)
         
-        subtitle = QLabel("Ready to practice your interview skills?")
+        subtitle = QLabel("准备开始你的求职训练了吗？")
         subtitle.setObjectName("subtitle")
         content_layout.addWidget(subtitle)
-        
+
         content_layout.addSpacing(20)
-        
-        # Action Cards Container
-        cards_layout = QHBoxLayout()
-        cards_layout.setSpacing(20)
-        
-        # Start Interview Card
-        start_card = self.create_card("Start New Interview", "Begin a mock interview session tailored to your profile.", "primaryButton", self.show_resume_dialog)
-        cards_layout.addWidget(start_card)
-        
-        # Join Interview Card
-        join_card = self.create_card("Join Interview", "Join an existing session as a listener using an invite code.", "secondaryButton", self.join_interview)
-        cards_layout.addWidget(join_card)
-        
-        content_layout.addLayout(cards_layout)
+
+        toolbox_title = QLabel("求职工具箱")
+        toolbox_title.setObjectName("cardTitle")
+        content_layout.addWidget(toolbox_title)
+
+        tools_grid = QHBoxLayout()
+        tools_grid.setSpacing(16)
+
+        match_card = self.create_card(
+            "简历匹配分析",
+            "多维评分、差距定位与优化建议。",
+            "secondaryButton",
+            self.open_resume_match,
+        )
+        tools_grid.addWidget(match_card)
+
+        craft_card = self.create_card(
+            "简历生成",
+            "生成结构化简历内容和排版建议。",
+            "secondaryButton",
+            self.open_resume_craft,
+        )
+        tools_grid.addWidget(craft_card)
+
+        letter_card = self.create_card(
+            "求职信撰写",
+            "输出邮件版求职信和招聘平台沟通文案。",
+            "secondaryButton",
+            self.open_cover_letter,
+        )
+        tools_grid.addWidget(letter_card)
+        content_layout.addLayout(tools_grid)
+
+        interview_row = QHBoxLayout()
+        interview_row.setSpacing(20)
+
+        interview_card = self.create_card(
+            "模拟面试",
+            "智能问答驱动面试流程，RTMP 推流与旁听体验保持不变。",
+            "primaryButton",
+            self.show_resume_dialog,
+        )
+        interview_row.addWidget(interview_card)
+
+        join_card = self.create_card(
+            "加入旁听",
+            "使用邀请码加入正在进行的面试旁听。",
+            "secondaryButton",
+            self.join_interview,
+        )
+        interview_row.addWidget(join_card)
+        content_layout.addLayout(interview_row)
         
         # History Section (Placeholder)
         history_frame = QFrame()
         history_frame.setObjectName("card")
         history_layout = QVBoxLayout(history_frame)
         
-        history_title = QLabel("Recent Activity")
+        history_title = QLabel("最近活动")
         history_title.setObjectName("cardTitle")
         history_layout.addWidget(history_title)
         
-        history_desc = QLabel("Your interview history will appear here.")
+        history_desc = QLabel("你的面试历史和反馈将显示在这里。")
         history_desc.setStyleSheet("color: #6b7280; font-style: italic;")
         history_layout.addWidget(history_desc)
         
-        view_history_btn = QPushButton("View Full History")
+        view_history_btn = QPushButton("查看完整历史")
         view_history_btn.setObjectName("linkButton")
         view_history_btn.setCursor(Qt.PointingHandCursor)
         view_history_btn.clicked.connect(self.view_history)
@@ -744,17 +800,21 @@ class MainWindow(QMainWindow):
     def create_card(self, title_text, desc_text, btn_style, callback):
         card = QFrame()
         card.setObjectName("card")
+        card.setFixedHeight(158)
         layout = QVBoxLayout(card)
-        layout.setContentsMargins(25, 25, 25, 25)
-        layout.setSpacing(15)
+        layout.setContentsMargins(18, 16, 18, 14)
+        layout.setSpacing(8)
         
         title = QLabel(title_text)
-        title.setObjectName("cardTitle")
+        title.setObjectName("featureCardTitle")
+        title.setWordWrap(True)
         layout.addWidget(title)
         
         desc = QLabel(desc_text)
         desc.setWordWrap(True)
+        desc.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         desc.setObjectName("cardDesc")
+        desc.setMinimumHeight(36)
         layout.addWidget(desc)
         
         layout.addStretch()
@@ -762,8 +822,12 @@ class MainWindow(QMainWindow):
         btn = QPushButton(title_text)
         btn.setObjectName(btn_style)
         btn.setCursor(Qt.PointingHandCursor)
+        btn.setFixedHeight(34)
+        btn.setMinimumWidth(120)
+        btn.setMaximumWidth(170)
+        btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         btn.clicked.connect(callback)
-        layout.addWidget(btn)
+        layout.addWidget(btn, 0, Qt.AlignHCenter)
         
         return card
 
@@ -805,16 +869,24 @@ class MainWindow(QMainWindow):
                 font-size: 20px;
                 font-weight: 600;
             }
+            QLabel#featureCardTitle {
+                color: #111827;
+                font-size: 16px;
+                font-weight: 700;
+            }
             QLabel#cardDesc {
                 color: #4b5563;
-                font-size: 14px;
+                font-size: 12px;
                 line-height: 1.4;
             }
             QPushButton {
-                border-radius: 8px;
-                padding: 10px 20px;
+                border-radius: 10px;
+                padding: 6px 12px;
                 font-weight: 600;
-                font-size: 14px;
+                font-size: 13px;
+            }
+            QFrame#card QPushButton {
+                min-height: 34px;
             }
             QPushButton#primaryButton {
                 background-color: #3b82f6;
@@ -883,12 +955,12 @@ class MainWindow(QMainWindow):
             self.interview_window.show()
         else:
             if "ongoing interview" in str(response):
-                dlg = CustomMessageBox("Active Interview Exists", 
-                    "You already have an interview in progress. Please finish it or check your history to rejoin.",
+                dlg = CustomMessageBox("已有进行中的面试", 
+                    "你已有进行中的面试，请先完成当前面试，或在历史中继续。",
                     parent=self)
                 dlg.exec_()
             else:
-                QMessageBox.warning(self, "Error", f"Failed to start interview: {response}")
+                QMessageBox.warning(self, "错误", f"开始面试失败：{response}")
 
     def join_interview(self):
         dialog = JoinDialog(self)
@@ -899,7 +971,7 @@ class MainWindow(QMainWindow):
                 self.listener_window = ListenerWindow(self.api_client, response)
                 self.listener_window.show()
             else:
-                QMessageBox.warning(self, "Error", "Failed to join interview")
+                QMessageBox.warning(self, "错误", "加入旁听失败")
 
     def view_history(self):
         history_window = HistoryWindow(self.api_client, self)
@@ -919,3 +991,69 @@ class MainWindow(QMainWindow):
             # Update UI if needed (e.g. welcome message or sidebar info)
             # Reload?
             pass
+
+    def open_resume_match(self):
+        app_path = os.path.abspath(
+            os.path.join(
+                os.path.dirname(__file__),
+                "..",
+                "streamlit",
+                "resume_match_agent_app.py",
+            )
+        )
+        app_path = os.path.normpath(app_path)
+
+        if not os.path.exists(app_path):
+            QMessageBox.warning(self, "错误", f"未找到 Streamlit 页面：{app_path}")
+            return
+
+        url = f"http://localhost:{self._resume_match_streamlit_port}"
+
+        if self._is_port_open(self._resume_match_streamlit_port):
+            webbrowser.open(url)
+            return
+
+        try:
+            project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+            env = os.environ.copy()
+            env["PYTHONPATH"] = project_root + os.pathsep + env.get("PYTHONPATH", "")
+            cmd = [
+                sys.executable,
+                "-m",
+                "streamlit",
+                "run",
+                app_path,
+                "--server.port",
+                str(self._resume_match_streamlit_port),
+                "--server.headless",
+                "true",
+                "--browser.gatherUsageStats",
+                "false",
+            ]
+            self._resume_match_streamlit_proc = subprocess.Popen(
+                cmd,
+                cwd=project_root,
+                env=env,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            QTimer.singleShot(1800, lambda: webbrowser.open(url))
+        except Exception as e:
+            QMessageBox.warning(self, "错误", f"启动简历匹配页面失败：{e}")
+
+    def open_resume_craft(self):
+        dialog = ResumeCraftDialog(self.api_client, self)
+        dialog.exec_()
+
+    def open_cover_letter(self):
+        dialog = CoverLetterDialog(self.api_client, self)
+        dialog.exec_()
+
+    @staticmethod
+    def _is_port_open(port):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(0.4)
+        try:
+            return sock.connect_ex(("127.0.0.1", port)) == 0
+        finally:
+            sock.close()
