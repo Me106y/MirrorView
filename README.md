@@ -85,7 +85,7 @@ Key features include **AI Interviewer** interactions, **Real-time Video Streamin
 
 <img src="assets/image-20260313190052517.png" alt="image-20260313190052517" style="zoom:50%;" />
 
-<img src="assets/image-20260313190125373.png" alt="image-20260313190125373" style="zoom:50%;" />
+<img src="assets/ca2fb451e05b52ff2a91ba86df86b8f7.png" alt="ca2fb451e05b52ff2a91ba86df86b8f7" style="zoom:50%;" />
 
 <img src="assets/image-20260313190303870.png" alt="image-20260313190303870" style="zoom:50%;" />
 
