@@ -100,7 +100,7 @@ This document describes the test strategy for verifying the TTS/STT voice integr
 | **ID** | TC-08 |
 | **Level** | 3 |
 | **Precondition** | `BOSON_API_KEY` |
-| **Steps** | 1. Synthesize Chinese text: "你好，欢迎参加面试"<br>2. Play audio |
+| **Steps** | 1. Synthesize Chinese text: "您好，欢迎参加面试"<br>2. Play audio |
 | **Expected** | Audio produced and plays correctly. Natural Chinese pronunciation. |
 
 ### TC-09: Latency — Time to First Audio

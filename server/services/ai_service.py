@@ -224,7 +224,7 @@ class AIService:
             )
         except Exception as e:
             logger.error(f"Error generating chat response: {e}")
-            return "收到，我们继续下一题：你如何证明自己能胜任这个岗位？"
+            return "收到，我们继续下一题：您如何证明自己能胜任这个岗位？"
 
     def chat_response_stream(self, messages_list, user_input, job_position="General"):
         """
@@ -239,4 +239,4 @@ class AIService:
                 yield chunk
         except Exception as e:
             logger.error(f"Error generating chat response stream: {e}")
-            yield "我遇到了一点问题，我们继续：请你讲一个最有代表性的项目经历。"
+            yield "我遇到了一点问题，我们继续：请您讲一个最有代表性的项目经历。"

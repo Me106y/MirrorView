@@ -168,7 +168,7 @@ class TestSplitSentences(unittest.TestCase):
 
     def test_chinese_sentences(self):
         """Should split Chinese text on Chinese punctuation."""
-        text = "你好！欢迎参加面试。准备好了吗？"
+        text = "您好！欢迎参加面试。准备好了吗？"
         result = HiggsAudioTTS._split_sentences(text)
         self.assertGreater(len(result), 1)
 
@@ -262,7 +262,7 @@ class TestConstants(unittest.TestCase):
     def test_sentence_pattern(self):
         """Should compile a valid regex."""
         self.assertTrue(SENTENCE_END_PATTERN.search("Hello. World"))
-        self.assertTrue(SENTENCE_END_PATTERN.search("你好。世界"))
+        self.assertTrue(SENTENCE_END_PATTERN.search("您好。世界"))
 
 
 # ---------------------------------------------------------------------------

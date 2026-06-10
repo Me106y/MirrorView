@@ -263,7 +263,7 @@ MIT — same as MirrorView main project.
 
 ```
 tts_integration/
-├── README.md                          # ← 你正在看
+├── README.md                          # ← 您正在看
 ├── __init__.py
 ├── run_demo.py                        # 一键演示脚本
 ├── server/

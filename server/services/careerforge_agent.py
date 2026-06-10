@@ -357,7 +357,7 @@ Follow the skill behavior and constraints.
             )
         except Exception as e:
             logger.error("mock-interview invoke failed: %s", e)
-            return "收到。我们继续下一题：请你分享一个最能体现你岗位胜任力的项目经历。"
+            return "收到。我们继续下一题：请您分享一个最能体现您岗位胜任力的项目经历。"
 
     def stream_mock_interview_reply(
         self,
@@ -416,13 +416,13 @@ Follow the skill behavior and constraints.
                 yield chunk
         except Exception as e:
             logger.error("mock-interview stream failed: %s", e)
-            yield "收到，我们继续下一题：你如何量化说明你在项目中的核心贡献？"
+            yield "收到，我们继续下一题：您如何量化说明您在项目中的核心贡献？"
 
     def generate_mock_interview_opening(self, job_position: str, resume_summary: str = "") -> str:
         if self.llm is None:
-            return f"你好，我是你的面试官。我们现在开始进行{job_position}岗位的模拟面试。请先做一个简短自我介绍。"
+            return f"您好，我是您的面试官。我们现在开始进行{job_position}岗位的模拟面试。请先做一个简短自我介绍。"
         if not os.path.exists(str(self._skill_path("mock-interview"))):
-            return f"你好，我是你的面试官。我们现在开始进行{job_position}岗位的模拟面试。请先做一个简短自我介绍。"
+            return f"您好，我是您的面试官。我们现在开始进行{job_position}岗位的模拟面试。请先做一个简短自我介绍。"
         prompt = ChatPromptTemplate.from_template(
             """
 You are initializing a mock interview.
@@ -445,4 +445,4 @@ Output plain text only.
                 }
             )
         except Exception:
-            return f"你好，我是你的面试官。我们现在开始进行{job_position}岗位的模拟面试。请先做一个简短自我介绍。"
+            return f"您好，我是您的面试官。我们现在开始进行{job_position}岗位的模拟面试。请先做一个简短自我介绍。"

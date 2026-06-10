@@ -7,7 +7,6 @@ from client.ui.voice_interview_window import VoiceInterviewWindow
 from client.ui.resume_dialog import ResumeUploadDialog
 from client.ui.careerforge_dialogs import (
     CoverLetterDialog,
-    ResumeCraftDialog,
 )
 import os
 import socket
@@ -48,7 +47,7 @@ class ModeSelectDialog(QDialog):
         title.setAlignment(Qt.AlignCenter)
         container_layout.addWidget(title)
 
-        subtitle = QLabel("请选择你希望与 AI 面试官互动的方式")
+        subtitle = QLabel("请选择您希望与 AI 面试官互动的方式")
         subtitle.setObjectName("dialogDesc")
         subtitle.setAlignment(Qt.AlignCenter)
         subtitle.setWordWrap(True)
@@ -430,7 +429,7 @@ class HistoryWindow(QDialog):
         layout.setContentsMargins(30, 30, 30, 30)
         layout.setSpacing(20)
         
-        header = QLabel("你的面试历史")
+        header = QLabel("您的面试历史")
         header.setObjectName("historyHeader")
         layout.addWidget(header)
         
@@ -607,7 +606,7 @@ class JoinDialog(QDialog):
         
         # Name Input
         self.name_input = QLineEdit()
-        self.name_input.setPlaceholderText("你的昵称（可选）")
+        self.name_input.setPlaceholderText("您的昵称（可选）")
         self.name_input.setObjectName("inputField")
         container_layout.addWidget(self.name_input)
         
@@ -652,6 +651,8 @@ class MainWindow(QMainWindow):
         self.user_data = user_data
         self._resume_match_streamlit_proc = None
         self._resume_match_streamlit_port = 8511
+        self._resume_craft_streamlit_proc = None
+        self._resume_craft_streamlit_port = 8512
         self.setWindowTitle("MirrorView - 控制台")
         self.setFixedSize(1160, 760)
         self.init_ui()
@@ -712,7 +713,7 @@ class MainWindow(QMainWindow):
         welcome_header.setObjectName("welcomeHeader")
         content_layout.addWidget(welcome_header)
         
-        subtitle = QLabel("准备开始你的求职训练了吗？")
+        subtitle = QLabel("准备开始您的求职训练了吗？")
         subtitle.setObjectName("subtitle")
         content_layout.addWidget(subtitle)
 
@@ -779,7 +780,7 @@ class MainWindow(QMainWindow):
         history_title.setObjectName("cardTitle")
         history_layout.addWidget(history_title)
         
-        history_desc = QLabel("你的面试历史和反馈将显示在这里。")
+        history_desc = QLabel("您的面试历史和反馈将显示在这里。")
         history_desc.setStyleSheet("color: #6b7280; font-style: italic;")
         history_layout.addWidget(history_desc)
         
@@ -956,7 +957,7 @@ class MainWindow(QMainWindow):
         else:
             if "ongoing interview" in str(response):
                 dlg = CustomMessageBox("已有进行中的面试", 
-                    "你已有进行中的面试，请先完成当前面试，或在历史中继续。",
+                    "您已有进行中的面试，请先完成当前面试，或在历史中继续。",
                     parent=self)
                 dlg.exec_()
             else:
@@ -1042,8 +1043,53 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "错误", f"启动简历匹配页面失败：{e}")
 
     def open_resume_craft(self):
-        dialog = ResumeCraftDialog(self.api_client, self)
-        dialog.exec_()
+        app_path = os.path.abspath(
+            os.path.join(
+                os.path.dirname(__file__),
+                "..",
+                "streamlit",
+                "resume_craft_agent_app.py",
+            )
+        )
+        app_path = os.path.normpath(app_path)
+
+        if not os.path.exists(app_path):
+            QMessageBox.warning(self, "错误", f"未找到 Streamlit 页面：{app_path}")
+            return
+
+        url = f"http://localhost:{self._resume_craft_streamlit_port}"
+
+        if self._is_port_open(self._resume_craft_streamlit_port):
+            webbrowser.open(url)
+            return
+
+        try:
+            project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+            env = os.environ.copy()
+            env["PYTHONPATH"] = project_root + os.pathsep + env.get("PYTHONPATH", "")
+            cmd = [
+                sys.executable,
+                "-m",
+                "streamlit",
+                "run",
+                app_path,
+                "--server.port",
+                str(self._resume_craft_streamlit_port),
+                "--server.headless",
+                "true",
+                "--browser.gatherUsageStats",
+                "false",
+            ]
+            self._resume_craft_streamlit_proc = subprocess.Popen(
+                cmd,
+                cwd=project_root,
+                env=env,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            QTimer.singleShot(1800, lambda: webbrowser.open(url))
+        except Exception as e:
+            QMessageBox.warning(self, "错误", f"启动简历生成页面失败：{e}")
 
     def open_cover_letter(self):
         dialog = CoverLetterDialog(self.api_client, self)

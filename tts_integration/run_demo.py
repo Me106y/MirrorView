@@ -113,7 +113,7 @@ def demo_tts_service():
                  f"{len(sentences)} sentences: {sentences}")
 
     # 1d. Chinese text splitting
-    cn_text = "你好！欢迎参加面试。准备好了吗？"
+    cn_text = "您好！欢迎参加面试。准备好了吗？"
     cn_sentences = tts._split_sentences(cn_text)
     print_result("Chinese splitting", len(cn_sentences) >= 2,
                  f"{len(cn_sentences)} sentences")

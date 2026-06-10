@@ -417,7 +417,7 @@ class ResumeCraftDialog(CareerForgeDialogBase):
 
         self.add_form_label("简历基础内容")
         self.resume_input = QTextEdit()
-        self.resume_input.setPlaceholderText("粘贴你已有的简历内容，或先填一个简要版本。")
+        self.resume_input.setPlaceholderText("粘贴您已有的简历内容，或先填一个简要版本。")
         self.resume_input.setMinimumHeight(170)
         self.form_layout.addWidget(self.resume_input)
 

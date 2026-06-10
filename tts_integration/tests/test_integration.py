@@ -322,7 +322,7 @@ class TestLiveVoicePipeline(unittest.TestCase):
 
     def test_chinese_tts(self):
         """Test Chinese language TTS."""
-        text = "你好！欢迎参加今天的面试。请先简单介绍一下你自己。"
+        text = "您好！欢迎参加今天的面试。请先简单介绍一下您自己。"
 
         pcm = self.tts.synthesize(text)
         self.assertGreater(len(pcm), 0)
