@@ -18,11 +18,14 @@ def register():
     data = request.json
     if User.query.filter_by(username=data.get('username')).first():
         return jsonify({'message': 'Username already exists'}), 400
-        
+
+    target_role = (data.get('target_role') or data.get('job_intention') or '').strip()
     user = User(
         username=data.get('username'),
         # email=data.get('email'), # Removed
-        job_intention=data.get('job_intention'),
+        job_intention=target_role,
+        target_role=target_role,
+        target_jd=(data.get('target_jd') or '').strip(),
         work_experience=data.get('work_experience')
     )
     user.set_password(data.get('password'))
@@ -35,11 +38,17 @@ def login():
     data = request.json
     user = User.query.filter_by(username=data.get('username')).first()
     if user and user.check_password(data.get('password')):
+        role = user.target_role or user.job_intention
         return jsonify({
             'message': 'Login successful', 
             'user_id': user.id,
             'username': user.username,
-            'job_intention': user.job_intention
+            'job_intention': role,
+            'target_role': role,
+            'target_jd': user.target_jd,
+            'work_experience': user.work_experience,
+            'has_resume': bool(user.has_resume),
+            'resume_path': user.resume_path,
         }), 200
     return jsonify({'message': 'Invalid username or password'}), 401
 
@@ -117,13 +126,15 @@ def upload_resume(user_id):
     
     if file and file.filename.endswith('.pdf'):
         user = User.query.get_or_404(user_id)
-        
-        filename = f"resume_{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.pdf"
+
+        # Keep only the latest resume for each user.
+        filename = f"resume_{user_id}.pdf"
         file_path = os.path.join(Config.RESUME_UPLOAD_FOLDER, filename)
         file.save(file_path)
         
         user.resume_path = file_path
         user.has_resume = True
+        user.resume_uploaded_at = datetime.utcnow()
         db.session.commit()
         
         # Index resume immediately for RAG
@@ -135,13 +146,42 @@ def upload_resume(user_id):
     
     return jsonify({'message': 'Invalid file type'}), 400
 
+
+@api.route('/user/<int:user_id>/profile', methods=['GET'])
+def get_profile(user_id):
+    user = User.query.get_or_404(user_id)
+    role = user.target_role or user.job_intention or ''
+    return jsonify(
+        {
+            'user_id': user.id,
+            'username': user.username,
+            'target_role': role,
+            'job_intention': role,
+            'target_jd': user.target_jd or '',
+            'work_experience': user.work_experience or '',
+            'has_resume': bool(user.has_resume),
+            'resume_path': user.resume_path,
+        }
+    ), 200
+
 @api.route('/user/<int:user_id>/update_profile', methods=['POST'])
 def update_profile(user_id):
-    data = request.json
+    data = request.json or {}
     user = User.query.get_or_404(user_id)
-    
-    if 'job_intention' in data:
-        user.job_intention = data['job_intention']
+
+    target_role = None
+    if 'target_role' in data:
+        target_role = (data.get('target_role') or '').strip()
+    elif 'job_intention' in data:
+        target_role = (data.get('job_intention') or '').strip()
+
+    if target_role is not None:
+        user.target_role = target_role
+        # Keep legacy field in sync for old code paths.
+        user.job_intention = target_role
+
+    if 'target_jd' in data:
+        user.target_jd = (data.get('target_jd') or '').strip()
     if 'work_experience' in data:
         user.work_experience = data['work_experience']
         
@@ -259,6 +299,60 @@ def careerforge_cover_letter():
         }
     ), 200
 
+
+@api.route('/careerforge/job-hunt', methods=['POST'])
+def careerforge_job_hunt():
+    data = request.get_json(silent=True)
+    if data is None:
+        data = request.form.to_dict() if request.form else {}
+
+    resume_text = _extract_resume_text(data)
+    target_role = (data.get('target_role') or data.get('job_intention') or '').strip()
+    target_jd = (data.get('target_jd') or data.get('jd_text') or '').strip()
+    work_experience = (data.get('work_experience') or '').strip()
+    target_regions = data.get('target_regions') or data.get('target_region') or []
+    target_cities = data.get('target_cities') or data.get('target_city') or []
+    salary_range = (data.get('salary_range') or '').strip()
+    hard_requirements = data.get('hard_requirements') or []
+    platforms = data.get('platforms') or []
+
+    if isinstance(target_regions, str):
+        target_regions = [target_regions]
+    if isinstance(target_cities, str):
+        target_cities = [target_cities]
+    if isinstance(hard_requirements, str):
+        hard_requirements = [hard_requirements]
+    if isinstance(platforms, str):
+        platforms = [platforms]
+
+    if not target_role and not resume_text:
+        return jsonify({'message': 'Please provide target_role or resume_text.'}), 400
+
+    result = ai_service.run_job_hunt(
+        {
+            "resume_text": resume_text[:24000],
+            "target_role": target_role,
+            "target_jd": target_jd[:12000],
+            "work_experience": work_experience,
+            "target_regions": target_regions,
+            "target_cities": target_cities,
+            "salary_range": salary_range,
+            "hard_requirements": hard_requirements,
+            "platforms": platforms,
+        }
+    )
+    return jsonify(
+        {
+            "skill": "job-hunt",
+            "result": result,
+            "process": [
+                "Loaded CareerForge job-hunt skill",
+                "Built search strategy from profile and constraints",
+                "Generated prioritized opportunities",
+            ],
+        }
+    ), 200
+
 @api.route('/interview/create', methods=['POST'])
 def create_interview():
     data = request.json
@@ -276,10 +370,10 @@ def create_interview():
         else:
             return jsonify({'message': 'You have an ongoing interview. Please finish it before starting a new one.'}), 400
 
-    # Use user's job intention directly
-    job_position = user.job_intention
+    # Prefer new profile field and keep backward compatibility.
+    job_position = user.target_role or user.job_intention
     if not job_position:
-        return jsonify({'message': 'Please set your job intention in your profile first.'}), 400
+        return jsonify({'message': 'Please set your target role in your profile first.'}), 400
 
     resume_text = None
     projects_summary = None

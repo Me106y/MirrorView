@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import (QWidget, QLabel, QPushButton, QVBoxLayout, QScrollArea,
-                             QMessageBox, QInputDialog, QMainWindow, QFrame, QHBoxLayout, QDialog, QLineEdit, QComboBox,
-                             QTextEdit, QSizePolicy)
+                             QApplication, QMessageBox, QInputDialog, QMainWindow, QFrame, QHBoxLayout, QDialog, QLineEdit, QComboBox,
+                             QTextEdit, QSizePolicy, QFileDialog, QListView, QStyledItemDelegate)
 from PyQt5.QtCore import Qt, QTimer
 from client.ui.interview_window import InterviewWindow
 from client.ui.voice_interview_window import VoiceInterviewWindow
@@ -162,55 +162,104 @@ class ModeSelectDialog(QDialog):
         self.accept()
 
 
+class ExperienceItemDelegate(QStyledItemDelegate):
+    def sizeHint(self, option, index):
+        size = super().sizeHint(option, index)
+        size.setHeight(max(size.height(), 44))
+        return size
+
+
 class ProfileDialog(QDialog):
-    def __init__(self, api_client, current_job, current_exp, parent=None):
+    def __init__(self, api_client, current_role, current_jd, current_exp, has_resume=False, parent=None):
         super().__init__(parent)
         self.api_client = api_client
         self.setWindowTitle("编辑个人信息")
-        self.setFixedSize(450, 350)
+        self.setFixedSize(560, 620)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground)
-        
-        self.job_intention = current_job
-        self.work_experience = current_exp
+
+        self.target_role = current_role or ""
+        self.target_jd = current_jd or ""
+        self.work_experience = current_exp or ""
+        self.has_resume = bool(has_resume)
+        self.selected_resume_path = None
         self.init_ui()
-        
+
     def init_ui(self):
         layout = QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
-        
+
         container = QFrame()
         container.setObjectName("dialogContainer")
         container_layout = QVBoxLayout(container)
         container_layout.setContentsMargins(30, 30, 30, 30)
-        container_layout.setSpacing(20)
-        
+        container_layout.setSpacing(16)
+
         title = QLabel("编辑个人信息")
         title.setObjectName("dialogTitle")
         title.setAlignment(Qt.AlignCenter)
         container_layout.addWidget(title)
-        
-        # Form Layout
+
         form_layout = QVBoxLayout()
-        form_layout.setSpacing(15)
-        
-        # Job Intention
-        job_label = QLabel("求职意向")
-        job_label.setObjectName("inputLabel")
-        form_layout.addWidget(job_label)
-        
-        self.job_input = QLineEdit(self.job_intention)
-        self.job_input.setPlaceholderText("例如：Java 开发工程师 / 产品经理")
-        self.job_input.setObjectName("inputField")
-        form_layout.addWidget(self.job_input)
-        
-        # Work Experience (ComboBox)
+        form_layout.setSpacing(12)
+
+        role_label = QLabel("目标岗位")
+        role_label.setObjectName("inputLabel")
+        form_layout.addWidget(role_label)
+
+        self.role_input = QLineEdit(self.target_role)
+        self.role_input.setPlaceholderText("如：AI应用开发")
+        self.role_input.setObjectName("inputField")
+        form_layout.addWidget(self.role_input)
+
+        jd_label = QLabel("JD")
+        jd_label.setObjectName("inputLabel")
+        form_layout.addWidget(jd_label)
+
+        self.jd_input = QTextEdit()
+        self.jd_input.setObjectName("jdField")
+        self.jd_input.setPlaceholderText("请粘贴目标岗位 JD，便于后续匹配分析与面试准备。")
+        self.jd_input.setPlainText(self.target_jd)
+        self.jd_input.setMinimumHeight(150)
+        form_layout.addWidget(self.jd_input)
+
         exp_label = QLabel("工作经验")
         exp_label.setObjectName("inputLabel")
         form_layout.addWidget(exp_label)
-        
+
         self.exp_combo = QComboBox()
         self.exp_combo.setObjectName("inputField")
+        popup_view = QListView()
+        popup_view.setObjectName("experiencePopup")
+        popup_view.setMouseTracking(True)
+        popup_view.setUniformItemSizes(True)
+        popup_view.setItemDelegate(ExperienceItemDelegate(popup_view))
+        popup_view.setStyleSheet("""
+            QListView#experiencePopup {
+                background-color: #ffffff;
+                color: #111827;
+                border: 1px solid #d1d5db;
+                border-radius: 12px;
+                padding: 6px;
+                outline: none;
+            }
+            QListView#experiencePopup::item {
+                min-height: 44px;
+                padding: 8px 14px;
+                border-radius: 9px;
+                color: #111827;
+                background-color: #ffffff;
+            }
+            QListView#experiencePopup::item:hover {
+                background-color: #3b82f6;
+                color: #ffffff;
+            }
+            QListView#experiencePopup::item:selected {
+                background-color: #3b82f6;
+                color: #ffffff;
+            }
+        """)
+        self.exp_combo.setView(popup_view)
         options = ["无经验", "1-2 年", "3-5 年", "5 年以上"]
         legacy_map = {
             "No experience": "无经验",
@@ -219,122 +268,204 @@ class ProfileDialog(QDialog):
             "5+ years": "5 年以上",
         }
         self.exp_combo.addItems(options)
-        
-        # Set current selection
         normalized_exp = legacy_map.get(self.work_experience, self.work_experience)
         if normalized_exp in options:
             self.exp_combo.setCurrentText(normalized_exp)
-        else:
-            # Try to match loosely or default to first
-            index = self.exp_combo.findText(normalized_exp)
-            if index >= 0:
-                self.exp_combo.setCurrentIndex(index)
-        
         form_layout.addWidget(self.exp_combo)
-        
+
+        resume_label = QLabel("简历（PDF）")
+        resume_label.setObjectName("inputLabel")
+        form_layout.addWidget(resume_label)
+
+        resume_row = QHBoxLayout()
+        resume_row.setSpacing(10)
+        self.resume_status = QLabel("已上传简历" if self.has_resume else "未上传简历")
+        self.resume_status.setObjectName("resumeStatus")
+        resume_row.addWidget(self.resume_status)
+        resume_row.addStretch()
+
+        self.resume_btn = QPushButton("上传简历")
+        self.resume_btn.setObjectName("secondaryButton")
+        self.resume_btn.setCursor(Qt.PointingHandCursor)
+        self.resume_btn.clicked.connect(self.select_resume)
+        resume_row.addWidget(self.resume_btn)
+        form_layout.addLayout(resume_row)
+
         container_layout.addLayout(form_layout)
         container_layout.addStretch()
-        
-        # Buttons
+
         btn_layout = QHBoxLayout()
         btn_layout.setSpacing(15)
-        
+
         cancel_btn = QPushButton("取消")
         cancel_btn.setObjectName("secondaryButton")
         cancel_btn.setCursor(Qt.PointingHandCursor)
         cancel_btn.clicked.connect(self.reject)
-        
+
         save_btn = QPushButton("保存修改")
         save_btn.setObjectName("primaryButton")
         save_btn.setCursor(Qt.PointingHandCursor)
         save_btn.clicked.connect(self.save_profile)
-        
+
         btn_layout.addWidget(cancel_btn)
         btn_layout.addWidget(save_btn)
         container_layout.addLayout(btn_layout)
-        
+
         layout.addWidget(container)
         self.setLayout(layout)
-        
+
         self.setStyleSheet("""
-            QFrame#dialogContainer { 
-                background-color: white; 
-                border-radius: 16px; 
-                border: 1px solid #e5e7eb; 
-                
+            QFrame#dialogContainer {
+                background-color: white;
+                border-radius: 16px;
+                border: 1px solid #e5e7eb;
             }
-            QLabel#dialogTitle { 
-                font-size: 24px; 
-                font-weight: 800; 
-                color: #111827; 
-                margin-bottom: 10px;
+            QLabel#dialogTitle {
+                font-size: 24px;
+                font-weight: 800;
+                color: #111827;
+                margin-bottom: 8px;
             }
             QLabel#inputLabel {
                 font-size: 14px;
                 font-weight: 600;
                 color: #374151;
             }
-            QLineEdit#inputField, QComboBox#inputField { 
-                padding: 10px 12px; 
-                border: 1px solid #d1d5db; 
-                border-radius: 8px; 
+            QLabel#resumeStatus {
+                font-size: 13px;
+                color: #6b7280;
+            }
+            QLineEdit#inputField {
+                padding: 10px 12px;
+                border: 1px solid #d1d5db;
+                border-radius: 8px;
                 font-size: 14px;
                 background-color: #f9fafb;
             }
-            QLineEdit#inputField:focus, QComboBox#inputField:focus {
+            QTextEdit#jdField {
+                padding: 10px 12px;
+                border: 1px solid #d1d5db;
+                border-radius: 8px;
+                font-size: 13px;
+                background-color: #f9fafb;
+            }
+            QLineEdit#inputField:focus, QTextEdit#jdField:focus {
                 border-color: #3b82f6;
                 background-color: white;
             }
-            QPushButton { 
-                padding: 10px 20px; 
-                border-radius: 8px; 
-                font-weight: 600;
+            QComboBox#inputField {
+                padding: 10px 12px;
+                border: 1px solid #d1d5db;
+                border-radius: 12px;
                 font-size: 14px;
+                background-color: #ffffff;
+                color: #111827;
             }
-            QPushButton#primaryButton { 
-                background-color: #3b82f6; 
-                color: white; 
-                border: none; 
+            QComboBox#inputField:focus {
+                border-color: #3b82f6;
             }
-            QPushButton#primaryButton:hover { 
-                background-color: #2563eb; 
-            }
-            QPushButton#secondaryButton { 
-                background-color: white; 
-                border: 1px solid #d1d5db; 
-                color: #374151; 
-            }
-            QPushButton#secondaryButton:hover { 
-                background-color: #f9fafb; 
-                border-color: #9ca3af; 
-            }
-            QComboBox::drop-down {
+            QComboBox#inputField::drop-down {
                 border: none;
                 width: 20px;
             }
+            QComboBox#inputField QAbstractItemView {
+                background-color: #ffffff;
+                color: #111827;
+                border: 1px solid #d1d5db;
+                border-radius: 10px;
+                outline: none;
+            }
+            QListView#experiencePopup {
+                background-color: #ffffff;
+                color: #111827;
+                border: 1px solid #d1d5db;
+                border-radius: 12px;
+                padding: 4px;
+                outline: none;
+            }
+            QListView#experiencePopup::item {
+                min-height: 44px;
+                padding: 8px 14px;
+                border-radius: 9px;
+                color: #111827;
+                background-color: #ffffff;
+            }
+            QListView#experiencePopup::item:hover {
+                background-color: #3b82f6;
+                color: #ffffff;
+            }
+            QListView#experiencePopup::item:selected {
+                background-color: #3b82f6;
+                color: #ffffff;
+            }
+            QPushButton {
+                padding: 10px 20px;
+                border-radius: 8px;
+                font-weight: 600;
+                font-size: 14px;
+            }
+            QPushButton#primaryButton {
+                background-color: #3b82f6;
+                color: white;
+                border: none;
+            }
+            QPushButton#primaryButton:hover {
+                background-color: #2563eb;
+            }
+            QPushButton#secondaryButton {
+                background-color: white;
+                border: 1px solid #d1d5db;
+                color: #374151;
+            }
+            QPushButton#secondaryButton:hover {
+                background-color: #f9fafb;
+                border-color: #9ca3af;
+            }
         """)
 
-    def save_profile(self):
-        job = self.job_input.text().strip()
-        exp = self.exp_combo.currentText()
-        if not job:
-            QMessageBox.warning(self, "提示", "求职意向不能为空")
+    def select_resume(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "选择简历文件", "", "PDF Files (*.pdf)")
+        if not file_path:
             return
-            
-        success, result = self.api_client.update_profile(job, exp)
-        if success:
+        self.selected_resume_path = file_path
+        self.resume_status.setText(f"待上传：{os.path.basename(file_path)}")
+        self.resume_status.setStyleSheet("color: #1d4ed8;")
+
+    def save_profile(self):
+        role = self.role_input.text().strip() or self.target_role
+        jd_text = self.jd_input.toPlainText().strip()
+        exp = self.exp_combo.currentText()
+        if not role:
+            QMessageBox.warning(self, "提示", "目标岗位不能为空")
+            return
+
+        success, result = self.api_client.update_profile(role, jd_text, exp)
+        if not success:
+            QMessageBox.warning(self, "失败", str(result))
+            return
+
+        upload_error = None
+        if self.selected_resume_path:
+            uploaded, upload_result = self.api_client.upload_resume(self.selected_resume_path)
+            if uploaded:
+                self.has_resume = True
+            else:
+                upload_error = str(upload_result)
+
+        self.target_role = role
+        self.target_jd = jd_text
+        self.work_experience = exp
+
+        if upload_error:
+            QMessageBox.warning(self, "部分成功", f"信息已保存，但简历上传失败：{upload_error}")
+        else:
             msg = QMessageBox(self)
             msg.setWindowTitle("成功")
             msg.setText("个人信息更新成功！")
             msg.setIcon(QMessageBox.Information)
             msg.setStyleSheet("background-color: white;")
             msg.exec_()
-            
-            self.job_intention = job
-            self.work_experience = exp
-            self.accept()
-        else:
-            QMessageBox.warning(self, "失败", str(result))
+        self.accept()
 
 
 
@@ -656,6 +787,7 @@ class MainWindow(QMainWindow):
         self.setFixedSize(1160, 760)
         self.init_ui()
         self.apply_styles()
+        self.center_on_screen()
 
     def init_ui(self):
         central_widget = QWidget()
@@ -772,9 +904,9 @@ class MainWindow(QMainWindow):
 
         find_card = self.create_card(
             "寻找工作",
-            "",
+            "筛选并输出高匹配岗位清单。",
             "secondaryButton",
-            self.join_interview,
+            self.open_job_hunt,
         )
         interview_row.addWidget(find_card)
 
@@ -806,6 +938,15 @@ class MainWindow(QMainWindow):
         
         central_widget.setLayout(main_layout)
         self.setCentralWidget(central_widget)
+
+    def center_on_screen(self):
+        screen = QApplication.primaryScreen()
+        if not screen:
+            return
+        screen_geometry = screen.availableGeometry()
+        frame_geometry = self.frameGeometry()
+        frame_geometry.moveCenter(screen_geometry.center())
+        self.move(frame_geometry.topLeft())
 
     def create_card(self, title_text, desc_text, btn_style, callback):
         card = QFrame()
@@ -888,6 +1029,7 @@ class MainWindow(QMainWindow):
                 color: #4b5563;
                 font-size: 12px;
                 line-height: 1.4;
+                font-style: italic;
             }
             QPushButton {
                 border-radius: 10px;
@@ -988,19 +1130,116 @@ class MainWindow(QMainWindow):
         history_window.exec_()
 
     def edit_profile(self):
-        # We need to get current user data, assuming self.user_data has it
-        # Or better, fetch it or pass what we have
-        current_job = self.user_data.get('job_intention', '')
+        # Always read latest profile from database before opening editor.
+        ok, profile = self.api_client.get_profile()
+        if ok and isinstance(profile, dict):
+            self.user_data.update(profile)
+
+        current_role = self.user_data.get('target_role') or self.user_data.get('job_intention', '')
+        current_jd = self.user_data.get('target_jd', '')
         current_exp = self.user_data.get('work_experience', '')
-        
-        dialog = ProfileDialog(self.api_client, current_job, current_exp, self)
+        has_resume = self.user_data.get('has_resume', False)
+
+        dialog = ProfileDialog(self.api_client, current_role, current_jd, current_exp, has_resume, self)
         if dialog.exec_() == QDialog.Accepted:
-            # Update local data
-            self.user_data['job_intention'] = dialog.job_intention
+            self.user_data['target_role'] = dialog.target_role
+            self.user_data['job_intention'] = dialog.target_role
+            self.user_data['target_jd'] = dialog.target_jd
             self.user_data['work_experience'] = dialog.work_experience
-            # Update UI if needed (e.g. welcome message or sidebar info)
-            # Reload?
-            pass
+            self.user_data['has_resume'] = dialog.has_resume
+
+    def open_job_hunt(self):
+        target_role = (self.user_data.get('target_role') or self.user_data.get('job_intention') or '').strip()
+        target_jd = (self.user_data.get('target_jd') or '').strip()
+        work_experience = (self.user_data.get('work_experience') or '').strip()
+
+        if not target_role:
+            target_role, ok = QInputDialog.getText(self, "补充信息", "请输入目标岗位：")
+            if not ok:
+                return
+            target_role = target_role.strip()
+            if not target_role:
+                QMessageBox.warning(self, "提示", "请先填写目标岗位，再进行岗位搜索。")
+                return
+
+        success, response = self.api_client.run_job_hunt(
+            target_role=target_role,
+            target_jd=target_jd,
+            work_experience=work_experience,
+        )
+        if not success:
+            QMessageBox.warning(self, "错误", f"调用 Job Hunt 失败：{response}")
+            return
+
+        result = response.get("result", {}) if isinstance(response, dict) else {}
+        summary_text = self._format_job_hunt_result(result)
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Job Hunt 结果")
+        dlg.setFixedSize(720, 560)
+        layout = QVBoxLayout(dlg)
+
+        title = QLabel("寻找工作（Job Hunt）已执行")
+        title.setStyleSheet("font-size: 18px; font-weight: 700; color: #111827;")
+        layout.addWidget(title)
+
+        body = QTextEdit()
+        body.setReadOnly(True)
+        body.setText(summary_text)
+        body.setStyleSheet("background: #ffffff; border: 1px solid #e5e7eb; border-radius: 10px;")
+        layout.addWidget(body)
+
+        close_btn = QPushButton("关闭")
+        close_btn.setObjectName("secondaryButton")
+        close_btn.clicked.connect(dlg.accept)
+        layout.addWidget(close_btn, 0, Qt.AlignRight)
+        dlg.exec_()
+
+    @staticmethod
+    def _format_job_hunt_result(result):
+        if not isinstance(result, dict):
+            return "未获取到有效结果。"
+
+        lines = []
+        summary = (result.get("summary") or "").strip()
+        if summary:
+            lines.append(f"总览：{summary}")
+
+        jobs = result.get("top_jobs") or []
+        if jobs:
+            lines.append("")
+            lines.append("推荐岗位：")
+            for idx, job in enumerate(jobs[:10], start=1):
+                title = job.get("title", "未命名岗位")
+                company = job.get("company", "未知公司")
+                location = job.get("location", "地点未标注")
+                salary = job.get("salary", "薪资未标注")
+                level = job.get("match_level", "unknown")
+                reason = job.get("match_reason", "")
+                url = job.get("url", "")
+                lines.append(f"{idx}. {title} - {company}")
+                lines.append(f"   地点：{location} | 薪资：{salary} | 匹配等级：{level}")
+                if reason:
+                    lines.append(f"   匹配点：{reason}")
+                if url:
+                    lines.append(f"   链接：{url}")
+                lines.append("")
+
+        next_actions = result.get("next_actions") or []
+        if next_actions:
+            lines.append("下一步建议：")
+            for i, item in enumerate(next_actions[:5], start=1):
+                lines.append(f"{i}. {item}")
+
+        assumptions = result.get("assumptions") or []
+        if assumptions:
+            lines.append("")
+            lines.append("备注：")
+            for item in assumptions[:5]:
+                lines.append(f"- {item}")
+
+        if not lines:
+            return "已调用 Job Hunt Skill，但暂未返回可展示的内容。"
+        return "\n".join(lines)
 
     def open_resume_match(self):
         app_path = os.path.abspath(

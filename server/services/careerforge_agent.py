@@ -19,6 +19,7 @@ class CareerForgeAgent:
     """
 
     SUPPORTED_SKILLS = {
+        "job-hunt",
         "resume-match",
         "resume-craft",
         "cover-letter",
@@ -301,6 +302,26 @@ You MUST follow the provided Skill specification to process user input.
             "assumptions": ["string"],
         }
         return self._invoke_json_skill("cover-letter", payload, schema)
+
+    def run_job_hunt(self, payload: dict) -> dict:
+        schema = {
+            "summary": "string",
+            "search_strategy": ["string"],
+            "top_jobs": [
+                {
+                    "title": "string",
+                    "company": "string",
+                    "location": "string",
+                    "salary": "string",
+                    "match_level": "green|yellow|orange",
+                    "match_reason": "string",
+                    "url": "string",
+                }
+            ],
+            "next_actions": ["string"],
+            "assumptions": ["string"],
+        }
+        return self._invoke_json_skill("job-hunt", payload, schema)
 
     def build_mock_interview_reply(
         self,

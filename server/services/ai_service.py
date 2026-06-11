@@ -212,6 +212,9 @@ class AIService:
     def run_cover_letter(self, payload):
         return self.careerforge_agent.run_cover_letter(payload)
 
+    def run_job_hunt(self, payload):
+        return self.careerforge_agent.run_job_hunt(payload)
+
     def generate_mock_interview_opening(self, job_position, resume_summary=""):
         return self.careerforge_agent.generate_mock_interview_opening(job_position, resume_summary)
 

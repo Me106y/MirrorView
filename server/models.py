@@ -11,10 +11,14 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(50), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
+    # Legacy field kept for backward compatibility.
     job_intention = db.Column(db.String(100))
+    target_role = db.Column(db.String(120))
+    target_jd = db.Column(db.Text)
     work_experience = db.Column(db.String(50), default='No experience') # Changed from integer work_years
     resume_path = db.Column(db.String(200))
     has_resume = db.Column(db.Boolean, default=False)
+    resume_uploaded_at = db.Column(db.DateTime)
     is_active = db.Column(db.Boolean, default=True)
     last_login = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)

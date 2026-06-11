@@ -45,7 +45,7 @@ class LoginWindow(QWidget):
         self.right_panel.setObjectName("rightPanel")
         right_layout = QVBoxLayout(self.right_panel)
         right_layout.setAlignment(Qt.AlignCenter)
-        right_layout.setContentsMargins(50, 85, 50, 50)
+        right_layout.setContentsMargins(50, 155, 50, 50)
         right_layout.setSpacing(20)
 
         # Title
@@ -54,10 +54,10 @@ class LoginWindow(QWidget):
         title.setAlignment(Qt.AlignCenter)
         right_layout.addWidget(title)
         
-        subtitle = QLabel("请登录后继续")
-        subtitle.setObjectName("subtitle")
-        subtitle.setAlignment(Qt.AlignCenter)
-        right_layout.addWidget(subtitle)
+        # subtitle = QLabel("请登录后继续")
+        # subtitle.setObjectName("subtitle")
+        # subtitle.setAlignment(Qt.AlignCenter)
+        # right_layout.addWidget(subtitle)
 
         # Form Fields
         form_layout = QVBoxLayout()

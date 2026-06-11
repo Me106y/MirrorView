@@ -4,8 +4,33 @@ from server.models import db
 from server.routes import api
 import os
 # import pymysql
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 from utils.logger_handler import logger
+
+
+def _ensure_users_table_columns():
+    """
+    Lightweight compatibility migration for existing SQLite databases.
+    """
+    inspector = inspect(db.engine)
+    if 'users' not in inspector.get_table_names():
+        return
+
+    existing = {col['name'] for col in inspector.get_columns('users')}
+    alter_sql = []
+
+    if 'target_role' not in existing:
+        alter_sql.append("ALTER TABLE users ADD COLUMN target_role VARCHAR(120)")
+    if 'target_jd' not in existing:
+        alter_sql.append("ALTER TABLE users ADD COLUMN target_jd TEXT")
+    if 'resume_uploaded_at' not in existing:
+        alter_sql.append("ALTER TABLE users ADD COLUMN resume_uploaded_at DATETIME")
+
+    for statement in alter_sql:
+        db.session.execute(text(statement))
+    if alter_sql:
+        db.session.commit()
+        logger.info("Applied users table compatibility migration: %s", ", ".join(alter_sql))
 
 
 def create_app():
@@ -40,6 +65,7 @@ def create_app():
         # Create tables
         try:
             db.create_all()
+            _ensure_users_table_columns()
             logger.info("Database tables created successfully.")
 
 

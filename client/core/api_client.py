@@ -1,5 +1,5 @@
-import requests
 import json
+import requests
 
 class APIClient:
     def __init__(self, base_url="http://localhost:5001/api"):
@@ -47,15 +47,42 @@ class APIClient:
             return False, str(e)
 
     
-    def update_profile(self, job_intention, work_experience):
+    def update_profile(self, target_role, target_jd, work_experience):
         try:
             response = requests.post(f"{self.base_url}/user/{self.user_id}/update_profile", json={
-                "job_intention": job_intention,
+                "target_role": target_role,
+                "target_jd": target_jd,
                 "work_experience": work_experience
             })
             if response.status_code == 200:
                 return True, response.json()
             return False, response.json().get('message', 'Failed to update profile')
+        except Exception as e:
+            return False, str(e)
+
+    def get_profile(self):
+        try:
+            response = requests.get(f"{self.base_url}/user/{self.user_id}/profile")
+            if response.status_code == 200:
+                return True, response.json()
+            return False, response.json().get('message', 'Failed to fetch profile')
+        except Exception as e:
+            return False, str(e)
+
+    def upload_resume(self, file_path):
+        try:
+            with open(file_path, 'rb') as f:
+                files = {'resume': f}
+                response = requests.post(
+                    f"{self.base_url}/user/{self.user_id}/upload_resume",
+                    files=files
+                )
+            if response.status_code == 200:
+                return True, response.json()
+            try:
+                return False, response.json().get('message', 'Resume upload failed')
+            except ValueError:
+                return False, f"Server Error ({response.status_code}): {response.text[:100]}"
         except Exception as e:
             return False, str(e)
     def create_interview(self, difficulty="medium", duration=30):
@@ -228,6 +255,42 @@ class APIClient:
                 return True, response.json()
             try:
                 return False, response.json().get("message", "Cover letter generation failed")
+            except ValueError:
+                return False, f"Server Error ({response.status_code}): {response.text[:100]}"
+        except Exception as e:
+            return False, str(e)
+
+    def run_job_hunt(
+        self,
+        target_role,
+        target_jd="",
+        work_experience="",
+        resume_text="",
+        target_regions=None,
+        target_cities=None,
+        salary_range="",
+        hard_requirements=None,
+        platforms=None,
+    ):
+        try:
+            response = requests.post(
+                f"{self.base_url}/careerforge/job-hunt",
+                json={
+                    "target_role": target_role,
+                    "target_jd": target_jd,
+                    "work_experience": work_experience,
+                    "resume_text": resume_text,
+                    "target_regions": target_regions or [],
+                    "target_cities": target_cities or [],
+                    "salary_range": salary_range,
+                    "hard_requirements": hard_requirements or [],
+                    "platforms": platforms or [],
+                },
+            )
+            if response.status_code == 200:
+                return True, response.json()
+            try:
+                return False, response.json().get("message", "Job hunt failed")
             except ValueError:
                 return False, f"Server Error ({response.status_code}): {response.text[:100]}"
         except Exception as e:
