@@ -755,8 +755,8 @@ class MainWindow(QMainWindow):
 
         interview_card = self.create_card(
             "模拟面试",
-            "智能问答驱动面试流程，RTMP 推流与旁听体验保持不变。",
-            "primaryButton",
+            "智能问答驱动面试。",
+            "secondaryButton",
             self.show_resume_dialog,
         )
         interview_row.addWidget(interview_card)
@@ -768,6 +768,16 @@ class MainWindow(QMainWindow):
             self.join_interview,
         )
         interview_row.addWidget(join_card)
+
+
+        find_card = self.create_card(
+            "寻找工作",
+            "",
+            "secondaryButton",
+            self.join_interview,
+        )
+        interview_row.addWidget(find_card)
+
         content_layout.addLayout(interview_row)
         
         # History Section (Placeholder)
