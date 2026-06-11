@@ -11,7 +11,7 @@ class LoginWindow(QWidget):
     def __init__(self, api_client):
         super().__init__()
         self.api_client = api_client
-        self.setWindowTitle("MirrorView - Login")
+        self.setWindowTitle("MirrorView - 登录")
         self.setFixedSize(900, 600)
         self.init_ui()
         self.apply_styles()
@@ -33,7 +33,7 @@ class LoginWindow(QWidget):
             pixmap = QPixmap(image_path)
             self.image_label.setPixmap(pixmap.scaled(400, 400, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         else:
-            self.image_label.setText("MirrorView\nSmart Interview Platform")
+            self.image_label.setText("MirrorView\n智能面试平台")
             self.image_label.setAlignment(Qt.AlignCenter)
             self.image_label.setStyleSheet("font-size: 24px; color: #555; font-weight: bold;")
         
@@ -45,16 +45,16 @@ class LoginWindow(QWidget):
         self.right_panel.setObjectName("rightPanel")
         right_layout = QVBoxLayout(self.right_panel)
         right_layout.setAlignment(Qt.AlignCenter)
-        right_layout.setContentsMargins(50, 50, 50, 50)
+        right_layout.setContentsMargins(50, 85, 50, 50)
         right_layout.setSpacing(20)
 
         # Title
-        title = QLabel("Welcome Back")
+        title = QLabel("欢迎回来")
         title.setObjectName("title")
         title.setAlignment(Qt.AlignCenter)
         right_layout.addWidget(title)
         
-        subtitle = QLabel("Please sign in to continue")
+        subtitle = QLabel("请登录后继续")
         subtitle.setObjectName("subtitle")
         subtitle.setAlignment(Qt.AlignCenter)
         right_layout.addWidget(subtitle)
@@ -64,11 +64,11 @@ class LoginWindow(QWidget):
         form_layout.setSpacing(15)
 
         self.username_input = QLineEdit()
-        self.username_input.setPlaceholderText("Username")
+        self.username_input.setPlaceholderText("用户名")
         form_layout.addWidget(self.username_input)
 
         self.password_input = QLineEdit()
-        self.password_input.setPlaceholderText("Password")
+        self.password_input.setPlaceholderText("密码")
         self.password_input.setEchoMode(QLineEdit.Password)
         self.password_input.returnPressed.connect(self.handle_login)
         form_layout.addWidget(self.password_input)
@@ -76,13 +76,13 @@ class LoginWindow(QWidget):
         right_layout.addLayout(form_layout)
 
         # Buttons
-        self.login_btn = QPushButton("Sign In")
+        self.login_btn = QPushButton("登录")
         self.login_btn.setObjectName("primaryButton")
         self.login_btn.setCursor(Qt.PointingHandCursor)
         self.login_btn.clicked.connect(self.handle_login)
         right_layout.addWidget(self.login_btn)
 
-        self.register_btn = QPushButton("Don't have an account? Sign up")
+        self.register_btn = QPushButton("还没有账号？去注册")
         self.register_btn.setObjectName("secondaryButton")
         self.register_btn.setCursor(Qt.PointingHandCursor)
         self.register_btn.clicked.connect(self.switch_to_register.emit)
@@ -158,7 +158,7 @@ class LoginWindow(QWidget):
         password = self.password_input.text()
         
         if not username or not password:
-            QMessageBox.warning(self, "Error", "Please fill in all fields")
+            QMessageBox.warning(self, "提示", "请填写完整信息")
             return
 
         success, data = self.api_client.login(username, password)
@@ -166,4 +166,17 @@ class LoginWindow(QWidget):
             self.login_success.emit(data)
             self.close()
         else:
-            QMessageBox.critical(self, "Login Failed", str(data))
+            QMessageBox.critical(self, "登录失败", self.localize_login_error(str(data)))
+
+    @staticmethod
+    def localize_login_error(message):
+        error_map = {
+            "Invalid username or password": "用户名或密码错误",
+            "Login failed": "登录失败",
+        }
+
+        if message in error_map:
+            return error_map[message]
+        if message.startswith("Server Error"):
+            return message.replace("Server Error", "服务器错误")
+        return message
