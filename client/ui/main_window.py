@@ -5,9 +5,6 @@ from PyQt5.QtCore import Qt, QTimer
 from client.ui.interview_window import InterviewWindow
 from client.ui.voice_interview_window import VoiceInterviewWindow
 from client.ui.resume_dialog import ResumeUploadDialog
-from client.ui.careerforge_dialogs import (
-    CoverLetterDialog,
-)
 import os
 import socket
 import subprocess
@@ -653,6 +650,8 @@ class MainWindow(QMainWindow):
         self._resume_match_streamlit_port = 8511
         self._resume_craft_streamlit_proc = None
         self._resume_craft_streamlit_port = 8512
+        self._cover_letter_streamlit_proc = None
+        self._cover_letter_streamlit_port = 8513
         self.setWindowTitle("MirrorView - 控制台")
         self.setFixedSize(1160, 760)
         self.init_ui()
@@ -1092,8 +1091,53 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "错误", f"启动简历生成页面失败：{e}")
 
     def open_cover_letter(self):
-        dialog = CoverLetterDialog(self.api_client, self)
-        dialog.exec_()
+        app_path = os.path.abspath(
+            os.path.join(
+                os.path.dirname(__file__),
+                "..",
+                "streamlit",
+                "cover_letter_agent_app.py",
+            )
+        )
+        app_path = os.path.normpath(app_path)
+
+        if not os.path.exists(app_path):
+            QMessageBox.warning(self, "错误", f"未找到 Streamlit 页面：{app_path}")
+            return
+
+        url = f"http://localhost:{self._cover_letter_streamlit_port}"
+
+        if self._is_port_open(self._cover_letter_streamlit_port):
+            webbrowser.open(url)
+            return
+
+        try:
+            project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+            env = os.environ.copy()
+            env["PYTHONPATH"] = project_root + os.pathsep + env.get("PYTHONPATH", "")
+            cmd = [
+                sys.executable,
+                "-m",
+                "streamlit",
+                "run",
+                app_path,
+                "--server.port",
+                str(self._cover_letter_streamlit_port),
+                "--server.headless",
+                "true",
+                "--browser.gatherUsageStats",
+                "false",
+            ]
+            self._cover_letter_streamlit_proc = subprocess.Popen(
+                cmd,
+                cwd=project_root,
+                env=env,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            QTimer.singleShot(1800, lambda: webbrowser.open(url))
+        except Exception as e:
+            QMessageBox.warning(self, "错误", f"启动求职信页面失败：{e}")
 
     @staticmethod
     def _is_port_open(port):
