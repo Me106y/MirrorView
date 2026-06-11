@@ -9,7 +9,10 @@ import os
 import socket
 import subprocess
 import sys
+import json
+import tempfile
 import webbrowser
+from urllib.parse import urlencode
 
 
 # ---------------------------------------------------------------------------
@@ -1242,6 +1245,8 @@ class MainWindow(QMainWindow):
         return "\n".join(lines)
 
     def open_resume_match(self):
+        prefill_params = self._get_streamlit_prefill_params()
+
         app_path = os.path.abspath(
             os.path.join(
                 os.path.dirname(__file__),
@@ -1256,7 +1261,8 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "错误", f"未找到 Streamlit 页面：{app_path}")
             return
 
-        url = f"http://localhost:{self._resume_match_streamlit_port}"
+        base_url = f"http://localhost:{self._resume_match_streamlit_port}"
+        url = self._build_streamlit_url(base_url, prefill_params)
 
         if self._is_port_open(self._resume_match_streamlit_port):
             webbrowser.open(url)
@@ -1286,11 +1292,13 @@ class MainWindow(QMainWindow):
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
-            QTimer.singleShot(1800, lambda: webbrowser.open(url))
+            QTimer.singleShot(1800, lambda u=url: webbrowser.open(u))
         except Exception as e:
             QMessageBox.warning(self, "错误", f"启动简历匹配页面失败：{e}")
 
     def open_resume_craft(self):
+        prefill_params = self._get_streamlit_prefill_params()
+
         app_path = os.path.abspath(
             os.path.join(
                 os.path.dirname(__file__),
@@ -1305,7 +1313,8 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "错误", f"未找到 Streamlit 页面：{app_path}")
             return
 
-        url = f"http://localhost:{self._resume_craft_streamlit_port}"
+        base_url = f"http://localhost:{self._resume_craft_streamlit_port}"
+        url = self._build_streamlit_url(base_url, prefill_params)
 
         if self._is_port_open(self._resume_craft_streamlit_port):
             webbrowser.open(url)
@@ -1335,11 +1344,13 @@ class MainWindow(QMainWindow):
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
-            QTimer.singleShot(1800, lambda: webbrowser.open(url))
+            QTimer.singleShot(1800, lambda u=url: webbrowser.open(u))
         except Exception as e:
             QMessageBox.warning(self, "错误", f"启动简历生成页面失败：{e}")
 
     def open_cover_letter(self):
+        prefill_params = self._get_streamlit_prefill_params()
+
         app_path = os.path.abspath(
             os.path.join(
                 os.path.dirname(__file__),
@@ -1354,7 +1365,8 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "错误", f"未找到 Streamlit 页面：{app_path}")
             return
 
-        url = f"http://localhost:{self._cover_letter_streamlit_port}"
+        base_url = f"http://localhost:{self._cover_letter_streamlit_port}"
+        url = self._build_streamlit_url(base_url, prefill_params)
 
         if self._is_port_open(self._cover_letter_streamlit_port):
             webbrowser.open(url)
@@ -1384,9 +1396,54 @@ class MainWindow(QMainWindow):
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
-            QTimer.singleShot(1800, lambda: webbrowser.open(url))
+            QTimer.singleShot(1800, lambda u=url: webbrowser.open(u))
         except Exception as e:
             QMessageBox.warning(self, "错误", f"启动求职信页面失败：{e}")
+
+    def _get_streamlit_prefill_params(self):
+        ok, profile = self.api_client.get_profile()
+        if ok and isinstance(profile, dict):
+            self.user_data.update(profile)
+
+        role = (self.user_data.get("target_role") or self.user_data.get("job_intention") or "").strip()
+        jd_text = (self.user_data.get("target_jd") or "").strip()
+        resume_path = (self.user_data.get("resume_path") or "").strip()
+        has_resume = bool(self.user_data.get("has_resume"))
+
+        if not role or not jd_text:
+            return {}
+
+        prefill_file = self._create_streamlit_prefill_file(role, jd_text, resume_path, has_resume)
+        if prefill_file:
+            return {"profile_source": "saved", "prefill_file": prefill_file}
+        params = {"profile_source": "saved", "target_role": role, "target_jd": jd_text}
+        if resume_path:
+            params["resume_path"] = resume_path
+        if has_resume:
+            params["has_resume"] = "1"
+        return params
+
+    @staticmethod
+    def _create_streamlit_prefill_file(target_role, target_jd, resume_path="", has_resume=False):
+        payload = {
+            "target_role": (target_role or "").strip(),
+            "target_jd": (target_jd or "").strip(),
+            "resume_path": (resume_path or "").strip(),
+            "has_resume": bool(has_resume),
+        }
+        try:
+            with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", delete=False, suffix=".json") as tmp:
+                json.dump(payload, tmp, ensure_ascii=False)
+                return tmp.name
+        except Exception:
+            return ""
+
+    @staticmethod
+    def _build_streamlit_url(base_url, query_params):
+        params = {k: v for k, v in (query_params or {}).items() if v}
+        if not params:
+            return base_url
+        return f"{base_url}?{urlencode(params)}"
 
     @staticmethod
     def _is_port_open(port):

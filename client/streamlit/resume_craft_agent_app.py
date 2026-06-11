@@ -1,4 +1,5 @@
 import html
+import json
 import os
 import queue
 import re
@@ -6,6 +7,7 @@ import sys
 import threading
 import time
 import uuid
+import zipfile
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -86,6 +88,46 @@ def _read_text(path: Path) -> str:
         return ""
 
 
+def _read_pdf_text(path: Path) -> str:
+    try:
+        from pypdf import PdfReader
+        reader = PdfReader(str(path))
+        parts = []
+        for page in reader.pages:
+            parts.append(page.extract_text() or "")
+        return "\n".join(parts).strip()
+    except Exception:
+        return ""
+
+
+def _read_resume_from_path(path_text: str) -> str:
+    raw = (path_text or "").strip()
+    if not raw:
+        return ""
+    path = Path(raw).expanduser()
+    try:
+        if not path.exists() or not path.is_file():
+            return ""
+    except OSError:
+        return ""
+
+    suffix = path.suffix.lower()
+    try:
+        if suffix == ".pdf":
+            return _read_pdf_text(path)
+        if suffix in {".txt", ".md"}:
+            return path.read_text(encoding="utf-8", errors="ignore").strip()
+        if suffix == ".docx":
+            with zipfile.ZipFile(path, "r") as zf:
+                xml = zf.read("word/document.xml").decode("utf-8", errors="ignore")
+            xml = re.sub(r"<w:p[^>]*>", "\n", xml)
+            xml = re.sub(r"<[^>]+>", "", xml)
+            return re.sub(r"\n{2,}", "\n", xml).strip()
+    except Exception:
+        return ""
+    return ""
+
+
 def _load_resume_sources():
     if "resume_sources" in st.session_state:
         return st.session_state.resume_sources
@@ -116,13 +158,178 @@ def _load_resume_sources():
     return sources
 
 
+def _query_value(name: str) -> str:
+    try:
+        value = st.query_params.get(name, "")
+    except Exception:
+        try:
+            value = st.experimental_get_query_params().get(name, [""])
+        except Exception:
+            return ""
+    if isinstance(value, list):
+        value = value[0] if value else ""
+    return str(value or "").strip()
+
+
+def _load_profile_prefill() -> dict:
+    payload = {}
+    prefill_file = _query_value("prefill_file")
+    if prefill_file:
+        try:
+            path = Path(prefill_file).expanduser()
+            if path.exists() and path.is_file():
+                data = json.loads(path.read_text(encoding="utf-8", errors="ignore"))
+                if isinstance(data, dict):
+                    payload.update(data)
+        except Exception:
+            pass
+
+    role = _query_value("target_role")
+    jd_text = _query_value("target_jd")
+    resume_path = _query_value("resume_path")
+    has_resume = _query_value("has_resume")
+    if role and not payload.get("target_role"):
+        payload["target_role"] = role
+    if jd_text and not payload.get("target_jd"):
+        payload["target_jd"] = jd_text
+    if resume_path and not payload.get("resume_path"):
+        payload["resume_path"] = resume_path
+    if has_resume and ("has_resume" not in payload):
+        payload["has_resume"] = has_resume
+    payload["profile_source"] = _query_value("profile_source")
+    return payload
+
+
+def _to_bool(value) -> bool:
+    if isinstance(value, bool):
+        return value
+    text = str(value or "").strip().lower()
+    return text in {"1", "true", "yes", "y", "on"}
+
+
+def _normalize_choice_text(text: str) -> str:
+    return re.sub(r"\s+", "", (text or "").strip().lower())
+
+
+def _resolve_profile_choice(text: str) -> str:
+    norm = _normalize_choice_text(text)
+    if norm in {"1", "选1", "选择1", "使用已保存信息"}:
+        return "saved"
+    if any(k in norm for k in ("使用已保存", "用已保存", "已保存", "saved")):
+        return "saved"
+    if norm in {"2", "选2", "选择2", "使用新提交信息"}:
+        return "new"
+    if any(k in norm for k in ("使用新提交", "用新提交", "新提交", "重新提交", "new")):
+        return "new"
+    if any(k in (text or "") for k in ("【目标岗位JD】", "[目标岗位JD]")):
+        return "new"
+    if (text or "").startswith(("JD：", "jd：", "职位JD：", "岗位：")):
+        return "new"
+    return ""
+
+
+def _is_choice_command_only(text: str) -> bool:
+    norm = _normalize_choice_text(text)
+    command_only = {
+        "使用已保存信息", "使用已保存", "已保存", "saved", "1", "选1", "选择1",
+        "使用新提交信息", "使用新提交", "新提交", "重新提交", "new", "2", "选2", "选择2",
+    }
+    return norm in command_only
+
+
+def _saved_choice_guidance(resume_loaded: bool) -> str:
+    resume_tip = "已读取已保存简历，可直接继续。" if resume_loaded else "未读取到已保存简历，请补充简历内容或文件路径。"
+    return (
+        "已切换为“使用已保存信息”。\n"
+        f"{resume_tip}\n\n"
+        "下一步请告诉我这 3 项：\n"
+        "1) 模板编号（01-07）\n"
+        "2) 语言（中文 / 英文 / 中英文双版）\n"
+        "3) 照片偏好（放照片 / 不放照片）\n\n"
+        "| 编号 | 模板名称 | 风格特点 |\n"
+        "| --- | --- | --- |\n"
+        "| 01 | **Editorial 杂志编辑风** | 经典文艺，奶油色底，绿色强调线，适合创意/文化类岗位 |\n"
+        "| 02 | **Minimal 极简主义** | 纯白底，极少装饰，留白多，适合科技/设计/外企 |\n"
+        "| 03 | **Sidebar Navy 深蓝双栏** | 左侧深蓝栏放技能和联系方式，右侧放经历，信息密度高 |\n"
+        "| 04 | **Sidebar Dark 深灰左栏** | 左侧深灰栏+右侧白底，沉稳大气，适合管理/金融类 |\n"
+        "| 05 | **Dark Header 深色头部** | 顶部深色块放姓名和联系方式，正文白底，对比醒目 |\n"
+        "| 06 | **Clean Teal 清新青色** | 白底+青绿色条装饰，清新专业，适合大部分岗位 |\n"
+        "| 07 | **Elegant 优雅对称** | 居中对称排版，衬线体为主，适合学术/高管/传统行业 |\n\n"
+        "你可以直接回复：\n"
+        "模板=02，语言=中文，不放照片"
+    )
+
+
+def _profile_context_text() -> str:
+    if (st.session_state.get("profile_choice") or "") != "saved":
+        return "（无）"
+    role = (st.session_state.get("prefill_target_role") or "").strip()
+    jd_text = (st.session_state.get("prefill_target_jd") or "").strip()
+    resume_text = _ensure_saved_resume_loaded()
+    if not role and not jd_text and not resume_text:
+        return "（无）"
+    lines = []
+    if role:
+        lines.append(f"目标岗位：{role}")
+    if jd_text:
+        lines.append(f"目标岗位JD：{jd_text[:6000]}")
+    if resume_text:
+        lines.append(f"已保存简历内容：{resume_text[:16000]}")
+    return "\n".join(lines)
+
+
+def _ensure_saved_resume_loaded() -> str:
+    cached = (st.session_state.get("saved_resume_text") or "").strip()
+    if cached:
+        return cached
+    if not st.session_state.get("saved_has_resume"):
+        return ""
+    resume_path = (st.session_state.get("saved_resume_path") or "").strip()
+    if not resume_path:
+        return ""
+    parsed = _read_resume_from_path(resume_path)
+    if parsed:
+        st.session_state.saved_resume_text = parsed
+    return parsed
+
+
 def _init_state():
     _load_local_env()
     _load_resume_sources()
+    prefill = _load_profile_prefill()
+    role = (prefill.get("target_role") or "").strip()
+    jd_text = (prefill.get("target_jd") or "").strip()
+    has_saved_profile = bool(role and jd_text)
+
+    choice_lines = [
+        "检测到您已保存目标岗位/JD。",
+        "请选择：",
+        "1) 使用已保存信息",
+        "2) 使用新提交信息",
+        "",
+        "你可以直接回复“使用已保存信息”或“使用新提交信息”。",
+    ]
+    if role:
+        choice_lines.append(f"（已保存岗位：{role}）")
+    if jd_text:
+        choice_lines.append("（已保存 JD：可直接沿用）")
+
     if "agent" not in st.session_state:
         st.session_state.agent = CareerForgeAgent()
     if "messages" not in st.session_state:
-        st.session_state.messages = [{"role": "assistant", "content": INITIAL_MESSAGE}]
+        if has_saved_profile:
+            st.session_state.messages = [{"role": "assistant", "content": "\n".join(choice_lines)}]
+        else:
+            st.session_state.messages = [{"role": "assistant", "content": INITIAL_MESSAGE}]
+    elif has_saved_profile:
+        msgs = st.session_state.messages
+        if (
+            isinstance(msgs, list)
+            and len(msgs) == 1
+            and msgs[0].get("role") == "assistant"
+            and "我们按“从零制作简历”开始" in (msgs[0].get("content") or "")
+        ):
+            st.session_state.messages = [{"role": "assistant", "content": "\n".join(choice_lines)}]
     if "run_state" not in st.session_state:
         st.session_state.run_state = {
             "running": False,
@@ -149,6 +356,60 @@ def _init_state():
             "selected_template_code": "",
             "selected_template_name": "",
         }
+    if "prefill_target_role" not in st.session_state:
+        st.session_state.prefill_target_role = ""
+    if "prefill_target_jd" not in st.session_state:
+        st.session_state.prefill_target_jd = ""
+    if "saved_resume_path" not in st.session_state:
+        st.session_state.saved_resume_path = ""
+    if "saved_has_resume" not in st.session_state:
+        st.session_state.saved_has_resume = False
+    if "saved_resume_text" not in st.session_state:
+        st.session_state.saved_resume_text = ""
+    if "profile_choice" not in st.session_state:
+        st.session_state.profile_choice = "none"
+    if "_profile_prefill_loaded" not in st.session_state:
+        st.session_state._profile_prefill_loaded = False
+
+    if not st.session_state._profile_prefill_loaded:
+        if role:
+            st.session_state.prefill_target_role = role
+        if jd_text:
+            st.session_state.prefill_target_jd = jd_text
+        st.session_state.saved_resume_path = (prefill.get("resume_path") or "").strip()
+        st.session_state.saved_has_resume = _to_bool(prefill.get("has_resume"))
+        if has_saved_profile:
+            st.session_state.profile_choice = "pending"
+        else:
+            st.session_state.profile_choice = "none"
+        st.session_state._profile_prefill_loaded = True
+
+
+def _consume_profile_choice(user_text: str):
+    if (st.session_state.get("profile_choice") or "") != "pending":
+        return False
+
+    choice = _resolve_profile_choice(user_text)
+    if not choice:
+        _append("user", user_text)
+        _append("assistant", "先确认这一步：回复“使用已保存信息”或“使用新提交信息”。")
+        return True
+
+    if choice == "saved":
+        st.session_state.profile_choice = "saved"
+        loaded_saved_resume = bool(_ensure_saved_resume_loaded())
+        if _is_choice_command_only(user_text):
+            _append("user", user_text)
+            _append("assistant", _saved_choice_guidance(loaded_saved_resume))
+            return True
+        return False
+
+    st.session_state.profile_choice = "new"
+    if _is_choice_command_only(user_text):
+        _append("user", user_text)
+        _append("assistant", "已切换为“使用新提交信息”。请发送新的目标岗位/JD。")
+        return True
+    return False
 
 
 def _append(role: str, content: str):
@@ -392,6 +653,9 @@ def _build_dialog_prompt(user_text: str, sources: dict):
 [SKILL.md 核心规范]
 {skill_spec[:13000]}
 
+[已保存目标信息（若用户本轮提供新信息，以用户新输入为准）]
+{_profile_context_text()}
+
 [最近对话]
 {_history_to_text()}
 
@@ -428,6 +692,9 @@ def _build_final_html_prompt(sources: dict, template_code: str, template_en: str
 
 [CareerForge-模板预览.html 选中模板片段]
 {preview_snippet[:5000]}
+
+[已保存目标信息（若用户后续已更新，请以后续最新输入为准）]
+{_profile_context_text()}
 
 [已确认对话事实]
 {_history_to_text(28)}
@@ -839,6 +1106,9 @@ def main():
     else:
         user_msg = st.chat_input("直接回复信息，助手会分轮引导您完成简历")
         if user_msg:
+            if _consume_profile_choice(user_msg):
+                st.rerun()
+                return
             _start_generation(user_msg)
             st.rerun()
 
