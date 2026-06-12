@@ -1317,26 +1317,8 @@ def _answer_followup(question: str):
     if not analysis:
         _append("assistant", "请先提供简历与 JD，并输入“开始分析”。")
         return
-    if st.session_state.agent.llm is None:
-        _append("assistant", "当前模型未就绪，请先配置 API Key 后再进行追问。")
-        return
-
-    prompt = f"""
-您是职业顾问。基于下面的简历匹配分析结果，回答用户追问。
-要求：回答具体、简洁、可执行，不编造经历。
-
-分析结果JSON：
-{json.dumps(analysis, ensure_ascii=False)}
-
-用户问题：
-{question}
-"""
-    try:
-        text = st.session_state.agent.llm.invoke(prompt)
-        content = getattr(text, "content", str(text))
-        _append("assistant", content)
-    except Exception as e:
-        _append("assistant", f"回答追问失败：{e}")
+    content = st.session_state.agent.run_resume_match_followup(analysis, question)
+    _append("assistant", content)
 
 
 def _is_yes_reply(text: str) -> bool:

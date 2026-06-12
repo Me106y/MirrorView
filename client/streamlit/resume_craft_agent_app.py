@@ -635,70 +635,28 @@ def _build_fallback_html(raw_text: str, template_display: str):
 </html>"""
 
 
-def _build_dialog_prompt(user_text: str, sources: dict):
-    skill_spec = sources.get("skill_spec", "")
-    return f"""
-您是“简历生成助手”，需要和用户进行多轮 human-in-the-loop 对话，目标是收集完整简历信息并逐步打磨到可投递状态。
-
-执行规则（必须遵守）：
-1) 始终围绕简历生成，不跑题。
-2) 每轮最多追问 2-3 个问题。
-3) 不得编造用户经历，不夸大资历；信息不完整时先追问。
-4) 当用户已经选择模板编号后，后续不要再次要求确认模板，除非用户主动更换。
-5) 不输出 JSON，不输出代码块，只输出给用户可直接阅读的话。
-6) 当信息已齐全时，你必须先输出“最终信息清单”，然后仅要求用户回复：确定生成。
-7) 在用户未明确回复“确定生成”前，禁止说“我现在开始生成/请稍等我生成/生成后我会提供链接”等已开始生成的话术。
-8) 用户若回复“没有其他补充/就这些/OK”，你仍需继续提示：请回复“确定生成”。
-
-[SKILL.md 核心规范]
-{skill_spec[:13000]}
-
-[已保存目标信息（若用户本轮提供新信息，以用户新输入为准）]
-{_profile_context_text()}
-
-[最近对话]
-{_history_to_text()}
-
-[用户最新输入]
-{user_text}
-"""
+def _build_dialog_payload(user_text: str):
+    return {
+        "profile_context": _profile_context_text(),
+        "history_text": _history_to_text(),
+        "user_input": user_text,
+    }
 
 
-def _build_final_html_prompt(sources: dict, template_code: str, template_en: str, template_display: str):
-    skill_spec = sources.get("skill_spec", "")
-    base_template = sources.get("base_template", "")
+def _build_final_html_payload(sources: dict, template_code: str, template_en: str, template_display: str):
     preview_template = sources.get("preview_template", "")
     preview_snippet = _extract_preview_snippet(preview_template, template_code)
-    language = _detect_language(_history_to_text(24))
-    photo_pref = _detect_photo_preference(_history_to_text(24))
-
-    return f"""
-您是简历 HTML 生成器。请直接输出最终 HTML，不要任何解释文字。
-
-必须严格遵守以下要求：
-1) 只输出完整 HTML 文档（从 <!DOCTYPE html> 到 </html>）。
-2) 目标模板：{template_code} / {template_en} / {template_display}。
-3) 语言要求：{language}。
-4) 照片偏好：{photo_pref}。
-5) 必须包含导出按钮（window.print）、@page A4、@media print、分页控制。
-6) 内容结构与视觉风格遵循 SKILL.md，且不编造事实。
-7) 若用户已在早期选定模板，禁止再次确认模板。
-
-[SKILL.md 规范全文节选]
-{skill_spec[:18000]}
-
-[resume-template.html 参考（Editorial 完整结构）]
-{base_template[:22000]}
-
-[CareerForge-模板预览.html 选中模板片段]
-{preview_snippet[:5000]}
-
-[已保存目标信息（若用户后续已更新，请以后续最新输入为准）]
-{_profile_context_text()}
-
-[已确认对话事实]
-{_history_to_text(28)}
-"""
+    return {
+        "template_code": template_code,
+        "template_en": template_en,
+        "template_display": template_display,
+        "language": _detect_language(_history_to_text(24)),
+        "photo_pref": _detect_photo_preference(_history_to_text(24)),
+        "base_template": sources.get("base_template", ""),
+        "preview_snippet": preview_snippet,
+        "profile_context": _profile_context_text(),
+        "history_text": _history_to_text(28),
+    }
 
 
 def _emit_event(run_queue, ev_type: str, **payload):
@@ -714,8 +672,8 @@ def _worker_generate_reply(
     run_queue,
     cancel_event,
     agent,
-    dialog_prompt: str,
-    html_prompt: str,
+    dialog_payload: dict,
+    html_payload: dict,
     final_mode: bool,
     template_display: str,
 ):
@@ -738,7 +696,7 @@ def _worker_generate_reply(
         if not final_mode:
             _emit_stage(run_queue, "模型思考中...", 40)
             generated = False
-            for chunk in agent.llm.stream(dialog_prompt):
+            for chunk in agent.stream_resume_craft_dialog(dialog_payload):
                 if cancel_event.is_set():
                     _emit_event(run_queue, "canceled")
                     return
@@ -749,9 +707,7 @@ def _worker_generate_reply(
 
             if not generated:
                 _emit_stage(run_queue, "模型返回较慢，进行兜底生成...", 55)
-                text = agent.llm.invoke(dialog_prompt)
-                content = getattr(text, "content", str(text))
-                final = (content or "").strip() or "我已收到，继续把下一轮信息发我即可。"
+                final = (agent.run_resume_craft_dialog(dialog_payload) or "").strip() or "我已收到，继续把下一轮信息发我即可。"
                 _emit_event(run_queue, "chunk", text=final)
 
             _emit_stage(run_queue, "输出整理完成", 95)
@@ -765,7 +721,7 @@ def _worker_generate_reply(
 
         html_parts = []
         streamed_chars = 0
-        for chunk in agent.llm.stream(html_prompt):
+        for chunk in agent.stream_resume_craft_html(html_payload):
             if cancel_event.is_set():
                 _emit_event(run_queue, "canceled")
                 return
@@ -780,19 +736,17 @@ def _worker_generate_reply(
         html_raw = "".join(html_parts).strip()
         if not html_raw:
             _emit_stage(run_queue, "HTML流式结果为空，正在重试一次...", 78)
-            text = agent.llm.invoke(html_prompt)
-            html_raw = getattr(text, "content", str(text)) or ""
+            html_raw = agent.run_resume_craft_html(html_payload) or ""
 
         _emit_stage(run_queue, "正在校验 HTML 结构...", 85)
         html_doc = _extract_html_document(html_raw)
         if not html_doc:
             _emit_stage(run_queue, "未检测到有效 HTML，正在启用兜底生成...", 90)
-            second_prompt = (
-                html_prompt
-                + "\n\n再次强调：现在必须只输出完整HTML（<!DOCTYPE html>... </html>），不得有其他文字。"
+            strict_payload = dict(html_payload or {})
+            strict_payload["extra_instruction"] = (
+                "再次强调：现在必须只输出完整HTML（<!DOCTYPE html>... </html>），不得有其他文字。"
             )
-            text = agent.llm.invoke(second_prompt)
-            html_doc = _extract_html_document(getattr(text, "content", str(text)))
+            html_doc = _extract_html_document(agent.run_resume_craft_html(strict_payload))
 
         used_fallback = False
         if not html_doc:
@@ -832,10 +786,10 @@ def _start_generation(user_text: str):
     history = _history_to_text(28)
     template_code, template_en, template_display = _detect_template_choice(history)
 
-    dialog_prompt = _build_dialog_prompt(user_text, sources)
-    html_prompt = ""
+    dialog_payload = _build_dialog_payload(user_text)
+    html_payload = {}
     if should_save_output:
-        html_prompt = _build_final_html_prompt(sources, template_code, template_en, template_display)
+        html_payload = _build_final_html_payload(sources, template_code, template_en, template_display)
 
     run_state = st.session_state.run_state
     run_state.update(
@@ -881,8 +835,8 @@ def _start_generation(user_text: str):
             run_queue,
             cancel_event,
             st.session_state.agent,
-            dialog_prompt,
-            html_prompt,
+            dialog_payload,
+            html_payload,
             should_save_output,
             template_display,
         ),

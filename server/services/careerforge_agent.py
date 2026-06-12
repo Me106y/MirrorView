@@ -291,6 +291,168 @@ You MUST follow the provided Skill specification to process user input.
         }
         return self._invoke_json_skill("resume-craft", payload, schema)
 
+    def run_resume_match_followup(self, analysis_result: dict, question: str) -> str:
+        if self.llm is None:
+            return "当前模型未就绪，请先配置 API Key 后再进行追问。"
+        skill_spec = self.load_skill("resume-match")
+        prompt = ChatPromptTemplate.from_template(
+            """
+You are running CareerForge's resume-match follow-up QA flow.
+You MUST follow the provided Skill specification when answering.
+
+[Skill Specification]
+{skill_spec}
+
+[Existing Analysis Result JSON]
+{analysis_json}
+
+[User Question]
+{question}
+
+[Runtime Constraints]
+- Answer in Chinese.
+- Keep answer concise, practical, and actionable.
+- Do not fabricate experiences or facts not supported by analysis.
+- If information is insufficient, state uncertainty and provide next-step checks.
+- Output plain text only.
+"""
+        )
+        chain = prompt | self.llm | StrOutputParser()
+        try:
+            return chain.invoke(
+                {
+                    "skill_spec": skill_spec[:12000],
+                    "analysis_json": json.dumps(analysis_result or {}, ensure_ascii=False)[:14000],
+                    "question": (question or "").strip()[:1200],
+                }
+            )
+        except Exception as e:
+            logger.error("resume-match followup failed: %s", e)
+            return "我先给你一个稳妥建议：优先补齐 JD 中高频硬性要求，并用量化结果重写对应经历。"
+
+    def stream_resume_craft_dialog(self, payload: dict) -> Generator[str, None, None]:
+        if self.llm is None:
+            yield "当前模型未就绪，请先配置 API Key 后重试。"
+            return
+        skill_spec = self.load_skill("resume-craft")
+        prompt = ChatPromptTemplate.from_template(
+            """
+你正在运行 CareerForge 的 resume-craft 技能（多轮信息收集阶段）。
+必须遵循 Skill 规范，并输出给用户可直接阅读的对话文本。
+
+[Skill Specification]
+{skill_spec}
+
+[已保存目标信息]
+{profile_context}
+
+[最近对话]
+{history_text}
+
+[用户最新输入]
+{user_input}
+
+[运行约束]
+1) 始终围绕简历生成，不跑题。
+2) 每轮最多追问 2-3 个问题。
+3) 不编造经历，不夸大资历。
+4) 若用户尚未明确模板/语言/照片偏好，优先引导补齐。
+5) 不输出 JSON，不输出代码块。
+"""
+        )
+        chain = prompt | self.llm | StrOutputParser()
+        try:
+            for chunk in chain.stream(
+                {
+                    "skill_spec": skill_spec[:14000],
+                    "profile_context": (payload.get("profile_context") or "（无）")[:8000],
+                    "history_text": (payload.get("history_text") or "")[:14000],
+                    "user_input": (payload.get("user_input") or "").strip()[:3000],
+                }
+            ):
+                yield chunk
+        except Exception as e:
+            logger.error("resume-craft dialog stream failed: %s", e)
+            yield "我已收到你的信息。请继续补充目标岗位、模板编号、语言和照片偏好。"
+
+    def run_resume_craft_dialog(self, payload: dict) -> str:
+        if self.llm is None:
+            return "当前模型未就绪，请先配置 API Key 后重试。"
+        chunks = []
+        for part in self.stream_resume_craft_dialog(payload):
+            chunks.append(part)
+        return "".join(chunks).strip()
+
+    def _build_resume_craft_html_prompt(self, payload: dict) -> str:
+        skill_spec = self.load_skill("resume-craft")
+        template_code = (payload.get("template_code") or "02").strip()[:8]
+        template_en = (payload.get("template_en") or "").strip()[:64]
+        template_display = (payload.get("template_display") or "").strip()[:120]
+        language = (payload.get("language") or "中文").strip()[:40]
+        photo_pref = (payload.get("photo_pref") or "未明确").strip()[:40]
+        base_template = payload.get("base_template") or ""
+        preview_snippet = payload.get("preview_snippet") or ""
+        profile_context = payload.get("profile_context") or "（无）"
+        history_text = payload.get("history_text") or ""
+        extra_instruction = (payload.get("extra_instruction") or "").strip()
+
+        return f"""
+您是简历 HTML 生成器。请直接输出最终 HTML，不要任何解释文字。
+
+必须严格遵守以下要求：
+1) 只输出完整 HTML 文档（从 <!DOCTYPE html> 到 </html>）。
+2) 目标模板：{template_code} / {template_en} / {template_display}。
+3) 语言要求：{language}。
+4) 照片偏好：{photo_pref}。
+5) 必须包含导出按钮（window.print）、@page A4、@media print、分页控制。
+6) 内容结构与视觉风格遵循 SKILL.md，且不编造事实。
+7) 若用户已在早期选定模板，禁止再次确认模板。
+
+[SKILL.md 规范全文节选]
+{skill_spec[:18000]}
+
+[resume-template.html 参考（Editorial 完整结构）]
+{str(base_template)[:22000]}
+
+[CareerForge-模板预览.html 选中模板片段]
+{str(preview_snippet)[:5000]}
+
+[已保存目标信息（若用户后续已更新，请以后续最新输入为准）]
+{str(profile_context)[:9000]}
+
+[已确认对话事实]
+{str(history_text)[:14000]}
+
+[附加约束]
+{extra_instruction[:1200] if extra_instruction else "（无）"}
+"""
+
+    def stream_resume_craft_html(self, payload: dict) -> Generator[str, None, None]:
+        if self.llm is None:
+            yield ""
+            return
+        prompt = ChatPromptTemplate.from_template("{full_prompt}")
+        chain = prompt | self.llm | StrOutputParser()
+        full_prompt = self._build_resume_craft_html_prompt(payload)
+        try:
+            for chunk in chain.stream({"full_prompt": full_prompt}):
+                yield chunk
+        except Exception as e:
+            logger.error("resume-craft html stream failed: %s", e)
+            yield ""
+
+    def run_resume_craft_html(self, payload: dict) -> str:
+        if self.llm is None:
+            return ""
+        prompt = ChatPromptTemplate.from_template("{full_prompt}")
+        chain = prompt | self.llm | StrOutputParser()
+        full_prompt = self._build_resume_craft_html_prompt(payload)
+        try:
+            return chain.invoke({"full_prompt": full_prompt})
+        except Exception as e:
+            logger.error("resume-craft html invoke failed: %s", e)
+            return ""
+
     def run_cover_letter(self, payload: dict) -> dict:
         schema = {
             "scenario": "email|chat",

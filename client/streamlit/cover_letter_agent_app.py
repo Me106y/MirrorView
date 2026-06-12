@@ -444,6 +444,38 @@ def _run_cover_letter(force_language: str = ""):
     _append("assistant", text)
 
 
+def _run_cover_letter_revision(user_feedback: str):
+    missing = _missing_fields()
+    if missing:
+        _append("assistant", "还缺少这些信息：\n- " + "\n- ".join(missing))
+        return
+
+    language = st.session_state.language
+    backend_language = "zh" if language == "both" else language
+    payload = {
+        "resume_text": (st.session_state.resume_text or "").strip()[:20000],
+        "jd_text": (st.session_state.jd_text or "").strip()[:12000],
+        "scenario": (st.session_state.scenario or "").strip() or "email",
+        "language": backend_language or "zh",
+        "company_name": (st.session_state.company_name or "").strip(),
+        # Let Skill runtime revise the latest draft using user feedback.
+        "revision_request": (user_feedback or "").strip()[:4000],
+        "previous_result": st.session_state.last_result or {},
+    }
+    if (st.session_state.target_role or "").strip():
+        payload["target_role"] = (st.session_state.target_role or "").strip()
+    if st.session_state.emphasis:
+        payload["emphasis"] = st.session_state.emphasis
+
+    with st.chat_message("assistant"):
+        with st.spinner("正在按你的要求调整文案..."):
+            result = st.session_state.agent.run_cover_letter(payload)
+
+    st.session_state.last_result = result
+    text = _format_cover_letter(result or {}, payload["scenario"], language)
+    _append("assistant", text)
+
+
 def _answer_followup(user_text: str):
     result = st.session_state.last_result
     if not result:
@@ -461,39 +493,7 @@ def _answer_followup(user_text: str):
         _run_cover_letter(force_language="zh")
         return
 
-    if st.session_state.agent.llm is None:
-        _append("assistant", "当前模型未就绪，请先配置 API Key 后再调整文案。")
-        return
-
-    prompt = f"""
-你是资深求职顾问。请基于用户简历、JD、当前版本文案和用户修改要求，重写文案。
-要求：
-1) 仅基于已提供事实，不编造经历。
-2) 语气自然，避免模板腔和空洞套话。
-3) 如果是招聘软件打招呼，控制在 80-150 字。
-4) 如果是邮件求职信，控制在 300-500 字（中文）或 200-350 words（英文）。
-
-简历：
-{st.session_state.resume_text}
-
-目标岗位：
-{st.session_state.target_role}
-
-JD：
-{st.session_state.jd_text}
-
-当前生成结果(JSON)：
-{json.dumps(result, ensure_ascii=False)}
-
-用户修改要求：
-{user_text}
-"""
-    try:
-        out = st.session_state.agent.llm.invoke(prompt)
-        content = getattr(out, "content", str(out))
-        _append("assistant", content)
-    except Exception as e:
-        _append("assistant", f"调整失败：{e}")
+    _run_cover_letter_revision(user_text)
 
 
 def _apply_user_message(user_text: str):
