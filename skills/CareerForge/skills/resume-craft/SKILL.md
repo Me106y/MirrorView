@@ -9,6 +9,72 @@ description: >
   简历设计、resume design。当用户从 resume-match 衔接过来（已有优化后的 Markdown 简历），
   也应触发此 Skill 来生成 HTML+PDF 版本。即使用户只说"帮我弄个好看的简历"或
   "把简历排版一下"，也要触发。
+prefill_policy:
+  enabled: true
+  ask_before_using_saved: true
+  saved_choice_label: 使用已保存信息
+  new_choice_label: 使用新提交信息
+  prompt_template: |
+    检测到您已保存目标岗位/JD（并可能已上传简历）。
+    在开始简历生成前，请先确认：
+    1) {saved_choice_label}
+    2) {new_choice_label}
+
+    你可以直接回复“{saved_choice_label}”或“{new_choice_label}”。
+  saved_choice_aliases:
+    - 使用已保存信息
+    - 使用已保存
+    - 已保存
+    - saved
+    - "1"
+    - 选1
+    - 选择1
+  new_choice_aliases:
+    - 使用新提交信息
+    - 使用新提交
+    - 新提交
+    - 重新提交
+    - new
+    - "2"
+    - 选2
+    - 选择2
+  new_content_markers:
+    - "【简历】"
+    - "[简历]"
+    - "【目标岗位JD】"
+    - "[目标岗位JD]"
+  saved_guidance_with_resume: |
+    已切换为“使用已保存信息”，并已读取已保存简历。
+
+    请补充这 3 项：
+    1) 模板编号（01-07）
+    2) 语言（中文 / 英文 / 中英文双版）
+    3) 照片偏好（放照片 / 不放照片）
+
+    模板速览（01-07）：
+    - 01 Editorial 杂志编辑风：经典文艺，奶油色底，绿色强调线，适合创意/文化类岗位
+    - 02 Minimal 极简主义：纯白底，极少装饰，留白多，适合科技/设计/外企
+    - 03 Sidebar Navy 深蓝双栏：左侧深蓝栏放技能和联系方式，右侧放经历，信息密度高
+    - 04 Sidebar Dark 深灰左栏：左侧深灰栏 + 右侧白底，沉稳大气，适合管理/金融类
+    - 05 Dark Header 深色头部：顶部深色块放姓名和联系方式，正文白底，对比醒目
+    - 06 Clean Teal 清新青色：白底 + 青绿色条装饰，清新专业，适合大部分岗位
+    - 07 Elegant 优雅对称：居中对称排版，衬线体为主，适合学术/高管/传统行业
+
+    你可以直接回复：
+    模板=02，语言=中文，不放照片
+  saved_guidance_without_resume: |
+    已切换为“使用已保存信息”，但未读取到已保存简历。
+    请先补充简历内容（或简历文件路径），并补充以下偏好：
+    - 模板编号（01-07）
+    - 语言（中文 / 英文 / 中英文双版）
+    - 照片偏好（放照片 / 不放照片）
+    - 模板 01-07 风格见上方“模板速览”
+  new_guidance: |
+    已切换为“使用新提交信息”。
+    请发送新的简历/JD，并补充：
+    - 模板编号（01-07）
+    - 语言（中文 / 英文 / 中英文双版）
+    - 照片偏好（放照片 / 不放照片）
 ---
 
 # Resume Craft — 简历生成与优化

@@ -1,11 +1,49 @@
-from flask import Flask
-from server.config import Config
-from server.models import db
-from server.routes import api
 import os
+from pathlib import Path
+
+from flask import Flask
 # import pymysql
 from sqlalchemy import inspect, text
 from utils.logger_handler import logger
+
+
+def _load_runtime_env_files():
+    """
+    Load local env files before importing Config, so Config picks up keys
+    even when user starts server manually without `source .env`.
+    """
+    root = Path(__file__).resolve().parents[1]
+    candidates = [
+        root / ".env_tts",
+        root / ".env",
+        Path.home() / ".mirrorview-tui" / ".env",
+    ]
+    for path in candidates:
+        if not path.exists() or not path.is_file():
+            continue
+        try:
+            for raw in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+                line = raw.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if line.startswith("export "):
+                    line = line[len("export "):].strip()
+                if "=" not in line:
+                    continue
+                key, val = line.split("=", 1)
+                key = key.strip()
+                val = val.strip().strip('"').strip("'")
+                if key and val and not os.environ.get(key):
+                    os.environ[key] = val
+        except Exception as e:
+            logger.warning("Failed to load env file %s: %s", path, e)
+
+
+_load_runtime_env_files()
+
+from server.config import Config
+from server.models import db
+from server.routes import api
 
 
 def _ensure_users_table_columns():

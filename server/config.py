@@ -6,8 +6,10 @@ class Config:
 
     # Database Configuration
     basedir = os.path.abspath(os.path.dirname(__file__))
+    data_dir = os.environ.get("MIRRORVIEW_DATA_DIR",
+                              os.path.join(basedir, 'instance'))
     db_path = os.environ.get("MIRRORVIEW_DB_PATH",
-                              os.path.join(basedir, 'instance', 'mirrorview.db'))
+                              os.path.join(data_dir, 'mirrorview.db'))
     SQLALCHEMY_DATABASE_URI = f'sqlite:///{db_path}'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
@@ -30,9 +32,16 @@ class Config:
     BOSON_API_KEY = os.environ.get("BOSON_API_KEY", "")
 
     # Resume Configuration
-    RESUME_UPLOAD_FOLDER = os.path.join(basedir, 'uploads', 'resumes')
-    CHROMA_DB_DIR = os.path.join(basedir, 'instance', 'chroma_db')
+    RESUME_UPLOAD_FOLDER = os.environ.get(
+        "MIRRORVIEW_RESUME_UPLOAD_FOLDER",
+        os.path.join(data_dir, 'uploads', 'resumes')
+    )
+    CHROMA_DB_DIR = os.environ.get(
+        "MIRRORVIEW_CHROMA_DB_DIR",
+        os.path.join(data_dir, 'chroma_db')
+    )
 
     # Ensure directories exist
+    os.makedirs(data_dir, exist_ok=True)
     os.makedirs(RESUME_UPLOAD_FOLDER, exist_ok=True)
     os.makedirs(CHROMA_DB_DIR, exist_ok=True)

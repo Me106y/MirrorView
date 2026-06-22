@@ -296,6 +296,27 @@ class APIClient:
         except Exception as e:
             return False, str(e)
 
+    def chat_careerforge_agent(self, message, history=None):
+        try:
+            response = requests.post(
+                f"{self.base_url}/careerforge/agent/chat",
+                json={
+                    "user_id": self.user_id,
+                    "message": message,
+                    "history": history or [],
+                },
+            )
+            if response.status_code == 200:
+                return True, response.json()
+            try:
+                payload = response.json()
+                error_msg = payload.get("error") or payload.get("message") or "Agent chat failed"
+                return False, error_msg
+            except ValueError:
+                return False, f"Server Error ({response.status_code}): {response.text[:120]}"
+        except Exception as e:
+            return False, str(e)
+
     def rejoin_interview(self, interview_id):
         try:
             response = requests.get(f"{self.base_url}/interview/{interview_id}/rejoin")

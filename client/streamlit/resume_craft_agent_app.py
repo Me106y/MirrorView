@@ -18,6 +18,12 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from client.core.skill_prefill_policy import (
+    build_prefill_choice_prompt,
+    get_prefill_choice_guidance,
+    is_prefill_choice_command_only,
+    resolve_prefill_choice,
+)
 from server.services.careerforge_agent import CareerForgeAgent
 from utils.logger_handler import logger
 
@@ -36,6 +42,7 @@ TEMPLATE_MAP = {
     "06": ("Clean Teal", "Clean Teal 清新青色"),
     "07": ("Elegant", "Elegant 优雅对称"),
 }
+SKILL_NAME = "resume-craft"
 
 
 INITIAL_MESSAGE = """我们按“从零制作简历”开始，先完成第一轮信息收集。请直接按下面 3 项回复我：
@@ -207,41 +214,18 @@ def _to_bool(value) -> bool:
     return text in {"1", "true", "yes", "y", "on"}
 
 
-def _normalize_choice_text(text: str) -> str:
-    return re.sub(r"\s+", "", (text or "").strip().lower())
-
-
 def _resolve_profile_choice(text: str) -> str:
-    norm = _normalize_choice_text(text)
-    if norm in {"1", "选1", "选择1", "使用已保存信息"}:
-        return "saved"
-    if any(k in norm for k in ("使用已保存", "用已保存", "已保存", "saved")):
-        return "saved"
-    if norm in {"2", "选2", "选择2", "使用新提交信息"}:
-        return "new"
-    if any(k in norm for k in ("使用新提交", "用新提交", "新提交", "重新提交", "new")):
-        return "new"
-    if any(k in (text or "") for k in ("【目标岗位JD】", "[目标岗位JD]")):
-        return "new"
-    if (text or "").startswith(("JD：", "jd：", "职位JD：", "岗位：")):
-        return "new"
-    return ""
+    return resolve_prefill_choice(SKILL_NAME, text)
 
 
 def _is_choice_command_only(text: str) -> bool:
-    norm = _normalize_choice_text(text)
-    command_only = {
-        "使用已保存信息", "使用已保存", "已保存", "saved", "1", "选1", "选择1",
-        "使用新提交信息", "使用新提交", "新提交", "重新提交", "new", "2", "选2", "选择2",
-    }
-    return norm in command_only
+    return is_prefill_choice_command_only(SKILL_NAME, text)
 
 
 def _saved_choice_guidance(resume_loaded: bool) -> str:
-    resume_tip = "已读取已保存简历，可直接继续。" if resume_loaded else "未读取到已保存简历，请补充简历内容或文件路径。"
+    base = get_prefill_choice_guidance(SKILL_NAME, "saved", resume_loaded=resume_loaded)
     return (
-        "已切换为“使用已保存信息”。\n"
-        f"{resume_tip}\n\n"
+        f"{base}\n\n"
         "下一步请告诉我这 3 项：\n"
         "1) 模板编号（01-07）\n"
         "2) 语言（中文 / 英文 / 中英文双版）\n"
@@ -299,26 +283,21 @@ def _init_state():
     prefill = _load_profile_prefill()
     role = (prefill.get("target_role") or "").strip()
     jd_text = (prefill.get("target_jd") or "").strip()
-    has_saved_profile = bool(role and jd_text)
+    has_saved_resume = _to_bool(prefill.get("has_resume"))
+    has_saved_profile = bool(role or jd_text or has_saved_resume)
 
-    choice_lines = [
-        "检测到您已保存目标岗位/JD。",
-        "请选择：",
-        "1) 使用已保存信息",
-        "2) 使用新提交信息",
-        "",
-        "你可以直接回复“使用已保存信息”或“使用新提交信息”。",
-    ]
-    if role:
-        choice_lines.append(f"（已保存岗位：{role}）")
-    if jd_text:
-        choice_lines.append("（已保存 JD：可直接沿用）")
+    choice_prompt = build_prefill_choice_prompt(
+        SKILL_NAME,
+        role=role,
+        jd_text=jd_text,
+        has_resume=has_saved_resume,
+    )
 
     if "agent" not in st.session_state:
         st.session_state.agent = CareerForgeAgent()
     if "messages" not in st.session_state:
         if has_saved_profile:
-            st.session_state.messages = [{"role": "assistant", "content": "\n".join(choice_lines)}]
+            st.session_state.messages = [{"role": "assistant", "content": choice_prompt}]
         else:
             st.session_state.messages = [{"role": "assistant", "content": INITIAL_MESSAGE}]
     elif has_saved_profile:
@@ -329,7 +308,7 @@ def _init_state():
             and msgs[0].get("role") == "assistant"
             and "我们按“从零制作简历”开始" in (msgs[0].get("content") or "")
         ):
-            st.session_state.messages = [{"role": "assistant", "content": "\n".join(choice_lines)}]
+            st.session_state.messages = [{"role": "assistant", "content": choice_prompt}]
     if "run_state" not in st.session_state:
         st.session_state.run_state = {
             "running": False,
@@ -407,7 +386,7 @@ def _consume_profile_choice(user_text: str):
     st.session_state.profile_choice = "new"
     if _is_choice_command_only(user_text):
         _append("user", user_text)
-        _append("assistant", "已切换为“使用新提交信息”。请发送新的目标岗位/JD。")
+        _append("assistant", get_prefill_choice_guidance(SKILL_NAME, "new", resume_loaded=False))
         return True
     return False
 

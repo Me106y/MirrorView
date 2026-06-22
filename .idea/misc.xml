@@ -3,5 +3,5 @@
   <component name="Black">
     <option name="sdkName" value="MirrowView" />
   </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="$USER_HOME$/anaconda3/envs/mirrorview" project-jdk-type="Python SDK" />
+  <component name="ProjectRootManager" version="2" project-jdk-name="$USER_HOME$/anaconda3/envs/MirrorView" project-jdk-type="Python SDK" />
 </project>

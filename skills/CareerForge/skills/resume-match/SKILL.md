@@ -9,6 +9,45 @@ description: >
   当用户同时提供了简历文件和岗位 JD 时也应自动触发。
   即使用户没有明确说"匹配分析"，只要他们提供了简历+JD并想知道"合不合适"、
   "能不能投"、"差距在哪"，都应该触发这个 Skill。
+prefill_policy:
+  enabled: true
+  ask_before_using_saved: true
+  saved_choice_label: 使用已保存信息
+  new_choice_label: 使用新提交信息
+  prompt_template: |
+    检测到您已保存目标岗位和 JD（并可能已上传简历）。
+    在开始简历匹配前，请先确认数据来源：
+    1) {saved_choice_label}
+    2) {new_choice_label}
+
+    你可以直接回复“{saved_choice_label}”或“{new_choice_label}”。
+  saved_choice_aliases:
+    - 使用已保存信息
+    - 使用已保存
+    - 已保存
+    - saved
+    - "1"
+    - 选1
+    - 选择1
+  new_choice_aliases:
+    - 使用新提交信息
+    - 使用新提交
+    - 新提交
+    - 重新提交
+    - new
+    - "2"
+    - 选2
+    - 选择2
+  new_content_markers:
+    - "【简历】"
+    - "[简历]"
+    - "【目标岗位JD】"
+    - "[目标岗位JD]"
+    - "JD："
+    - "jd："
+  saved_guidance_with_resume: 已切换为“使用已保存信息”，并已读取已保存简历。可直接输入“开始分析”或补充细节。
+  saved_guidance_without_resume: 已切换为“使用已保存信息”。未读取到已保存简历，请补充简历内容或文件路径后再分析。
+  new_guidance: 已切换为“使用新提交信息”。请发送新的简历与目标JD。
 ---
 
 # Resume Match — 简历匹配度分析

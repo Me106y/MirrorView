@@ -7,6 +7,65 @@ description: >
   帮我写个求职信、投递邮件怎么写、怎么跟 HR 打招呼、boss直聘打招呼、
   招呼语、开场白、自我介绍信。当用户从 resume-match 或 resume-craft 衔接过来
   （已有简历和 JD 信息），也应触发此 Skill。
+prefill_policy:
+  enabled: true
+  ask_before_using_saved: true
+  saved_choice_label: 使用已保存信息
+  new_choice_label: 使用新提交信息
+  prompt_template: |
+    检测到您已保存目标岗位和 JD（并可能已上传简历）。
+    在开始求职信生成前，请先确认：
+    1) {saved_choice_label}
+    2) {new_choice_label}
+
+    你可以直接回复“{saved_choice_label}”或“{new_choice_label}”。
+  saved_choice_aliases:
+    - 使用已保存信息
+    - 使用已保存
+    - 已保存
+    - saved
+    - "1"
+    - 选1
+    - 选择1
+  new_choice_aliases:
+    - 使用新提交信息
+    - 使用新提交
+    - 新提交
+    - 重新提交
+    - new
+    - "2"
+    - 选2
+    - 选择2
+  new_content_markers:
+    - "【简历】"
+    - "[简历]"
+    - "【目标岗位JD】"
+    - "[目标岗位JD]"
+    - "场景："
+  saved_guidance_with_resume: |
+    已切换为“使用已保存信息”，并已读取已保存简历。
+
+    请选择投递场景：
+    - A / email：邮件求职信（完整版本）
+    - B / chat：招聘软件打招呼（短消息）
+
+    请选择语言：
+    - 中文（zh）
+    - 英文（en）
+    - 中英文双版（both）
+
+    你可以直接回复：
+    场景=A，语言=中文，开始生成
+  saved_guidance_without_resume: |
+    已切换为“使用已保存信息”，但未读取到已保存简历。
+    请先补充简历内容（或简历文件路径），再选择场景和语言：
+    - 场景：A / email（邮件求职信）或 B / chat（打招呼短消息）
+    - 语言：中文（zh）/ 英文（en）/ 中英文双版（both）
+  new_guidance: |
+    已切换为“使用新提交信息”。
+    请发送新的简历与 JD，并说明场景/语言：
+    - 场景：A / email（邮件求职信）或 B / chat（打招呼短消息）
+    - 语言：中文（zh）/ 英文（en）/ 中英文双版（both）
 ---
 
 # Cover Letter — 求职信与招呼语生成

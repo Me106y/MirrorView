@@ -77,6 +77,40 @@
    python client/main.py
    ```
 
+3. **启动 TUI 客户端（可选）**
+   ```bash
+   python client/tui_main.py
+   ```
+   TUI 启动时会先尝试执行以下命令显示 MirrorView Logo：  
+   `npx oh-my-logo "MirrorView" purple --filled --block-font block`
+
+### 一键安装（预编译 TUI 软件）
+
+- macOS / Linux：
+  ```bash
+  curl -fsSL https://raw.githubusercontent.com/Zhuanz/MirrorView/main/install.sh | bash
+  ```
+- Windows：
+  ```powershell
+  powershell -ExecutionPolicy Bypass -File .\install.ps1
+  ```
+
+安装后请配置 `DEEPSEEK_API_KEY`：
+- macOS / Linux：`~/.mirrorview-tui/.env`
+- Windows：`%USERPROFILE%\.mirrorview-tui\.env`
+
+### CareerForge 对话式 TUI Agent
+
+- 新增接口：`POST /api/careerforge/agent/chat`
+- 路由策略：`/命令优先 -> 关键词规则 -> DeepSeek 意图兜底`
+- 支持命令：
+  - `/help`
+  - `/login` `/register` `/logout`
+  - `/profile` `/edit-profile`
+  - `/resume-match` `/resume-craft` `/cover-letter` `/mock-interview` `/job-hunt`
+  - `/skill <name>` `/cancel` `/exit`
+- 产物文件（例如简历匹配 HTML 报告）会在 TUI 中展示可点击链接，并支持 `[O]` 一键浏览器打开。
+
 ## 📸 界面截图
 
 <img src="assets/image-20260313190052517.png" alt="image-20260313190052517" style="zoom:50%;" />
@@ -96,4 +130,3 @@
 ## 📄 许可证
 
 本项目采用 MIT 许可证 - 详情请参阅 [LICENSE](LICENSE) 文件。
-

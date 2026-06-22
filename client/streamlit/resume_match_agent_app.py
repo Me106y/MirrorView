@@ -17,9 +17,17 @@ OUTPUT_DIR = ROOT / "test-output"
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from client.core.resume_match_report import build_resume_match_html_report
+from client.core.skill_prefill_policy import (
+    build_prefill_choice_prompt,
+    get_prefill_choice_guidance,
+    is_prefill_choice_command_only,
+    resolve_prefill_choice,
+)
 from server.services.careerforge_agent import CareerForgeAgent
 
 HTML_OFFER_TEXT = "要不要把这份分析报告生成一个精美的 HTML 页面？可以在浏览器里打开、截图或分享。"
+SKILL_NAME = "resume-match"
 WEIGHT_MAP = {
     "硬性技能匹配度": 25,
     "工作经验相关度": 25,
@@ -865,34 +873,12 @@ def _to_bool(value) -> bool:
     return text in {"1", "true", "yes", "y", "on"}
 
 
-def _normalize_choice_text(text: str) -> str:
-    return re.sub(r"\s+", "", (text or "").strip().lower())
-
-
 def _resolve_profile_choice(text: str) -> str:
-    norm = _normalize_choice_text(text)
-    if norm in {"1", "选1", "选择1", "使用已保存信息"}:
-        return "saved"
-    if any(k in norm for k in ("使用已保存", "用已保存", "已保存", "saved")):
-        return "saved"
-    if norm in {"2", "选2", "选择2", "使用新提交信息"}:
-        return "new"
-    if any(k in norm for k in ("使用新提交", "用新提交", "新提交", "重新提交", "new")):
-        return "new"
-    if any(k in (text or "") for k in ("【目标岗位JD】", "[目标岗位JD]")):
-        return "new"
-    if (text or "").startswith(("JD：", "jd：", "职位JD：", "岗位：")):
-        return "new"
-    return ""
+    return resolve_prefill_choice(SKILL_NAME, text)
 
 
 def _is_choice_command_only(text: str) -> bool:
-    norm = _normalize_choice_text(text)
-    command_only = {
-        "使用已保存信息", "使用已保存", "已保存", "saved", "1", "选1", "选择1",
-        "使用新提交信息", "使用新提交", "新提交", "重新提交", "new", "2", "选2", "选择2",
-    }
-    return norm in command_only
+    return is_prefill_choice_command_only(SKILL_NAME, text)
 
 
 def _init_state():
@@ -900,14 +886,14 @@ def _init_state():
     prefill = _load_profile_prefill()
     role = (prefill.get("target_role") or "").strip()
     jd_text = (prefill.get("target_jd") or "").strip()
-    has_saved_profile = bool(role and jd_text)
+    has_saved_resume = _to_bool(prefill.get("has_resume"))
+    has_saved_profile = bool(role or jd_text or has_saved_resume)
 
-    choice_prompt = (
-        "检测到您已保存目标岗位和 JD。\n"
-        "请选择：\n"
-        "1) 使用已保存信息\n"
-        "2) 使用新提交信息\n\n"
-        "你可以直接回复“使用已保存信息”或“使用新提交信息”。"
+    choice_prompt = build_prefill_choice_prompt(
+        SKILL_NAME,
+        role=role,
+        jd_text=jd_text,
+        has_resume=has_saved_resume,
     )
 
     if "agent" not in st.session_state:
@@ -1121,7 +1107,12 @@ def _worker_generate_html_report(run_id: str, run_queue, analysis_result: dict, 
         _emit_html_event(run_queue, "stage", text="正在整理匹配分析数据...", progress=15)
         time.sleep(0.25)
         _emit_html_event(run_queue, "stage", text="正在构建报告页面结构...", progress=45)
-        report_name, html_doc = _build_html_report(analysis_result, resume_text, target_role, jd_text)
+        report_name, html_doc = build_resume_match_html_report(
+            analysis_result,
+            resume_text,
+            target_role,
+            jd_text,
+        )
         time.sleep(0.25)
         _emit_html_event(run_queue, "stage", text="正在写入 HTML 文件...", progress=78)
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -1414,15 +1405,20 @@ def _apply_user_message(user_text: str):
                 if saved_resume:
                     st.session_state.resume_text = saved_resume
                     resume_loaded = True
-            if resume_loaded:
-                _append("assistant", "已切换为“使用已保存信息”，并已读取已保存简历。可直接输入“开始分析”。")
-            else:
-                _append("assistant", "已切换为“使用已保存信息”。请继续提交简历，或直接输入“开始分析”。")
         else:
             st.session_state.profile_choice = "new"
-            _append("assistant", "已切换为“使用新提交信息”。请发送新的目标岗位/JD。")
 
         if _is_choice_command_only(text):
+            if choice == "saved":
+                _append(
+                    "assistant",
+                    get_prefill_choice_guidance(SKILL_NAME, "saved", resume_loaded=resume_loaded),
+                )
+            else:
+                _append(
+                    "assistant",
+                    get_prefill_choice_guidance(SKILL_NAME, "new", resume_loaded=False),
+                )
             return
 
     lower = text.lower().strip()

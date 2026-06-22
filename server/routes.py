@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify, current_app, Response, stream_with_context
 from server.models import db, User, Interview, Message, InviteCode, Listener
 from server.services.ai_service import AIService
+from server.services.careerforge_command_agent import CareerForgeCommandAgent
 from server.services.rtmp_service import RTMPService
 from server.services.resume_service import ResumeService
 from utils.logger_handler import logger
@@ -11,6 +12,7 @@ import tempfile
 api = Blueprint('api', __name__)
 
 ai_service = AIService()
+command_agent = CareerForgeCommandAgent(ai_service)
 rtmp_service = RTMPService("rtmp://116.62.11.13:1935/live") # Hardcoded for now, or from config
 
 @api.route('/auth/register', methods=['POST'])
@@ -352,6 +354,57 @@ def careerforge_job_hunt():
             ],
         }
     ), 200
+
+
+@api.route('/careerforge/agent/chat', methods=['POST'])
+def careerforge_agent_chat():
+    data = request.get_json(silent=True) or {}
+    user_id = data.get('user_id')
+    message = (data.get('message') or '').strip()
+    history = data.get('history') or []
+
+    if not message:
+        return (
+            jsonify(
+                {
+                    "reply": "请输入消息内容。",
+                    "intent": "unknown",
+                    "action": "noop",
+                    "missing_fields": [],
+                    "result": {},
+                    "artifacts": [],
+                    "error": "empty_message",
+                }
+            ),
+            400,
+        )
+
+    if isinstance(user_id, str):
+        user_id = user_id.strip() or None
+        if user_id is not None:
+            try:
+                user_id = int(user_id)
+            except ValueError:
+                user_id = None
+    elif user_id is not None:
+        try:
+            user_id = int(user_id)
+        except (TypeError, ValueError):
+            user_id = None
+
+    if not isinstance(history, list):
+        history = []
+
+    result = command_agent.handle_chat(
+        user_id=user_id,
+        message=message,
+        history=history,
+    )
+
+    status_code = 200
+    if result.get("error"):
+        status_code = 400
+    return jsonify(result), status_code
 
 @api.route('/interview/create', methods=['POST'])
 def create_interview():

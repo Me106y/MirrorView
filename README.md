@@ -77,6 +77,38 @@ Key features include **AI Interviewer** interactions, **Real-time Video Streamin
    python client/main.py
    ```
 
+3. **Start the TUI Client (Optional)**
+   ```bash
+   python client/tui_main.py
+   ```
+   The TUI startup will try to render the MirrorView logo via:
+   `npx oh-my-logo "MirrorView" purple --filled --block-font block`
+
+### One-Click Install (Prebuilt TUI App)
+
+- macOS / Linux:
+  ```bash
+  curl -fsSL https://raw.githubusercontent.com/Zhuanz/MirrorView/main/install.sh | bash
+  ```
+- Windows:
+  ```powershell
+  powershell -ExecutionPolicy Bypass -File .\install.ps1
+  ```
+
+After install, set `DEEPSEEK_API_KEY` in `~/.mirrorview-tui/.env` (Windows: `%USERPROFILE%\.mirrorview-tui\.env`).
+
+### CareerForge TUI Agent
+
+- New chat endpoint: `POST /api/careerforge/agent/chat`
+- Routing strategy: `/command` first, then keyword rules, then DeepSeek intent fallback
+- Supported commands:
+  - `/help`
+  - `/login` `/register` `/logout`
+  - `/profile` `/edit-profile`
+  - `/resume-match` `/resume-craft` `/cover-letter` `/mock-interview` `/job-hunt`
+  - `/skill <name>` `/cancel` `/exit`
+- File artifacts (for example resume-match HTML report) are shown in TUI with clickable link + `[O]` one-key browser open.
+
 ## 📸 Screenshots
 
 *(Add screenshots of Main Window, Interview Interface, and Observer View here)*
@@ -98,4 +130,3 @@ Welcome to submit Pull Requests or Issues to help improve this project!
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
