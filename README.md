@@ -111,7 +111,7 @@ After install, set `DEEPSEEK_API_KEY` in `~/.mirrorview-tui/.env` (Windows: `%US
 
 ## 📸 Screenshots
 
-*(Add screenshots of Main Window, Interview Interface, and Observer View here)*
+<img src="assets/977afdf9d507b57dd8664dd5f484d50e.png" alt="977afdf9d507b57dd8664dd5f484d50e" style="zoom:50%;" />
 
 <img src="assets/image-20260313190052517.png" alt="image-20260313190052517" style="zoom:50%;" />
 

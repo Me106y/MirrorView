@@ -112,6 +112,7 @@
 - 产物文件（例如简历匹配 HTML 报告）会在 TUI 中展示可点击链接，并支持 `[O]` 一键浏览器打开。
 
 ## 📸 界面截图
+<img src="assets/977afdf9d507b57dd8664dd5f484d50e.png" alt="977afdf9d507b57dd8664dd5f484d50e" style="zoom:50%;" />
 
 <img src="assets/image-20260313190052517.png" alt="image-20260313190052517" style="zoom:50%;" />
 
