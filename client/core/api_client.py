@@ -85,14 +85,18 @@ class APIClient:
                 return False, f"Server Error ({response.status_code}): {response.text[:100]}"
         except Exception as e:
             return False, str(e)
-    def create_interview(self, difficulty="medium", duration=30):
+    def create_interview(self, difficulty="medium", duration=30, language="zh"):
         try:
-            response = requests.post(f"{self.base_url}/interview/create", json={
+            payload = {
                 "user_id": self.user_id,
                 # "job_position": job_position, # Removed, fetched from server
                 "difficulty": difficulty,
-                "duration": duration
-            })
+                "duration": duration,
+            }
+            if language:
+                payload["language"] = str(language).strip()
+
+            response = requests.post(f"{self.base_url}/interview/create", json=payload)
             if response.status_code == 201:
                 return True, response.json()
             

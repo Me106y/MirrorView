@@ -29,6 +29,7 @@ class ModeSelectDialog(QDialog):
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.selected_mode = None  # "classic" or "voice"
+        self.selected_language = "zh"
         self._init_ui()
 
     def _init_ui(self):
@@ -52,6 +53,16 @@ class ModeSelectDialog(QDialog):
         subtitle.setAlignment(Qt.AlignCenter)
         subtitle.setWordWrap(True)
         container_layout.addWidget(subtitle)
+
+        language_row = QHBoxLayout()
+        language_label = QLabel("面试语言")
+        language_label.setObjectName("inputLabel")
+        self.language_combo = QComboBox()
+        self.language_combo.addItems(["zh", "en"])
+        self.language_combo.setCurrentText(self.selected_language)
+        language_row.addWidget(language_label)
+        language_row.addWidget(self.language_combo)
+        container_layout.addLayout(language_row)
 
         # --- Two cards side by side ---
         cards_layout = QHBoxLayout()
@@ -102,6 +113,17 @@ class ModeSelectDialog(QDialog):
             }
             QLabel#dialogDesc {
                 font-size: 14px; color: #6b7280;
+            }
+            QLabel#inputLabel {
+                color: #374151;
+                font-size: 13px;
+                font-weight: 600;
+            }
+            QComboBox {
+                border: 1px solid #d1d5db;
+                border-radius: 8px;
+                padding: 6px 10px;
+                min-height: 20px;
             }
             QPushButton#secondaryButton {
                 background-color: white; border: 1px solid #d1d5db;
@@ -162,6 +184,8 @@ class ModeSelectDialog(QDialog):
 
     def _select(self, mode):
         self.selected_mode = mode
+        if hasattr(self, "language_combo"):
+            self.selected_language = self.language_combo.currentText().strip() or "zh"
         self.accept()
 
 
@@ -1090,25 +1114,14 @@ class MainWindow(QMainWindow):
         self.start_interview()
 
     def start_interview(self):
-        # job_position is now fetched from user profile on server
-        success, response = self.api_client.create_interview()
-        if success:
-            # Show mode selection dialog
-            mode_dlg = ModeSelectDialog(self)
-            if mode_dlg.exec_() != QDialog.Accepted:
-                return  # User cancelled
+        # Select mode + language first, then create interview with the chosen language.
+        mode_dlg = ModeSelectDialog(self)
+        if mode_dlg.exec_() != QDialog.Accepted:
+            return
 
-            if mode_dlg.selected_mode == "voice":
-                # Open voice-first interview
-                self.interview_window = VoiceInterviewWindow(
-                    self.api_client, response)
-            else:
-                # Open classic text interview
-                self.interview_window = InterviewWindow(
-                    self.api_client, response)
-
-            self.interview_window.show()
-        else:
+        language = (mode_dlg.selected_language or "zh").strip() or "zh"
+        success, response = self.api_client.create_interview(language=language)
+        if not success:
             if "ongoing interview" in str(response):
                 dlg = CustomMessageBox("已有进行中的面试", 
                     "您已有进行中的面试，请先完成当前面试，或在历史中继续。",
@@ -1116,6 +1129,18 @@ class MainWindow(QMainWindow):
                 dlg.exec_()
             else:
                 QMessageBox.warning(self, "错误", f"开始面试失败：{response}")
+            return
+
+        if mode_dlg.selected_mode == "voice":
+            # Open voice-first interview
+            self.interview_window = VoiceInterviewWindow(
+                self.api_client, response)
+        else:
+            # Open classic text interview
+            self.interview_window = InterviewWindow(
+                self.api_client, response)
+
+        self.interview_window.show()
 
     def join_interview(self):
         dialog = JoinDialog(self)

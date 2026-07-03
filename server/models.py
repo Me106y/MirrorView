@@ -40,6 +40,7 @@ class Interview(db.Model):
     title = db.Column(db.String(200))
     job_position = db.Column(db.String(100), nullable=False)
     questions_count = db.Column(db.Integer, default=10)
+    language = db.Column(db.String(16), default='zh')
     # difficulty = db.Column(db.String(20), default='medium') # Removed
     # duration = db.Column(db.Integer) # in minutes # Removed
     status = db.Column(db.Integer, default=0) # 0-pending, 1-ongoing, 2-ended, 3-reviewed

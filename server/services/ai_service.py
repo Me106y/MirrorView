@@ -3,6 +3,7 @@ import json
 from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 
+from server.config import Config
 from server.factories.llm_factory import ModelFactory
 from server.services.careerforge_agent import CareerForgeAgent
 from server.services.resume_service import ResumeService
@@ -11,9 +12,22 @@ from utils.logger_handler import logger
 
 class AIService:
     def __init__(self):
-        self.llm = ModelFactory.get_model("deepseek", "deepseek-chat", temperature=0.7)
+        self.llm = ModelFactory.get_model(
+            "deepseek",
+            Config.DEEPSEEK_MODEL,
+            temperature=0.7,
+            base_url=Config.DEEPSEEK_BASE_URL,
+            api_key=Config.DEEPSEEK_API_KEY,
+        )
         self.resume_service = ResumeService()
         self.careerforge_agent = CareerForgeAgent(llm=self.llm)
+
+    @staticmethod
+    def _normalize_language(language):
+        lang = (language or "zh").strip().lower()
+        if lang.startswith("en"):
+            return "en"
+        return "zh"
 
     def analyze_resume_and_update_job(self, user_id, resume_text, current_job_intention):
         """
@@ -168,12 +182,14 @@ class AIService:
                 "improved_answer_suggestion": "",
             }
 
-    def generate_feedback(self, interview):
+    def generate_feedback(self, interview, language="zh"):
         """
         Generate overall feedback for the interview.
         """
         from server.models import Message
 
+        normalized_language = self._normalize_language(language)
+        output_language = "English" if normalized_language == "en" else "Chinese"
         messages = Message.query.filter_by(interview_id=interview.id).order_by(Message.created_at).all()
         conversation = "\n".join([f"{m.role}: {m.content}" for m in messages])
 
@@ -188,6 +204,7 @@ class AIService:
             Task:
             Provide a comprehensive summary and feedback in a single, well-structured paragraph or a few paragraphs.
             Include an overall score (0-100), key strengths, areas for improvement, and a final verdict (Hire/No Hire).
+            IMPORTANT: Write the response strictly in {output_language}.
             Do NOT return JSON. Return plain text only.
 
             Format:
@@ -198,10 +215,18 @@ class AIService:
         chain = prompt | self.llm | StrOutputParser()
 
         try:
-            return chain.invoke({"job_position": interview.job_position, "conversation": conversation})
+            return chain.invoke(
+                {
+                    "job_position": interview.job_position,
+                    "conversation": conversation,
+                    "output_language": output_language,
+                }
+            )
         except Exception as e:
             logger.error(f"Error generating feedback: {e}")
-            return "Could not generate feedback due to an error."
+            if normalized_language == "en":
+                return "Could not generate feedback due to an error."
+            return "生成面试反馈时出现异常，请稍后重试。"
 
     def run_resume_match(self, payload):
         return self.careerforge_agent.run_resume_match(payload)
@@ -215,31 +240,44 @@ class AIService:
     def run_job_hunt(self, payload):
         return self.careerforge_agent.run_job_hunt(payload)
 
-    def generate_mock_interview_opening(self, job_position, resume_summary=""):
-        return self.careerforge_agent.generate_mock_interview_opening(job_position, resume_summary)
+    def generate_mock_interview_opening(self, job_position, resume_summary="", language="zh"):
+        return self.careerforge_agent.generate_mock_interview_opening(
+            job_position,
+            resume_summary,
+            language=language,
+        )
 
-    def chat_response(self, messages_list, user_input, job_position="General"):
+    def chat_response(self, messages_list, user_input, job_position="General", language="zh"):
+        normalized_language = self._normalize_language(language)
         try:
             return self.careerforge_agent.build_mock_interview_reply(
                 messages_list=messages_list,
                 user_input=user_input,
                 job_position=job_position,
+                language=normalized_language,
             )
         except Exception as e:
             logger.error(f"Error generating chat response: {e}")
+            if normalized_language == "en":
+                return "Got it. Let's move on: how would you prove you're a strong fit for this role?"
             return "收到，我们继续下一题：您如何证明自己能胜任这个岗位？"
 
-    def chat_response_stream(self, messages_list, user_input, job_position="General"):
+    def chat_response_stream(self, messages_list, user_input, job_position="General", language="zh"):
         """
         Interview streaming response now uses CareerForge mock-interview skill runtime.
         """
+        normalized_language = self._normalize_language(language)
         try:
             for chunk in self.careerforge_agent.stream_mock_interview_reply(
                 messages_list=messages_list,
                 user_input=user_input,
                 job_position=job_position,
+                language=normalized_language,
             ):
                 yield chunk
         except Exception as e:
             logger.error(f"Error generating chat response stream: {e}")
-            yield "我遇到了一点问题，我们继续：请您讲一个最有代表性的项目经历。"
+            if normalized_language == "en":
+                yield "I hit a temporary issue. Let's continue: tell me about your most representative project."
+            else:
+                yield "我遇到了一点问题，我们继续：请您讲一个最有代表性的项目经历。"

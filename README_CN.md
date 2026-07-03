@@ -64,6 +64,18 @@
    pip install -r requirements.txt
    ```
 
+3. **从示例生成本地配置**
+   ```bash
+   cp server/config.json.example server/config.json
+   ```
+   然后编辑 `server/config.json`，填入你的 `DEEPSEEK_API_KEY`。
+   如果同时设置了环境变量 `DEEPSEEK_API_KEY`，环境变量优先。
+
+   Windows（PowerShell）:
+   ```powershell
+   Copy-Item server\config.json.example server\config.json
+   ```
+
 ### 运行应用
 
 1. **启动服务端**

@@ -15,6 +15,7 @@ env/
 .env_tts
 *.env.local
 .env.*.local
+server/config.json
 
 # ── Database ──
 *.db

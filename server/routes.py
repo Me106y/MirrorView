@@ -4,6 +4,7 @@ from server.services.ai_service import AIService
 from server.services.careerforge_command_agent import CareerForgeCommandAgent
 from server.services.rtmp_service import RTMPService
 from server.services.resume_service import ResumeService
+from server.config import Config
 from utils.logger_handler import logger
 from datetime import datetime
 import uuid
@@ -13,7 +14,7 @@ api = Blueprint('api', __name__)
 
 ai_service = AIService()
 command_agent = CareerForgeCommandAgent(ai_service)
-rtmp_service = RTMPService("rtmp://116.62.11.13:1935/live") # Hardcoded for now, or from config
+rtmp_service = RTMPService(Config.RTMP_SERVER_URL)
 
 @api.route('/auth/register', methods=['POST'])
 def register():
@@ -54,7 +55,6 @@ def login():
         }), 200
     return jsonify({'message': 'Invalid username or password'}), 401
 
-from server.config import Config
 import os
 import json
 
@@ -74,6 +74,12 @@ def _delete_interview(interview):
     Listener.query.filter_by(interview_id=interview.id).delete(synchronize_session=False)
     db.session.delete(interview)
     db.session.commit()
+
+def _normalize_interview_language(language):
+    lang = (language or "zh").strip().lower()
+    if lang.startswith("en"):
+        return "en"
+    return "zh"
 
 
 def _extract_resume_text(data):
@@ -408,8 +414,9 @@ def careerforge_agent_chat():
 
 @api.route('/interview/create', methods=['POST'])
 def create_interview():
-    data = request.json
+    data = request.get_json(silent=True) or {}
     user_id = data.get('user_id')
+    interview_language = _normalize_interview_language((data or {}).get('language'))
     
     user = User.query.get(user_id)
     if not user:
@@ -445,6 +452,7 @@ def create_interview():
         user_id=user_id,
         title=f"{job_position} Interview - {datetime.now().strftime('%Y-%m-%d')}",
         job_position=job_position,
+        language=interview_language,
         questions_count=10,
         status=1, # Ongoing
         start_time=datetime.utcnow()
@@ -460,6 +468,7 @@ def create_interview():
     greeting = ai_service.generate_mock_interview_opening(
         job_position=job_position,
         resume_summary=(projects_summary or ""),
+        language=interview_language,
     )
     
     initial_msg = Message(
@@ -474,7 +483,8 @@ def create_interview():
     return jsonify({
         'interview_id': interview.id,
         'rtmp_push_url': interview.rtmp_push_url,
-        'initial_message': greeting
+        'initial_message': greeting,
+        'language': interview.language or "zh",
     }), 201
 
 @api.route('/interview/<int:interview_id>/messages', methods=['GET', 'POST'])
@@ -506,12 +516,18 @@ def handle_messages(interview_id):
                 with current_app.app_context():
                     interview = Interview.query.get(interview_id)
                     job_position = interview.job_position if interview else "General"
+                    interview_language = _normalize_interview_language(getattr(interview, "language", "zh"))
                     
                     messages = Message.query.filter_by(interview_id=interview_id).order_by(Message.created_at).all()
                     messages_list = [{'role': m.role, 'content': m.content} for m in messages]
                     
                     full_response = ""
-                    for chunk in ai_service.chat_response_stream(messages_list, user_content, job_position):
+                    for chunk in ai_service.chat_response_stream(
+                        messages_list,
+                        user_content,
+                        job_position,
+                        language=interview_language,
+                    ):
                         full_response += chunk
                         yield f"data: {json.dumps({'content': chunk})}\n\n"
                     
@@ -538,11 +554,17 @@ def handle_messages(interview_id):
 
             # Get context
             job_position = interview.job_position if interview else "General"
+            interview_language = _normalize_interview_language(getattr(interview, "language", "zh"))
             messages = Message.query.filter_by(interview_id=interview_id).order_by(Message.created_at).all()
             messages_list = [{'role': m.role, 'content': m.content} for m in messages]
             
             # Generate AI response
-            ai_response_content = ai_service.chat_response(messages_list, user_msg.content, job_position)
+            ai_response_content = ai_service.chat_response(
+                messages_list,
+                user_msg.content,
+                job_position,
+                language=interview_language,
+            )
             
             ai_msg = Message(
                 interview_id=interview_id,
@@ -580,7 +602,10 @@ def finish_interview(interview_id):
     interview.end_time = datetime.utcnow()
     
     # Generate feedback
-    feedback = ai_service.generate_feedback(interview)
+    feedback = ai_service.generate_feedback(
+        interview,
+        language=_normalize_interview_language(getattr(interview, "language", "zh")),
+    )
     
     # Ensure feedback is stored as JSON string, not dict, for SQLite
     if isinstance(feedback, dict):
@@ -608,6 +633,7 @@ def get_interview_history(user_id):
             'title': interview.title,
             'job_position': interview.job_position,
             'status': interview.status, # 1-ongoing, 2-ended, 3-reviewed
+            'language': interview.language or "zh",
             'created_at': interview.created_at.isoformat(),
             'end_time': interview.end_time.isoformat() if interview.end_time else None,
             'overall_feedback': interview.overall_feedback,
@@ -636,6 +662,7 @@ def rejoin_interview(interview_id):
         'interview_id': interview.id,
         'rtmp_push_url': interview.rtmp_push_url,
         'initial_message': greeting, # Re-use this field to show last message
+        'language': interview.language or "zh",
         'rejoin': True
     }), 200
 

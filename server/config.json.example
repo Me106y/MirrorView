@@ -1,0 +1,15 @@
+{
+  "SECRET_KEY": "dev-key-mirrorview",
+  "SQLALCHEMY_TRACK_MODIFICATIONS": false,
+  "RTMP_SERVER_URL": "rtmp://116.62.11.13:1935/live",
+  "INTERVIEW_TTL_SECONDS": 3600,
+  "DEEPSEEK_BASE_URL": "https://api.deepseek.com/v1",
+  "DEEPSEEK_MODEL": "deepseek-chat",
+  "DEEPSEEK_API_KEY": "sk-your-deepseek-api-key",
+  "paths": {
+    "data_dir": "instance",
+    "db_filename": "mirrorview.db",
+    "resume_upload_folder": "uploads/resumes",
+    "chroma_db_dir": "chroma_db"
+  }
+}

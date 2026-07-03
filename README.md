@@ -64,6 +64,18 @@ Key features include **AI Interviewer** interactions, **Real-time Video Streamin
    pip install -r requirements.txt
    ```
 
+3. **Create local config from example**
+   ```bash
+   cp server/config.json.example server/config.json
+   ```
+   Then edit `server/config.json` and set your `DEEPSEEK_API_KEY`.
+   Environment variable `DEEPSEEK_API_KEY` still takes higher priority if both are set.
+
+   On Windows (PowerShell):
+   ```powershell
+   Copy-Item server\config.json.example server\config.json
+   ```
+
 ### Running the Application
 
 1. **Start the Server**

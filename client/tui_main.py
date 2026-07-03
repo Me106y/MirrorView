@@ -331,7 +331,11 @@ class MirrorViewTUI:
             return False
 
         if action == "start_mock_interview":
-            self._run_text_interview_session()
+            language = "zh"
+            result = payload.get("result") if isinstance(payload, dict) else {}
+            if isinstance(result, dict):
+                language = (result.get("language") or language).strip() or language
+            self._run_text_interview_session(language=language)
             return False
 
         if action == "exit_app":
@@ -357,10 +361,10 @@ class MirrorViewTUI:
             except Exception as e:
                 print(f"assistant> 产物展示失败：{e}")
 
-    def _run_text_interview_session(self) -> None:
+    def _run_text_interview_session(self, language: str = "zh") -> None:
         print("\nassistant> 正在创建文字模拟面试会话...")
 
-        success, response = self.api_client.create_interview()
+        success, response = self.api_client.create_interview(language=language)
         if not success:
             msg = str(response)
             if "ongoing interview" in msg.lower():

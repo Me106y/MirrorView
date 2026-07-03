@@ -996,6 +996,7 @@ class CareerForgeCommandAgent:
             return result, reply, "skill_executed", []
 
         if intent == "mock-interview":
+            interview_language = (slots.get("language") or "zh").strip() or "zh"
             reply = (
                 "好的，我们开始模拟面试。\n"
                 "我会为你进入文字面试会话（不包含旁听/RTMP 观看）。"
@@ -1003,6 +1004,7 @@ class CareerForgeCommandAgent:
             result = {
                 "target_role": (slots.get("target_role") or "").strip(),
                 "mode": "text",
+                "language": interview_language,
             }
             return result, reply, "start_mock_interview", []
 

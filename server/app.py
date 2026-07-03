@@ -68,6 +68,29 @@ def _ensure_users_table_columns():
         db.session.commit()
         logger.info("Applied users table compatibility migration: %s", ", ".join(alter_sql))
 
+def _ensure_interviews_table_columns():
+    """
+    Lightweight compatibility migration for existing SQLite databases.
+    """
+    inspector = inspect(db.engine)
+    if 'interviews' not in inspector.get_table_names():
+        return
+
+    existing = {col['name'] for col in inspector.get_columns('interviews')}
+    alter_sql = []
+
+    if 'language' not in existing:
+        alter_sql.append("ALTER TABLE interviews ADD COLUMN language VARCHAR(16)")
+
+    for statement in alter_sql:
+        db.session.execute(text(statement))
+
+    if alter_sql:
+        # Backfill existing rows with default zh to keep logic deterministic.
+        db.session.execute(text("UPDATE interviews SET language = 'zh' WHERE language IS NULL OR TRIM(language) = ''"))
+        db.session.commit()
+        logger.info("Applied interviews table compatibility migration: %s", ", ".join(alter_sql))
+
 
 def create_app():
     # Ensure database exists before initializing app
@@ -102,6 +125,7 @@ def create_app():
         try:
             db.create_all()
             _ensure_users_table_columns()
+            _ensure_interviews_table_columns()
             logger.info("Database tables created successfully.")
 
 
