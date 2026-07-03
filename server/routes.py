@@ -456,31 +456,11 @@ def create_interview():
     interview.rtmp_push_url = rtmp_service.generate_push_url(interview.id, user_id)
     interview.rtmp_play_url = rtmp_service.generate_play_url(interview.rtmp_push_url)
     
-    # Generate questions upfront or just first one?
-    # Let's generate the full list stored in memory/DB or just generate first question dynamically
-    # For now, we'll generate the first greeting.
-    # Ideally we should generate the list of 10 questions and store them to ask sequentially.
-    # But current architecture seems to be chat-based loop.
-    # Let's generate the questions list and store it in a temporary state or message?
-    # Simpler: The AI service will maintain the state or we generate them now and system prompts the AI to ask them.
-    
-    questions = ai_service.generate_interview_questions(job_position, resume_text, projects_summary)
-    # We could store these questions in a new table 'InterviewQuestions' or just as a system prompt for the chat context.
-    # For simplicity, let's inject them into the system context for the chat model in future turns.
-    # Or better: Add a hidden system message with the plan.
-    
-    system_instruction = f"You are interviewing for {job_position}. Here is your question plan: {json.dumps(questions)}. Ask them one by one. Start with the first one."
-    
     # Initial greeting from mock-interview skill runtime
     greeting = ai_service.generate_mock_interview_opening(
         job_position=job_position,
         resume_summary=(projects_summary or ""),
     )
-    
-    # Store system instruction as a hidden message or just handle it in AI service state?
-    # Stateless API: We need to store it.
-    # Let's store the questions plan in a special message or field.
-    # For now, we'll just let the chat flow naturally but with the Resume context available in AI service.
     
     initial_msg = Message(
         interview_id=interview.id,
