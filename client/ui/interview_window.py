@@ -1,16 +1,16 @@
 from PyQt5.QtWidgets import (QWidget, QLabel, QTextEdit, QListWidget, QLineEdit, QPushButton, QVBoxLayout,
                              QHBoxLayout, QMessageBox, QSplitter, QFileDialog, QFrame, QDialog, QSizePolicy,
-                             QScrollArea, QApplication)
+                             QScrollArea, QApplication, QComboBox)
 from PyQt5.QtCore import Qt, pyqtSlot, QTimer, QThread, pyqtSignal, QSize
 from PyQt5.QtGui import QImage, QPixmap, QIcon
 from client.core.video_thread import VideoThread
 from utils.logger_handler import logger
 import subprocess
-import cv2
 import numpy as np
 import shutil
 import os
 import json
+from collections import deque
 import sounddevice as sd
 import scipy.io.wavfile as wav
 import speech_recognition as sr
@@ -493,9 +493,55 @@ class InterviewWindow(QWidget):
         self.interview_id = interview_data.get('interview_id')
         self.rtmp_push_url = interview_data.get('rtmp_push_url')
         self.initial_message = interview_data.get('initial_message')
+
+        self._stream_config = self._load_stream_config()
+        self._preview_mode = self._normalize_preview_mode(
+            self._stream_config.get('preview_mode', 'fit')
+        )
+        self._selected_resolution = self._normalize_resolution(
+            self._stream_config.get('stream_resolution', '720p')
+        )
+        self._resolution_profiles = {
+            "360p": {"size": (640, 360), "bitrate": "800k", "maxrate": "1000k"},
+            "480p": {"size": (854, 480), "bitrate": "1200k", "maxrate": "1600k"},
+            "720p": {"size": (1280, 720), "bitrate": "2200k", "maxrate": "3000k"},
+            "1080p": {"size": (1920, 1080), "bitrate": "3500k", "maxrate": "5000k"},
+        }
+        self._resolution_order = ["360p", "480p", "720p", "1080p"]
+        self._auto_resolution_index = len(self._resolution_order) - 1
+        self._rtmp_ladder = [
+            (1920, 1080),
+            (1600, 900),
+            (1280, 720),
+            (1152, 648),
+            (1024, 576),
+            (960, 540),
+            (854, 480),
+            (768, 432),
+            (640, 360),
+            (512, 288),
+            (426, 240),
+            (320, 180),
+        ]
+        self._ffmpeg_path = None
+        self._streaming_requested = False
+        self._current_frame_size = None
+        self._last_launch_ts = 0.0
+        self._log_throttle_ts = {}
+        self._ffmpeg_failures = deque()
+        self._backoff_steps = [1, 2, 4, 8, 15, 30]
+        self._backoff_index = 0
+        self._downgrade_window_sec = 60
+        self._downgrade_trigger = 2
+        self._restart_reason = "startup"
+        self._shutdown_requested = False
+
         self.push_process = None
         self.recorder_thread = None
         self.stream_worker = None
+        self._restart_timer = QTimer(self)
+        self._restart_timer.setSingleShot(True)
+        self._restart_timer.timeout.connect(self._restart_ffmpeg_after_delay)
         
         self.setWindowTitle("MirrorView - Interview")
         self.resize(1100, 750)
@@ -506,31 +552,80 @@ class InterviewWindow(QWidget):
         # Delay start_pushing slightly to ensure UI is ready
         QTimer.singleShot(100, self.start_pushing)
         
-        # Display initial message
+        self.obs_timer = QTimer(self)
+        self.obs_timer.timeout.connect(self.poll_observers)
+        self.obs_timer.start(5000)
+
         if self.initial_message:
-        # Poll observers
-            self.obs_timer = QTimer(self)
-            self.obs_timer.timeout.connect(self.poll_observers)
-            self.obs_timer.start(5000)
             self.append_message("AI", self.initial_message)
+
+    def _stream_config_path(self):
+        return os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ffmpeg_config.json')
+
+    def _load_stream_config(self):
+        config_path = self._stream_config_path()
+        if not os.path.exists(config_path):
+            return {}
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            return data if isinstance(data, dict) else {}
+        except Exception as e:
+            logger.error(f"Error reading ffmpeg config: {e}")
+            return {}
+
+    def _save_stream_config(self):
+        payload = dict(self._stream_config)
+        payload['preview_mode'] = self._preview_mode
+        payload['stream_resolution'] = self._selected_resolution
+        if self._ffmpeg_path:
+            payload['ffmpeg_path'] = self._ffmpeg_path
+        try:
+            with open(self._stream_config_path(), 'w', encoding='utf-8') as f:
+                json.dump(payload, f, indent=2, ensure_ascii=False)
+            self._stream_config = payload
+        except Exception as e:
+            logger.error(f"Error saving ffmpeg config: {e}")
+
+    def _normalize_preview_mode(self, mode):
+        normalized = (mode or "").strip().lower()
+        if normalized not in {"fit", "fill"}:
+            return "fit"
+        return normalized
+
+    def _normalize_resolution(self, label):
+        text = (label or "").strip().lower()
+        for candidate in ("auto", "360p", "480p", "720p", "1080p"):
+            if text == candidate:
+                return candidate
+        return "720p"
+
+    def _is_auto_resolution_mode(self):
+        return self._selected_resolution == "auto"
+
+    def _current_auto_cap(self):
+        return self._resolution_order[self._auto_resolution_index]
+
+    def _resolution_label_for_status(self):
+        if self._is_auto_resolution_mode():
+            return f"AUTO (cap {self._current_auto_cap()})"
+        return self._selected_resolution
+
+    def _capture_profile_key(self):
+        if self._is_auto_resolution_mode():
+            return self._current_auto_cap()
+        return self._selected_resolution
 
     def get_ffmpeg_path(self):
         # 1. Check system PATH
         path = shutil.which('ffmpeg')
         if path:
             return path
-            
+
         # 2. Check config file
-        config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ffmpeg_config.json')
-        if os.path.exists(config_path):
-            try:
-                with open(config_path, 'r') as f:
-                    config = json.load(f)
-                    saved_path = config.get('ffmpeg_path')
-                    if saved_path and os.path.exists(saved_path) and os.access(saved_path, os.X_OK):
-                        return saved_path
-            except Exception as e:
-                logger.error(f"Error reading config: {e}")
+        saved_path = self._stream_config.get('ffmpeg_path')
+        if saved_path and os.path.exists(saved_path) and os.access(saved_path, os.X_OK):
+            return saved_path
 
         # 3. Check common paths
         common_paths = [
@@ -544,25 +639,25 @@ class InterviewWindow(QWidget):
         for p in common_paths:
             if os.path.exists(p) and os.access(p, os.X_OK):
                 return p
-        
+
         # 4. Ask user
-        reply = QMessageBox.question(self, "FFmpeg Missing", 
+        reply = QMessageBox.question(
+            self,
+            "FFmpeg Missing",
             "FFmpeg was not found automatically.\n"
             "Would you like to locate the 'ffmpeg' executable manually to enable video streaming?\n"
             "(If you choose No, video streaming will be disabled)",
-            QMessageBox.Yes | QMessageBox.No)
-            
+            QMessageBox.Yes | QMessageBox.No
+        )
+
         if reply == QMessageBox.Yes:
             path, _ = QFileDialog.getOpenFileName(self, "Locate FFmpeg Executable")
             if path and os.path.exists(path):
-                # Save for next time
-                try:
-                    with open(config_path, 'w') as f:
-                        json.dump({'ffmpeg_path': path}, f)
-                except Exception as e:
-                    logger.error(f"Error saving config: {e}")
+                self._ffmpeg_path = path
+                self._stream_config['ffmpeg_path'] = path
+                self._save_stream_config()
                 return path
-            
+
         return None
 
     def init_ui(self):
@@ -591,6 +686,45 @@ class InterviewWindow(QWidget):
         video_wrapper_layout.addWidget(self.video_label)
         
         video_layout.addWidget(video_wrapper)
+
+        stream_controls_layout = QHBoxLayout()
+        stream_controls_layout.setSpacing(10)
+
+        quality_label = QLabel("Resolution")
+        quality_label.setObjectName("streamControlLabel")
+        stream_controls_layout.addWidget(quality_label)
+
+        self.resolution_combo = QComboBox()
+        self.resolution_combo.setObjectName("streamCombo")
+        self.resolution_combo.addItem("Auto", "auto")
+        for item in self._resolution_order:
+            self.resolution_combo.addItem(item, item)
+        current_index = self.resolution_combo.findData(self._selected_resolution)
+        if current_index < 0:
+            current_index = self.resolution_combo.findData("720p")
+        self.resolution_combo.setCurrentIndex(current_index)
+        self.resolution_combo.currentIndexChanged.connect(self.on_resolution_changed)
+        stream_controls_layout.addWidget(self.resolution_combo)
+
+        mode_label = QLabel("Preview")
+        mode_label.setObjectName("streamControlLabel")
+        stream_controls_layout.addWidget(mode_label)
+
+        self.preview_mode_combo = QComboBox()
+        self.preview_mode_combo.setObjectName("streamCombo")
+        self.preview_mode_combo.addItem("Fit (Center)", "fit")
+        self.preview_mode_combo.addItem("Fill (Crop)", "fill")
+        mode_index = 0 if self._preview_mode == "fit" else 1
+        self.preview_mode_combo.setCurrentIndex(mode_index)
+        self.preview_mode_combo.currentIndexChanged.connect(self.on_preview_mode_changed)
+        stream_controls_layout.addWidget(self.preview_mode_combo)
+
+        stream_controls_layout.addStretch()
+        video_layout.addLayout(stream_controls_layout)
+
+        self.stream_status_label = QLabel("")
+        self.stream_status_label.setObjectName("streamStatus")
+        video_layout.addWidget(self.stream_status_label)
         
         # Controls under video
         controls_layout = QHBoxLayout()
@@ -703,6 +837,9 @@ class InterviewWindow(QWidget):
         
         main_layout.addWidget(splitter)
         self.setLayout(main_layout)
+        self._update_stream_status(
+            f"Streaming profile: {self._resolution_label_for_status()}, preview mode: {self._preview_mode.upper()}."
+        )
 
     def apply_styles(self):
         self.setStyleSheet("""
@@ -720,6 +857,28 @@ class InterviewWindow(QWidget):
                 background-color: #000000;
                 color: #ffffff;
                 border-radius: 8px;
+            }
+            QLabel#streamControlLabel {
+                color: #374151;
+                font-size: 12px;
+                font-weight: 600;
+                padding: 0 2px;
+            }
+            QLabel#streamStatus {
+                color: #4b5563;
+                font-size: 12px;
+                padding: 2px 4px 4px 2px;
+            }
+            QComboBox#streamCombo {
+                border: 1px solid #d1d5db;
+                border-radius: 6px;
+                padding: 4px 8px;
+                min-width: 110px;
+                background: #ffffff;
+                font-size: 12px;
+            }
+            QComboBox#streamCombo::drop-down {
+                border: none;
             }
             QLabel#chatHeader {
                 font-size: 18px;
@@ -802,10 +961,276 @@ class InterviewWindow(QWidget):
         """)
 
     def start_video(self):
-        self.thread = VideoThread()
+        capture_key = self._capture_profile_key()
+        target_size = self._resolution_profiles[capture_key]["size"]
+        self.thread = VideoThread(capture_width=target_size[0], capture_height=target_size[1])
         self.thread.change_pixmap_signal.connect(self.update_image)
         self.thread.frame_signal.connect(self.push_frame)
         self.thread.start()
+
+    def on_resolution_changed(self, index):
+        normalized = self._normalize_resolution(self.resolution_combo.itemData(index))
+        if normalized == self._selected_resolution:
+            return
+
+        self._selected_resolution = normalized
+        if self._is_auto_resolution_mode():
+            self._auto_resolution_index = len(self._resolution_order) - 1
+        self._save_stream_config()
+        self._update_stream_status(
+            f"Resolution switched to {self._resolution_label_for_status()}. Reconfiguring stream..."
+        )
+
+        if self._streaming_requested and self._ffmpeg_path:
+            self._backoff_index = 0
+            self._ffmpeg_failures.clear()
+            self._restart_timer.stop()
+            self._close_push_process()
+            self._restart_reason = "manual resolution switch"
+            self._restart_timer.start(0)
+
+    def on_preview_mode_changed(self, index):
+        mode = self.preview_mode_combo.itemData(index)
+        normalized = self._normalize_preview_mode(mode)
+        if normalized == self._preview_mode:
+            return
+        self._preview_mode = normalized
+        self._save_stream_config()
+        self._update_stream_status(
+            f"Preview mode switched to {normalized.upper()}."
+        )
+
+    def _update_stream_status(self, message):
+        if hasattr(self, "stream_status_label"):
+            self.stream_status_label.setText(message)
+
+    def _log_with_throttle(self, key, message, level="error", interval_sec=30):
+        now = time.time()
+        last_ts = self._log_throttle_ts.get(key, 0.0)
+        if now - last_ts < interval_sec:
+            return
+        self._log_throttle_ts[key] = now
+        log_fn = getattr(logger, level, logger.error)
+        log_fn(message)
+
+    def _fit_aspect(self, max_width, max_height, aspect_w=16, aspect_h=9):
+        max_width = max(2, int(max_width))
+        max_height = max(2, int(max_height))
+        if max_width * aspect_h <= max_height * aspect_w:
+            width = max_width
+            height = int(max_width * aspect_h / aspect_w)
+        else:
+            height = max_height
+            width = int(max_height * aspect_w / aspect_h)
+        width = max(2, width - (width % 2))
+        height = max(2, height - (height % 2))
+        return width, height
+
+    def _choose_stream_output_size(self):
+        if not self._is_auto_resolution_mode():
+            return self._resolution_profiles[self._selected_resolution]["size"]
+
+        cap_key = self._current_auto_cap()
+        profile_w, profile_h = self._resolution_profiles[cap_key]["size"]
+        area_w = max(self.video_label.width(), 640)
+        area_h = max(self.video_label.height(), 360)
+
+        fit_w, fit_h = self._fit_aspect(area_w, area_h, 16, 9)
+        max_w = min(profile_w, fit_w)
+        max_h = min(profile_h, fit_h)
+
+        for candidate_w, candidate_h in self._rtmp_ladder:
+            if candidate_w <= max_w and candidate_h <= max_h:
+                return candidate_w, candidate_h
+
+        return self._fit_aspect(max_w, max_h, 16, 9)
+
+    def _profile_key_for_output(self, output_size):
+        if not self._is_auto_resolution_mode():
+            return self._selected_resolution
+
+        _, output_h = output_size
+        if output_h >= 1080:
+            return "1080p"
+        if output_h >= 720:
+            return "720p"
+        if output_h >= 480:
+            return "480p"
+        return "360p"
+
+    def _calc_bufsize(self, maxrate):
+        # maxrate is formatted like "3000k"
+        if not maxrate.endswith("k"):
+            return maxrate
+        try:
+            numeric = int(maxrate[:-1])
+            return f"{numeric * 2}k"
+        except ValueError:
+            return maxrate
+
+    def _build_ffmpeg_command(self, input_size, output_size):
+        input_w, input_h = input_size
+        output_w, output_h = output_size
+        profile_key = self._profile_key_for_output(output_size)
+        profile = self._resolution_profiles[profile_key]
+        scale_filter = (
+            f"scale={output_w}:{output_h}:force_original_aspect_ratio=decrease,"
+            f"pad={output_w}:{output_h}:(ow-iw)/2:(oh-ih)/2:black"
+        )
+        return [
+            self._ffmpeg_path,
+            '-loglevel', 'error',
+            '-y',
+            '-f', 'rawvideo',
+            '-pixel_format', 'bgr24',
+            '-video_size', f'{input_w}x{input_h}',
+            '-framerate', '15',
+            '-i', '-',
+            '-vf', scale_filter,
+            '-c:v', 'libx264',
+            '-preset', 'ultrafast',
+            '-tune', 'zerolatency',
+            '-pix_fmt', 'yuv420p',
+            '-r', '15',
+            '-g', '30',
+            '-b:v', profile['bitrate'],
+            '-maxrate', profile['maxrate'],
+            '-bufsize', self._calc_bufsize(profile['maxrate']),
+            '-f', 'flv',
+            self.rtmp_push_url
+        ]
+
+    def _close_push_process(self):
+        if not self.push_process:
+            return
+        try:
+            if self.push_process.stdin:
+                try:
+                    self.push_process.stdin.close()
+                except Exception:
+                    pass
+            if self.push_process.poll() is None:
+                self.push_process.terminate()
+                try:
+                    self.push_process.wait(timeout=2)
+                except Exception:
+                    self.push_process.kill()
+        except Exception as e:
+            logger.debug(f"Error closing FFmpeg process: {e}")
+        finally:
+            self.push_process = None
+
+    def _start_ffmpeg_process(self, reason):
+        if not self._streaming_requested or self._shutdown_requested:
+            return False
+        if not self._current_frame_size:
+            return False
+        if self.push_process and self.push_process.poll() is None:
+            return True
+        if not self._ffmpeg_path:
+            return False
+
+        input_size = self._current_frame_size
+        output_size = self._choose_stream_output_size()
+        command = self._build_ffmpeg_command(input_size, output_size)
+
+        try:
+            self.push_process = subprocess.Popen(
+                command,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                bufsize=0
+            )
+            self._last_launch_ts = time.time()
+            self._update_stream_status(
+                f"Streaming at {output_size[0]}x{output_size[1]} ({self._resolution_label_for_status()}, {self._preview_mode.upper()})."
+            )
+            logger.info(
+                "FFmpeg started (%s): input=%sx%s output=%sx%s profile=%s",
+                reason,
+                input_size[0],
+                input_size[1],
+                output_size[0],
+                output_size[1],
+                self._resolution_label_for_status(),
+            )
+            return True
+        except Exception as e:
+            self.push_process = None
+            self._log_with_throttle(
+                "ffmpeg_start_failure",
+                f"Failed to start FFmpeg: {e}",
+                level="error",
+                interval_sec=30,
+            )
+            return False
+
+    def _record_ffmpeg_failure(self, reason):
+        now = time.time()
+        self._ffmpeg_failures.append(now)
+        while self._ffmpeg_failures and now - self._ffmpeg_failures[0] > self._downgrade_window_sec:
+            self._ffmpeg_failures.popleft()
+
+        if len(self._ffmpeg_failures) >= self._downgrade_trigger:
+            self._maybe_auto_downgrade_resolution()
+
+        if now - self._last_launch_ts >= 20:
+            self._backoff_index = 0
+
+        delay = self._backoff_steps[self._backoff_index]
+        self._backoff_index = min(self._backoff_index + 1, len(self._backoff_steps) - 1)
+
+        self._restart_reason = reason
+        if not self._restart_timer.isActive():
+            self._update_stream_status(
+                f"FFmpeg will retry in {delay}s ({reason})."
+            )
+            self._restart_timer.start(int(delay * 1000))
+
+    def _maybe_auto_downgrade_resolution(self):
+        if not self._is_auto_resolution_mode():
+            return
+
+        if self._auto_resolution_index == 0:
+            self._update_stream_status(
+                "Auto fallback reached minimum profile (360p). Continuing retries."
+            )
+            return
+
+        self._auto_resolution_index -= 1
+        downgraded = self._current_auto_cap()
+        self._save_stream_config()
+        self._ffmpeg_failures.clear()
+        self._update_stream_status(
+            f"Auto mode downgraded stream cap to {downgraded} after repeated FFmpeg exits."
+        )
+        logger.warning(
+            "Auto mode downgraded stream cap to %s after repeated FFmpeg exits.",
+            downgraded,
+        )
+
+    def _handle_ffmpeg_exit(self, reason):
+        if self._shutdown_requested:
+            return
+        self._close_push_process()
+        self._log_with_throttle(
+            "ffmpeg_exit",
+            f"FFmpeg process has exited unexpectedly ({reason}).",
+            level="error",
+            interval_sec=30,
+        )
+        self._record_ffmpeg_failure(reason)
+
+    def _restart_ffmpeg_after_delay(self):
+        if not self._streaming_requested or self._shutdown_requested:
+            return
+        if not self._current_frame_size:
+            # Wait for first camera frame before launching FFmpeg.
+            self._restart_timer.start(1000)
+            return
+        if not self._start_ffmpeg_process(self._restart_reason):
+            self._record_ffmpeg_failure("restart failed")
 
     def start_pushing(self):
         """
@@ -813,85 +1238,104 @@ class InterviewWindow(QWidget):
         """
         if not self.rtmp_push_url:
             logger.warning("No RTMP URL provided, skipping push.")
+            self._update_stream_status("No RTMP URL available. Streaming disabled.")
             return
 
         ffmpeg_path = self.get_ffmpeg_path()
         if not ffmpeg_path:
-             logger.warning("FFmpeg not found or selected. Streaming disabled.")
-             return
-            
+            logger.warning("FFmpeg not found or selected. Streaming disabled.")
+            self._update_stream_status("FFmpeg unavailable. Streaming disabled.")
+            return
+
+        self._ffmpeg_path = ffmpeg_path
+        self._streaming_requested = True
+        self._shutdown_requested = False
+        self._stream_config['ffmpeg_path'] = ffmpeg_path
+        self._save_stream_config()
+
         logger.info(f"Starting push to: {self.rtmp_push_url} using {ffmpeg_path}")
-        
-        # FFmpeg command to read raw video from stdin
-        # Added -re to read input at native frame rate (important for live streaming if input is too fast)
-        # But since we are pushing frames in real-time from thread, -re might not be strictly needed or could cause buffer issues if we are slow.
-        # Let's try removing -vcodec rawvideo from input args and just specify format.
-        
-        command = [
-            ffmpeg_path,
-            '-y',
-            '-f', 'rawvideo',
-            '-pixel_format', 'bgr24',
-            '-video_size', '640x480',
-            '-framerate', '15', # Match the reduced frame rate
-            '-i', '-',
-            '-c:v', 'libx264',
-            '-pix_fmt', 'yuv420p',
-            '-preset', 'ultrafast',
-            '-tune', 'zerolatency',
-            '-g', '30', # Keyframe interval (2 seconds at 15fps)
-            '-f', 'flv',
-            self.rtmp_push_url
-        ]
-        
-        try:
-            # Open ffmpeg process with stdin pipe
-            self.push_process = subprocess.Popen(command, stdin=subprocess.PIPE)
-            logger.info("FFmpeg process started.")
-        except FileNotFoundError:
-            logger.error("FFmpeg not found.")
-            QMessageBox.warning(self, "Streaming Disabled", "FFmpeg not found. Video streaming will be disabled, but you can still continue the interview.")
-            self.push_process = None
-        except Exception as e:
-            logger.error(f"Failed to start FFmpeg: {e}")
-            QMessageBox.warning(self, "Error", f"Failed to start streaming: {e}")
+        if self._current_frame_size:
+            self._start_ffmpeg_process("initial start")
+        else:
+            self._update_stream_status(
+                "Waiting for camera frames before starting RTMP push..."
+            )
 
     @pyqtSlot(np.ndarray)
     def push_frame(self, frame):
         """
         Receive raw frame from VideoThread and write to FFmpeg stdin
         """
-        if self.push_process and self.push_process.stdin:
-            try:
-                # Basic frame skipping to reduce load/fps for pushing
-                if not hasattr(self, '_frame_count'):
-                    self._frame_count = 0
-                self._frame_count += 1
-                
-                # Push every 2nd frame (30fps -> 15fps)
-                if self._frame_count % 2 != 0:
-                    return
+        if frame is None:
+            return
 
-                # Resize if needed to match ffmpeg input size
-                frame = cv2.resize(frame, (640, 480))
-                # Ensure connection is still open
-                if self.push_process.poll() is None:
-                    self.push_process.stdin.write(frame.tobytes())
-                    self.push_process.stdin.flush()
-                else:
-                    logger.error("FFmpeg process has exited unexpectedly.")
-                    # Optionally restart or nullify
-            except Exception as e:
-                logger.error(f"Error pushing frame: {e}")
+        frame_h, frame_w = frame.shape[:2]
+        if frame_w > 0 and frame_h > 0:
+            self._current_frame_size = (frame_w, frame_h)
+
+        if not self._streaming_requested:
+            return
+
+        if not self.push_process and not self._restart_timer.isActive():
+            if not self._start_ffmpeg_process("frame-driven launch"):
+                self._record_ffmpeg_failure("frame-driven launch failed")
+                return
+
+        if not self.push_process or not self.push_process.stdin:
+            return
+
+        if self.push_process.poll() is not None:
+            self._handle_ffmpeg_exit("poll() returned exited process")
+            return
+
+        if not hasattr(self, '_frame_count'):
+            self._frame_count = 0
+        self._frame_count += 1
+        # Keep 15fps push rate while local preview can stay smoother.
+        if self._frame_count % 2 != 0:
+            return
+
+        try:
+            self.push_process.stdin.write(frame.tobytes())
+            if self._backoff_index > 0 and time.time() - self._last_launch_ts >= 20:
+                self._backoff_index = 0
+        except (BrokenPipeError, OSError, ValueError) as e:
+            self._handle_ffmpeg_exit(f"stdin write failed: {e}")
+        except Exception as e:
+            self._log_with_throttle(
+                "ffmpeg_write_error",
+                f"Error pushing frame: {e}",
+                level="error",
+                interval_sec=30,
+            )
+            self._handle_ffmpeg_exit("unknown write failure")
 
     @pyqtSlot(QImage)
     def update_image(self, qt_img):
-        # Scale image to fit label while maintaining aspect ratio, to avoid black bars if possible
-        # Or just fill the label
-        scaled_pixmap = QPixmap.fromImage(qt_img).scaled(
-            self.video_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation
+        pixmap = QPixmap.fromImage(qt_img)
+        target_size = self.video_label.size()
+        if target_size.width() <= 0 or target_size.height() <= 0:
+            self.video_label.setPixmap(pixmap)
+            return
+
+        if self._preview_mode == "fill":
+            scaled = pixmap.scaled(
+                target_size,
+                Qt.KeepAspectRatioByExpanding,
+                Qt.SmoothTransformation,
+            )
+            x = max(0, (scaled.width() - target_size.width()) // 2)
+            y = max(0, (scaled.height() - target_size.height()) // 2)
+            cropped = scaled.copy(x, y, target_size.width(), target_size.height())
+            self.video_label.setPixmap(cropped)
+            return
+
+        scaled = pixmap.scaled(
+            target_size,
+            Qt.KeepAspectRatio,
+            Qt.SmoothTransformation,
         )
-        self.video_label.setPixmap(scaled_pixmap)
+        self.video_label.setPixmap(scaled)
 
     def append_message(self, sender, content):
         color = "blue" if sender == "You" else "green"
@@ -1072,11 +1516,16 @@ class InterviewWindow(QWidget):
         if self.stream_worker and self.stream_worker.isRunning():
             self.stream_worker.quit()
             self.stream_worker.wait()
+        if hasattr(self, "obs_timer") and self.obs_timer.isActive():
+            self.obs_timer.stop()
+        self._shutdown_requested = True
+        self._streaming_requested = False
+        if self._restart_timer.isActive():
+            self._restart_timer.stop()
         self.thread.stop()
-        if self.push_process:
-            self.push_process.terminate()
-            self.push_process = None
+        self._close_push_process()
         event.accept()
+
     def poll_observers(self):
         success, observers = self.api_client.get_observers(self.interview_id)
         if success:
