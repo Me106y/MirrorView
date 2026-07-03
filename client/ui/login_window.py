@@ -49,7 +49,7 @@ class LoginWindow(QWidget):
         right_layout.setSpacing(20)
 
         # Title
-        title = QLabel("欢迎回来")
+        title = QLabel("欢迎使用")
         title.setObjectName("title")
         title.setAlignment(Qt.AlignCenter)
         right_layout.addWidget(title)

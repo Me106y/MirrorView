@@ -843,7 +843,7 @@ class MainWindow(QMainWindow):
         content_layout.setSpacing(30)
         
         # Welcome Header
-        welcome_header = QLabel(f"欢迎回来，{self.user_data.get('username')}！")
+        welcome_header = QLabel(f"欢迎使用，{self.user_data.get('username')}！")
         welcome_header.setObjectName("welcomeHeader")
         content_layout.addWidget(welcome_header)
         

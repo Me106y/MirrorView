@@ -5,6 +5,9 @@ from flask import Flask
 # import pymysql
 from sqlalchemy import inspect, text
 from utils.logger_handler import logger
+from server.config import Config
+from server.models import db
+from server.routes import api
 
 
 def _load_runtime_env_files():
@@ -40,11 +43,6 @@ def _load_runtime_env_files():
 
 
 _load_runtime_env_files()
-
-from server.config import Config
-from server.models import db
-from server.routes import api
-
 
 def _ensure_users_table_columns():
     """
