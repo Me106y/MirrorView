@@ -11,7 +11,6 @@ export function Shell({ onOpenSettings }: { onOpenSettings: () => void }) {
           <NavLink to="/" className="topbar-brand-link">
             MirrorView
           </NavLink>
-          {isHome ? null : <p>Phase A Week 1 · Public MVP</p>}
         </div>
         <div className="topbar-actions">
           <button className="ghost-btn topbar-action-btn" onClick={onOpenSettings}>
