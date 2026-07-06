@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "bash scripts/sync_api_runtime.sh && cd web && npm ci && npm run build",
+  "buildCommand": "cd web && npm ci && npm run build && cd .. && bash scripts/sync_api_runtime.sh",
   "outputDirectory": "web/dist",
   "functions": {
     "api/index.py": {
