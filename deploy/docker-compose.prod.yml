@@ -1,0 +1,31 @@
+version: '3.9'
+
+services:
+  mirrorview-api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: mirrorview-api
+    env_file:
+      - ../.env
+    environment:
+      - TURNSTILE_ENFORCE=true
+      - RATE_LIMIT_ENFORCE=true
+      - RATE_LIMIT_REQUESTS=30
+      - RATE_LIMIT_WINDOW_SECONDS=60
+    expose:
+      - "5001"
+    restart: unless-stopped
+
+  mirrorview-web:
+    image: nginx:1.27-alpine
+    container_name: mirrorview-web
+    depends_on:
+      - mirrorview-api
+    volumes:
+      - ../web/dist:/usr/share/nginx/html:ro
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    restart: unless-stopped

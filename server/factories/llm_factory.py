@@ -5,6 +5,7 @@ Supports:
 - DeepSeek (via OpenAI-compatible API) — default for MirrorView
 - DashScope (Alibaba Cloud) — legacy
 - OpenAI — generic
+- Anthropic — generic
 - Ollama — local
 - Boson.ai Higgs Audio v3 (TTS)
 
@@ -26,6 +27,7 @@ class ModelFactory:
     _PROVIDERS = {
         "deepseek":  None,  # handled specially — OpenAI-compatible
         "openai":    ("langchain_openai", "ChatOpenAI"),
+        "anthropic": ("langchain_anthropic", "ChatAnthropic"),
         "dashscope": ("langchain_community.chat_models.tongyi", "ChatTongyi"),
         "ollama":    ("langchain_ollama", "ChatOllama"),
     }
@@ -70,7 +72,7 @@ class ModelFactory:
         Create a LangChain chat model instance.
 
         Args:
-            provider: "deepseek" | "openai" | "dashscope" | "ollama"
+            provider: "deepseek" | "openai" | "anthropic" | "dashscope" | "ollama"
             model_name: Model identifier
             **kwargs: Overrides (temperature, base_url, api_key, etc.)
 
@@ -114,6 +116,33 @@ class ModelFactory:
             return ChatOpenAI(
                 model=model_name,
                 openai_api_key=api_key,
+                temperature=kwargs.pop("temperature", 0.7),
+                max_tokens=kwargs.pop("max_tokens", 2048),
+                **extra,
+                **kwargs,
+            )
+
+        # ── Anthropic ──
+        if provider == "anthropic":
+            try:
+                from langchain_anthropic import ChatAnthropic
+            except ImportError as e:
+                raise ModuleNotFoundError(
+                    "Anthropic provider requires optional dependency "
+                    "`langchain-anthropic`. Install it in your runtime "
+                    "environment before using provider=anthropic."
+                ) from e
+
+            api_key = kwargs.pop("api_key", os.environ.get("ANTHROPIC_API_KEY", ""))
+            base_url = kwargs.pop("base_url", os.environ.get("ANTHROPIC_BASE_URL", None))
+
+            extra = {}
+            if base_url:
+                extra["base_url"] = base_url
+
+            return ChatAnthropic(
+                model=model_name,
+                anthropic_api_key=api_key,
                 temperature=kwargs.pop("temperature", 0.7),
                 max_tokens=kwargs.pop("max_tokens", 2048),
                 **extra,

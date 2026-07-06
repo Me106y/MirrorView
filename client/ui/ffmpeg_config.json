@@ -1,0 +1,5 @@
+{
+  "ffmpeg_path": "/usr/local/bin/ffmpeg",
+  "preview_mode": "fit",
+  "stream_resolution": "1080p"
+}

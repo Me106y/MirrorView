@@ -96,6 +96,34 @@
    TUI 启动时会先尝试执行以下命令显示 MirrorView Logo：  
    `npx oh-my-logo "MirrorView" purple --filled --block-font block`
 
+### Web MVP（Phase A Week 1）
+
+- 新增前端工程：`web/`（React + TypeScript + Vite）
+- 主页面路由：
+  - `/resume-match`
+  - `/resume-craft`
+  - `/cover-letter`
+  - `/mock-interview`
+  - `/job-hunt`（Phase B 占位）
+- 合规页面路由：
+  - `/legal/privacy`
+  - `/legal/terms`
+  - `/legal/ai-disclaimer`
+  - `/legal/byok-risk`
+
+本地运行：
+```bash
+cd web
+npm install
+npm run dev
+```
+
+后端接口扩展：
+- CareerForge 相关接口支持可选字段：
+  - `runtime`（platform / byok 模型配置）
+  - `turnstile_token`（开启防刷时校验）
+- 返回体新增安全的 `meta` 运行信息。
+
 ### 一键安装（预编译 TUI 软件）
 
 - macOS / Linux：

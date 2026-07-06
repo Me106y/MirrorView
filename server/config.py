@@ -93,8 +93,57 @@ class Config:
         _JSON_CONFIG.get("DEEPSEEK_MODEL", "deepseek-chat")
     )
 
+    # Platform default model route (used when runtime.mode == "platform")
+    PLATFORM_PROVIDER = str(
+        os.environ.get("PLATFORM_PROVIDER")
+        or _JSON_CONFIG.get("PLATFORM_PROVIDER", "deepseek")
+    ).strip().lower() or "deepseek"
+    PLATFORM_MODEL = str(
+        os.environ.get("PLATFORM_MODEL")
+        or _JSON_CONFIG.get("PLATFORM_MODEL", DEEPSEEK_MODEL)
+    ).strip() or DEEPSEEK_MODEL
+
     # Legacy DashScope — still configurable if someone has a key
     DASHSCOPE_API_KEY = os.environ.get("DASHSCOPE_API_KEY", "")
+
+    # Optional provider keys for BYOK routing
+    OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+    ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+
+    # Cloudflare Turnstile
+    TURNSTILE_SITE_KEY = str(
+        os.environ.get("TURNSTILE_SITE_KEY")
+        or _JSON_CONFIG.get("TURNSTILE_SITE_KEY", "")
+    )
+    TURNSTILE_SECRET_KEY = str(
+        os.environ.get("TURNSTILE_SECRET_KEY")
+        or _JSON_CONFIG.get("TURNSTILE_SECRET_KEY", "")
+    )
+    TURNSTILE_VERIFY_URL = str(
+        os.environ.get("TURNSTILE_VERIFY_URL")
+        or _JSON_CONFIG.get(
+            "TURNSTILE_VERIFY_URL",
+            "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+        )
+    )
+    TURNSTILE_ENFORCE = _to_bool(
+        os.environ.get("TURNSTILE_ENFORCE", _JSON_CONFIG.get("TURNSTILE_ENFORCE", False)),
+        default=False,
+    )
+
+    # Lightweight API guardrails (in-memory)
+    RATE_LIMIT_ENFORCE = _to_bool(
+        os.environ.get("RATE_LIMIT_ENFORCE", _JSON_CONFIG.get("RATE_LIMIT_ENFORCE", False)),
+        default=False,
+    )
+    RATE_LIMIT_REQUESTS = _to_int(
+        os.environ.get("RATE_LIMIT_REQUESTS", _JSON_CONFIG.get("RATE_LIMIT_REQUESTS", 30)),
+        default=30,
+    )
+    RATE_LIMIT_WINDOW_SECONDS = _to_int(
+        os.environ.get("RATE_LIMIT_WINDOW_SECONDS", _JSON_CONFIG.get("RATE_LIMIT_WINDOW_SECONDS", 60)),
+        default=60,
+    )
 
     # ── TTS: Boson.ai Higgs Audio v3 ──
     BOSON_API_KEY = os.environ.get("BOSON_API_KEY", "")

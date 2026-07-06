@@ -40,5 +40,5 @@ RUN mkdir -p /app/instance /app/uploads
 # Expose port for Flask Server
 EXPOSE 5001
 
-# Default command runs the server
-CMD ["python", "server/main.py"]
+# Default command runs Flask app via gunicorn
+CMD ["gunicorn", "-w", "2", "-b", "0.0.0.0:5001", "server.app:create_app()"]

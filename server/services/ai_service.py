@@ -1,4 +1,5 @@
 import json
+from typing import Any, Dict, Optional
 
 from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
@@ -12,15 +13,64 @@ from utils.logger_handler import logger
 
 class AIService:
     def __init__(self):
-        self.llm = ModelFactory.get_model(
-            "deepseek",
-            Config.DEEPSEEK_MODEL,
-            temperature=0.7,
-            base_url=Config.DEEPSEEK_BASE_URL,
-            api_key=Config.DEEPSEEK_API_KEY,
-        )
+        self.llm = self._build_platform_llm()
         self.resume_service = ResumeService()
         self.careerforge_agent = CareerForgeAgent(llm=self.llm)
+
+    @staticmethod
+    def _runtime_text(value: Any) -> str:
+        if value is None:
+            return ""
+        return str(value).strip()
+
+    def _build_platform_llm(self):
+        provider = (Config.PLATFORM_PROVIDER or "deepseek").strip().lower() or "deepseek"
+        model_name = (Config.PLATFORM_MODEL or "").strip() or Config.DEEPSEEK_MODEL
+        kwargs: Dict[str, Any] = {"temperature": 0.7}
+
+        if provider == "deepseek":
+            kwargs["base_url"] = Config.DEEPSEEK_BASE_URL
+            kwargs["api_key"] = Config.DEEPSEEK_API_KEY
+        elif provider == "openai":
+            kwargs["api_key"] = Config.OPENAI_API_KEY
+        elif provider == "anthropic":
+            kwargs["api_key"] = Config.ANTHROPIC_API_KEY
+
+        try:
+            return ModelFactory.get_model(provider, model_name, **kwargs)
+        except Exception as e:
+            logger.warning("Platform model init fallback to deepseek: %s", e)
+            return ModelFactory.get_model(
+                "deepseek",
+                Config.DEEPSEEK_MODEL,
+                temperature=0.7,
+                base_url=Config.DEEPSEEK_BASE_URL,
+                api_key=Config.DEEPSEEK_API_KEY,
+            )
+
+    def _build_runtime_agent(self, runtime: Optional[Dict[str, Any]] = None) -> CareerForgeAgent:
+        if not runtime:
+            return self.careerforge_agent
+
+        mode = self._runtime_text(runtime.get("mode") or "platform").lower()
+        if mode != "byok":
+            return self.careerforge_agent
+
+        provider = self._runtime_text(runtime.get("provider")).lower()
+        model_name = self._runtime_text(runtime.get("model"))
+        api_key = self._runtime_text(runtime.get("api_key"))
+        base_url = self._runtime_text(runtime.get("base_url"))
+
+        kwargs: Dict[str, Any] = {
+            "temperature": 0.35,
+        }
+        if api_key:
+            kwargs["api_key"] = api_key
+        if base_url:
+            kwargs["base_url"] = base_url
+
+        llm = ModelFactory.get_model(provider, model_name, **kwargs)
+        return CareerForgeAgent(llm=llm)
 
     @staticmethod
     def _normalize_language(language):
@@ -228,17 +278,45 @@ class AIService:
                 return "Could not generate feedback due to an error."
             return "生成面试反馈时出现异常，请稍后重试。"
 
-    def run_resume_match(self, payload):
-        return self.careerforge_agent.run_resume_match(payload)
+    def run_resume_match(self, payload, runtime: Optional[Dict[str, Any]] = None):
+        try:
+            return self._build_runtime_agent(runtime).run_resume_match(payload)
+        except Exception as e:
+            logger.error("run_resume_match runtime error: %s", e)
+            return {
+                "error": "runtime_call_failed",
+                "message": "Model runtime call failed.",
+            }
 
-    def run_resume_craft(self, payload):
-        return self.careerforge_agent.run_resume_craft(payload)
+    def run_resume_craft(self, payload, runtime: Optional[Dict[str, Any]] = None):
+        try:
+            return self._build_runtime_agent(runtime).run_resume_craft(payload)
+        except Exception as e:
+            logger.error("run_resume_craft runtime error: %s", e)
+            return {
+                "error": "runtime_call_failed",
+                "message": "Model runtime call failed.",
+            }
 
-    def run_cover_letter(self, payload):
-        return self.careerforge_agent.run_cover_letter(payload)
+    def run_cover_letter(self, payload, runtime: Optional[Dict[str, Any]] = None):
+        try:
+            return self._build_runtime_agent(runtime).run_cover_letter(payload)
+        except Exception as e:
+            logger.error("run_cover_letter runtime error: %s", e)
+            return {
+                "error": "runtime_call_failed",
+                "message": "Model runtime call failed.",
+            }
 
-    def run_job_hunt(self, payload):
-        return self.careerforge_agent.run_job_hunt(payload)
+    def run_job_hunt(self, payload, runtime: Optional[Dict[str, Any]] = None):
+        try:
+            return self._build_runtime_agent(runtime).run_job_hunt(payload)
+        except Exception as e:
+            logger.error("run_job_hunt runtime error: %s", e)
+            return {
+                "error": "runtime_call_failed",
+                "message": "Model runtime call failed.",
+            }
 
     def generate_mock_interview_opening(self, job_position, resume_summary="", language="zh"):
         return self.careerforge_agent.generate_mock_interview_opening(

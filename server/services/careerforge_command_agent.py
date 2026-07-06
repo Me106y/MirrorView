@@ -177,12 +177,20 @@ class CareerForgeCommandAgent:
                 temperature=0,
                 streaming=False,
                 max_tokens=256,
+                base_url=Config.DEEPSEEK_BASE_URL,
+                api_key=Config.DEEPSEEK_API_KEY,
             )
         except Exception as e:
             self._llm_error = str(e)
             logger.warning("CareerForgeCommandAgent LLM init failed: %s", e)
 
-    def handle_chat(self, user_id: Optional[int], message: str, history: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+    def handle_chat(
+        self,
+        user_id: Optional[int],
+        message: str,
+        history: Optional[List[Dict[str, Any]]] = None,
+        runtime: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         text = (message or "").strip()
         if not text:
             return self._resp(
@@ -301,7 +309,12 @@ class CareerForgeCommandAgent:
 
         # Execute skill
         try:
-            result, reply, action, artifacts = self._execute_intent(intent=intent, user_id=user_id, slots=slots)
+            result, reply, action, artifacts = self._execute_intent(
+                intent=intent,
+                user_id=user_id,
+                slots=slots,
+                runtime=runtime,
+            )
             session["last_result"] = result
             session["intent"] = ""
             session["slots"] = {}
@@ -899,14 +912,20 @@ class CareerForgeCommandAgent:
 
         return []
 
-    def _execute_intent(self, intent: str, user_id: int, slots: Dict[str, Any]) -> Tuple[Dict[str, Any], str, str, List[Dict[str, str]]]:
+    def _execute_intent(
+        self,
+        intent: str,
+        user_id: int,
+        slots: Dict[str, Any],
+        runtime: Optional[Dict[str, Any]] = None,
+    ) -> Tuple[Dict[str, Any], str, str, List[Dict[str, str]]]:
         if intent == "resume-match":
             payload = {
                 "resume_text": (slots.get("resume_text") or "")[:20000],
                 "jd_text": (slots.get("jd_text") or "")[:12000],
                 "target_role": (slots.get("target_role") or "").strip(),
             }
-            result = self.ai_service.run_resume_match(payload)
+            result = self.ai_service.run_resume_match(payload, runtime=runtime)
             reply = self._summarize_resume_match(result)
             artifacts: List[Dict[str, str]] = []
 
@@ -941,7 +960,7 @@ class CareerForgeCommandAgent:
                 "template": (slots.get("template") or "").strip(),
                 "optimization_goal": (slots.get("optimization_goal") or "").strip(),
             }
-            result = self.ai_service.run_resume_craft(payload)
+            result = self.ai_service.run_resume_craft(payload, runtime=runtime)
             reply = self._summarize_resume_craft(result)
             artifacts: List[Dict[str, str]] = []
             if isinstance(result, dict) and not result.get("error"):
@@ -975,7 +994,7 @@ class CareerForgeCommandAgent:
                 "language": (slots.get("language") or "zh").strip() or "zh",
                 "company_name": (slots.get("company_name") or "").strip(),
             }
-            result = self.ai_service.run_cover_letter(payload)
+            result = self.ai_service.run_cover_letter(payload, runtime=runtime)
             reply = self._summarize_cover_letter(result)
             return result, reply, "skill_executed", []
 
@@ -991,7 +1010,7 @@ class CareerForgeCommandAgent:
                 "hard_requirements": slots.get("hard_requirements") or [],
                 "platforms": slots.get("platforms") or [],
             }
-            result = self.ai_service.run_job_hunt(payload)
+            result = self.ai_service.run_job_hunt(payload, runtime=runtime)
             reply = self._summarize_job_hunt(result)
             return result, reply, "skill_executed", []
 

@@ -96,6 +96,34 @@ Key features include **AI Interviewer** interactions, **Real-time Video Streamin
    The TUI startup will try to render the MirrorView logo via:
    `npx oh-my-logo "MirrorView" purple --filled --block-font block`
 
+### Web MVP (Phase A Week 1)
+
+- New frontend workspace: `web/` (React + TypeScript + Vite)
+- Main routes:
+  - `/resume-match`
+  - `/resume-craft`
+  - `/cover-letter`
+  - `/mock-interview`
+  - `/job-hunt` (Phase B placeholder)
+- Legal routes:
+  - `/legal/privacy`
+  - `/legal/terms`
+  - `/legal/ai-disclaimer`
+  - `/legal/byok-risk`
+
+Run locally:
+```bash
+cd web
+npm install
+npm run dev
+```
+
+Backend runtime extension:
+- CareerForge endpoints now support optional request fields:
+  - `runtime` (platform / byok provider config)
+  - `turnstile_token` (for anti-abuse checks when enabled)
+- Responses include safe `meta` runtime info.
+
 ### One-Click Install (Prebuilt TUI App)
 
 - macOS / Linux:

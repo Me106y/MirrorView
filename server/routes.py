@@ -4,17 +4,27 @@ from server.services.ai_service import AIService
 from server.services.careerforge_command_agent import CareerForgeCommandAgent
 from server.services.rtmp_service import RTMPService
 from server.services.resume_service import ResumeService
+from server.runtime_request import build_runtime_meta, parse_runtime_payload
+from server.security import enforce_high_cost_guard
 from server.config import Config
 from utils.logger_handler import logger
 from datetime import datetime
 import uuid
 import tempfile
+from typing import Any, Dict, Optional, Tuple
 
 api = Blueprint('api', __name__)
 
 ai_service = AIService()
 command_agent = CareerForgeCommandAgent(ai_service)
 rtmp_service = RTMPService(Config.RTMP_SERVER_URL)
+
+HIGH_COST_ENDPOINTS = {
+    "resume-match",
+    "resume-craft",
+    "cover-letter",
+    "mock-interview",
+}
 
 @api.route('/auth/register', methods=['POST'])
 def register():
@@ -124,6 +134,37 @@ def _extract_resume_text(data):
             except Exception:
                 pass
 
+
+def _coerce_request_data() -> Dict[str, Any]:
+    data = request.get_json(silent=True)
+    if data is None:
+        data = request.form.to_dict() if request.form else {}
+    if not isinstance(data, dict):
+        return {}
+    return data
+
+
+def _resolve_runtime(data: Dict[str, Any]) -> Tuple[Optional[Dict[str, str]], Optional[Tuple[Dict[str, Any], int]], Dict[str, str]]:
+    runtime, runtime_error = parse_runtime_payload(data)
+    if runtime_error:
+        return None, ({"error": "invalid_runtime", "message": runtime_error}, 400), {}
+    return runtime, None, build_runtime_meta(runtime or {})
+
+
+def _guard_high_cost_request(endpoint_name: str, data: Dict[str, Any]) -> Optional[Tuple[Dict[str, Any], int]]:
+    if endpoint_name not in HIGH_COST_ENDPOINTS:
+        return None
+
+    token = str(data.get("turnstile_token") or "").strip()
+    allowed, status_code, err = enforce_high_cost_guard(
+        endpoint=endpoint_name,
+        token=token,
+        remote_ip=request.remote_addr or "",
+    )
+    if allowed:
+        return None
+    return err, status_code
+
 @api.route('/user/<int:user_id>/upload_resume', methods=['POST'])
 def upload_resume(user_id):
     if 'resume' not in request.files:
@@ -199,9 +240,16 @@ def update_profile(user_id):
 
 @api.route('/careerforge/resume-match', methods=['POST'])
 def careerforge_resume_match():
-    data = request.get_json(silent=True)
-    if data is None:
-        data = request.form.to_dict() if request.form else {}
+    data = _coerce_request_data()
+    runtime, runtime_error, meta = _resolve_runtime(data)
+    if runtime_error:
+        payload, status = runtime_error
+        return jsonify(payload), status
+
+    guard_error = _guard_high_cost_request("resume-match", data)
+    if guard_error:
+        payload, status = guard_error
+        return jsonify(payload), status
 
     resume_text = _extract_resume_text(data)
     jd_text = (data.get('jd_text') or '').strip()
@@ -217,12 +265,14 @@ def careerforge_resume_match():
             "resume_text": resume_text[:20000],
             "jd_text": jd_text[:12000],
             "target_role": target_role,
-        }
+        },
+        runtime=runtime,
     )
     return jsonify(
         {
             "skill": "resume-match",
             "result": result,
+            "meta": meta,
             "process": [
                 "Loaded CareerForge resume-match skill",
                 "Parsed resume and JD context",
@@ -234,9 +284,16 @@ def careerforge_resume_match():
 
 @api.route('/careerforge/resume-craft', methods=['POST'])
 def careerforge_resume_craft():
-    data = request.get_json(silent=True)
-    if data is None:
-        data = request.form.to_dict() if request.form else {}
+    data = _coerce_request_data()
+    runtime, runtime_error, meta = _resolve_runtime(data)
+    if runtime_error:
+        payload, status = runtime_error
+        return jsonify(payload), status
+
+    guard_error = _guard_high_cost_request("resume-craft", data)
+    if guard_error:
+        payload, status = guard_error
+        return jsonify(payload), status
 
     resume_text = _extract_resume_text(data)
     target_role = (data.get('target_role') or '').strip()
@@ -254,12 +311,14 @@ def careerforge_resume_craft():
             "language": language,
             "template": template_name,
             "optimization_goal": optimization_goal,
-        }
+        },
+        runtime=runtime,
     )
     return jsonify(
         {
             "skill": "resume-craft",
             "result": result,
+            "meta": meta,
             "process": [
                 "Loaded CareerForge resume-craft skill",
                 "Built optimized resume content",
@@ -271,9 +330,16 @@ def careerforge_resume_craft():
 
 @api.route('/careerforge/cover-letter', methods=['POST'])
 def careerforge_cover_letter():
-    data = request.get_json(silent=True)
-    if data is None:
-        data = request.form.to_dict() if request.form else {}
+    data = _coerce_request_data()
+    runtime, runtime_error, meta = _resolve_runtime(data)
+    if runtime_error:
+        payload, status = runtime_error
+        return jsonify(payload), status
+
+    guard_error = _guard_high_cost_request("cover-letter", data)
+    if guard_error:
+        payload, status = guard_error
+        return jsonify(payload), status
 
     resume_text = _extract_resume_text(data)
     jd_text = (data.get('jd_text') or '').strip()
@@ -293,12 +359,14 @@ def careerforge_cover_letter():
             "scenario": scenario,
             "language": language,
             "company_name": company_name,
-        }
+        },
+        runtime=runtime,
     )
     return jsonify(
         {
             "skill": "cover-letter",
             "result": result,
+            "meta": meta,
             "process": [
                 "Loaded CareerForge cover-letter skill",
                 "Matched resume highlights to JD",
@@ -310,9 +378,11 @@ def careerforge_cover_letter():
 
 @api.route('/careerforge/job-hunt', methods=['POST'])
 def careerforge_job_hunt():
-    data = request.get_json(silent=True)
-    if data is None:
-        data = request.form.to_dict() if request.form else {}
+    data = _coerce_request_data()
+    runtime, runtime_error, meta = _resolve_runtime(data)
+    if runtime_error:
+        payload, status = runtime_error
+        return jsonify(payload), status
 
     resume_text = _extract_resume_text(data)
     target_role = (data.get('target_role') or data.get('job_intention') or '').strip()
@@ -347,12 +417,14 @@ def careerforge_job_hunt():
             "salary_range": salary_range,
             "hard_requirements": hard_requirements,
             "platforms": platforms,
-        }
+        },
+        runtime=runtime,
     )
     return jsonify(
         {
             "skill": "job-hunt",
             "result": result,
+            "meta": meta,
             "process": [
                 "Loaded CareerForge job-hunt skill",
                 "Built search strategy from profile and constraints",
@@ -364,7 +436,17 @@ def careerforge_job_hunt():
 
 @api.route('/careerforge/agent/chat', methods=['POST'])
 def careerforge_agent_chat():
-    data = request.get_json(silent=True) or {}
+    data = _coerce_request_data()
+    runtime, runtime_error, meta = _resolve_runtime(data)
+    if runtime_error:
+        payload, status = runtime_error
+        return jsonify(payload), status
+
+    guard_error = _guard_high_cost_request("mock-interview", data)
+    if guard_error:
+        payload, status = guard_error
+        return jsonify(payload), status
+
     user_id = data.get('user_id')
     message = (data.get('message') or '').strip()
     history = data.get('history') or []
@@ -378,6 +460,7 @@ def careerforge_agent_chat():
                     "action": "noop",
                     "missing_fields": [],
                     "result": {},
+                    "meta": meta,
                     "artifacts": [],
                     "error": "empty_message",
                 }
@@ -405,7 +488,10 @@ def careerforge_agent_chat():
         user_id=user_id,
         message=message,
         history=history,
+        runtime=runtime,
     )
+    if isinstance(result, dict):
+        result.setdefault("meta", meta)
 
     status_code = 200
     if result.get("error"):

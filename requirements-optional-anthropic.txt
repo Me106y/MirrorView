@@ -1,0 +1,3 @@
+# Optional dependencies for BYOK provider=anthropic
+# Install this only when you need Anthropic runtime support.
+langchain-anthropic
