@@ -59,9 +59,13 @@
    cd MirrorView
    ```
 
-2. **安装依赖**
+2. **安装依赖（Web/API 基线）**
    ```bash
    pip install -r requirements.txt
+   ```
+   如需继续使用桌面端/PyQt + RTMP + Streamlit 能力，再额外安装：
+   ```bash
+   pip install -r requirements-desktop.txt
    ```
 
 3. **从示例生成本地配置**
@@ -80,7 +84,7 @@
 
 1. **启动服务端**
    ```bash
-   python server/app.py
+   python -m server.app
    ```
    服务将在 `http://localhost:5001` 启动。
 
@@ -123,6 +127,19 @@ npm run dev
   - `runtime`（platform / byok 模型配置）
   - `turnstile_token`（开启防刷时校验）
 - 返回体新增安全的 `meta` 运行信息。
+
+### Vercel 部署（Web + API）
+
+仓库已内置：
+- `vercel.json`（构建 `web/` 并将 `/api/*` 路由到 Python Function）
+- `api/index.py`（Vercel Flask 入口）
+- `.vercelignore`（排除 `.conda` 等大目录）
+
+重新部署前建议先清理前端缓存目录：
+```bash
+rm -rf web/node_modules web/dist
+```
+然后在 Vercel Dashboard 或 CLI 重新部署即可。
 
 ### 一键安装（预编译 TUI 软件）
 

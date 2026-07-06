@@ -59,9 +59,13 @@ Key features include **AI Interviewer** interactions, **Real-time Video Streamin
    cd MirrorView
    ```
 
-2. **Install dependencies**
+2. **Install dependencies (Web/API baseline)**
    ```bash
    pip install -r requirements.txt
+   ```
+   For desktop/PyQt + RTMP + Streamlit legacy flows, also install:
+   ```bash
+   pip install -r requirements-desktop.txt
    ```
 
 3. **Create local config from example**
@@ -80,7 +84,7 @@ Key features include **AI Interviewer** interactions, **Real-time Video Streamin
 
 1. **Start the Server**
    ```bash
-   python server/app.py
+   python -m server.app
    ```
    The server will start at `http://localhost:5001`.
 
@@ -123,6 +127,19 @@ Backend runtime extension:
   - `runtime` (platform / byok provider config)
   - `turnstile_token` (for anti-abuse checks when enabled)
 - Responses include safe `meta` runtime info.
+
+### Deploy on Vercel (Web + API)
+
+This repository now includes:
+- `vercel.json` (build `web/` + route `/api/*` to Python function)
+- `api/index.py` (Flask entrypoint for Vercel)
+- `.vercelignore` (exclude large local folders like `.conda`)
+
+Before redeploy:
+```bash
+rm -rf web/node_modules web/dist
+```
+Then redeploy from Vercel dashboard or CLI.
 
 ### One-Click Install (Prebuilt TUI App)
 

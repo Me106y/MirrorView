@@ -1,0 +1,44 @@
+# Local environments
+.conda/
+.venv/
+venv/
+env/
+
+# VCS / IDE
+.git/
+.idea/
+.vscode/
+
+# Python caches
+__pycache__/
+.pycache/
+.pytest_cache/
+*.pyc
+*.pyo
+
+# Local runtime artifacts
+log/
+output/
+test-output/
+server/instance/
+chroma_db/
+*.db
+*.db-journal
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Non-deploy sources
+assets/
+deploy/
+docs/
+test/
+MirrorView.md
+
+# Frontend build cache
+web/node_modules/
+web/dist/
+web/.vite/
+
+# Misc
+.DS_Store

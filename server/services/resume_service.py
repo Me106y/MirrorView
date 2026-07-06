@@ -1,7 +1,3 @@
-import os
-from langchain_community.document_loaders import PyPDFLoader
-from langchain_core.documents import Document
-from langchain_chroma import Chroma
 from server.config import Config
 from utils.logger_handler import logger
 
@@ -11,6 +7,7 @@ class ResumeService:
         self._embedding_model = "sentence-transformers/all-MiniLM-L6-v2"
         self.embedding = None  # lazy-load on first use
         self.chroma_dir = Config.CHROMA_DB_DIR
+        self._chroma_cls = None
 
     def _ensure_embedding(self):
         """Lazy-load the embedding model (avoids blocking server startup)."""
@@ -37,12 +34,54 @@ class ResumeService:
         Parse PDF resume and return text content
         """
         try:
+            from pypdf import PdfReader
+
+            reader = PdfReader(file_path)
+            pages = []
+            for page in reader.pages:
+                pages.append((page.extract_text() or "").strip())
+            full_text = "\n".join([p for p in pages if p]).strip()
+            if full_text:
+                return full_text
+        except Exception as e:
+            logger.warning("pypdf parse failed, fallback to PyPDFLoader: %s", e)
+
+        try:
+            from langchain_community.document_loaders import PyPDFLoader
+
             loader = PyPDFLoader(file_path)
             pages = loader.load()
-            full_text = "\n".join([p.page_content for p in pages])
+            full_text = "\n".join([p.page_content for p in pages]).strip()
             return full_text
         except Exception as e:
             logger.error(f"Error parsing resume: {e}")
+            return None
+
+    def _get_chroma_cls(self):
+        if self._chroma_cls is not None:
+            return self._chroma_cls
+        try:
+            from langchain_chroma import Chroma
+
+            self._chroma_cls = Chroma
+            return self._chroma_cls
+        except Exception:
+            logger.warning(
+                "langchain-chroma not installed — vector resume index is disabled."
+            )
+            self._chroma_cls = False
+            return None
+
+    @staticmethod
+    def _build_document(page_content: str, metadata: dict):
+        try:
+            from langchain_core.documents import Document
+
+            return Document(page_content=page_content, metadata=metadata)
+        except Exception:
+            logger.warning(
+                "langchain-core documents not available — vector index is disabled."
+            )
             return None
 
     def index_resume(self, user_id, file_path):
@@ -59,15 +98,23 @@ class ResumeService:
             return text
 
         try:
-            docs = [Document(page_content=text,
-                             metadata={"user_id": user_id, "source": "resume"})]
+            chroma_cls = self._get_chroma_cls()
+            if chroma_cls is None:
+                return text
 
-            vectorstore = Chroma(
+            doc = self._build_document(
+                page_content=text,
+                metadata={"user_id": user_id, "source": "resume"},
+            )
+            if doc is None:
+                return text
+
+            vectorstore = chroma_cls(
                 collection_name=f"resume_{user_id}",
                 embedding_function=self.embedding,
                 persist_directory=self.chroma_dir
             )
-            vectorstore.add_documents(docs)
+            vectorstore.add_documents([doc])
 
             return text
         except Exception as e:
@@ -77,7 +124,10 @@ class ResumeService:
     def get_vector_store(self, user_id):
         if not self._ensure_embedding():
             return None
-        return Chroma(
+        chroma_cls = self._get_chroma_cls()
+        if chroma_cls is None:
+            return None
+        return chroma_cls(
             collection_name=f"resume_{user_id}",
             embedding_function=self.embedding,
             persist_directory=self.chroma_dir
