@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Route, Routes } from "react-router-dom";
 import { Shell } from "./components/Shell";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { ResumeMatchPage } from "./pages/ResumeMatchPage";
@@ -6,6 +6,7 @@ import { ResumeCraftPage } from "./pages/ResumeCraftPage";
 import { CoverLetterPage } from "./pages/CoverLetterPage";
 import { MockInterviewPage } from "./pages/MockInterviewPage";
 import { JobHuntPage } from "./pages/JobHuntPage";
+import { HomePage } from "./pages/HomePage";
 import { PrivacyPage } from "./pages/legal/PrivacyPage";
 import { TermsPage } from "./pages/legal/TermsPage";
 import { AiDisclaimerPage } from "./pages/legal/AiDisclaimerPage";
@@ -21,7 +22,7 @@ export default function App() {
     <>
       <Routes>
         <Route element={<Shell onOpenSettings={() => setSettingsOpen(true)} />}>
-          <Route path="/" element={<Navigate to="/resume-match" replace />} />
+          <Route path="/" element={<HomePage />} />
           <Route path="/resume-match" element={<ResumeMatchPage />} />
           <Route path="/resume-craft" element={<ResumeCraftPage />} />
           <Route path="/cover-letter" element={<CoverLetterPage />} />
