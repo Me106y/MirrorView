@@ -31,7 +31,6 @@ server/instance/
 .idea/
 .vscode/
 node_modules/
-api/_runtime/
 *.swp
 *.swo
 *~

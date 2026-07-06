@@ -1,0 +1,174 @@
+import os
+import sys
+from pathlib import Path
+
+# Support direct script execution: `python server/app.py`
+if __package__ in {None, ""}:
+    _REPO_ROOT = Path(__file__).resolve().parents[1]
+    if str(_REPO_ROOT) not in sys.path:
+        sys.path.insert(0, str(_REPO_ROOT))
+
+from flask import Flask, abort, jsonify, send_from_directory
+# import pymysql
+from sqlalchemy import inspect, text
+from utils.logger_handler import logger
+from server.config import Config
+from server.models import db
+from server.routes import api
+
+
+def _load_runtime_env_files():
+    """
+    Load local env files before importing Config, so Config picks up keys
+    even when user starts server manually without `source .env`.
+    """
+    root = Path(__file__).resolve().parents[1]
+    candidates = [
+        root / ".env_tts",
+        root / ".env",
+        Path.home() / ".mirrorview-tui" / ".env",
+    ]
+    for path in candidates:
+        if not path.exists() or not path.is_file():
+            continue
+        try:
+            for raw in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+                line = raw.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if line.startswith("export "):
+                    line = line[len("export "):].strip()
+                if "=" not in line:
+                    continue
+                key, val = line.split("=", 1)
+                key = key.strip()
+                val = val.strip().strip('"').strip("'")
+                if key and val and not os.environ.get(key):
+                    os.environ[key] = val
+        except Exception as e:
+            logger.warning("Failed to load env file %s: %s", path, e)
+
+
+_load_runtime_env_files()
+
+def _ensure_users_table_columns():
+    """
+    Lightweight compatibility migration for existing SQLite databases.
+    """
+    inspector = inspect(db.engine)
+    if 'users' not in inspector.get_table_names():
+        return
+
+    existing = {col['name'] for col in inspector.get_columns('users')}
+    alter_sql = []
+
+    if 'target_role' not in existing:
+        alter_sql.append("ALTER TABLE users ADD COLUMN target_role VARCHAR(120)")
+    if 'target_jd' not in existing:
+        alter_sql.append("ALTER TABLE users ADD COLUMN target_jd TEXT")
+    if 'resume_uploaded_at' not in existing:
+        alter_sql.append("ALTER TABLE users ADD COLUMN resume_uploaded_at DATETIME")
+
+    for statement in alter_sql:
+        db.session.execute(text(statement))
+    if alter_sql:
+        db.session.commit()
+        logger.info("Applied users table compatibility migration: %s", ", ".join(alter_sql))
+
+def _ensure_interviews_table_columns():
+    """
+    Lightweight compatibility migration for existing SQLite databases.
+    """
+    inspector = inspect(db.engine)
+    if 'interviews' not in inspector.get_table_names():
+        return
+
+    existing = {col['name'] for col in inspector.get_columns('interviews')}
+    alter_sql = []
+
+    if 'language' not in existing:
+        alter_sql.append("ALTER TABLE interviews ADD COLUMN language VARCHAR(16)")
+
+    for statement in alter_sql:
+        db.session.execute(text(statement))
+
+    if alter_sql:
+        # Backfill existing rows with default zh to keep logic deterministic.
+        db.session.execute(text("UPDATE interviews SET language = 'zh' WHERE language IS NULL OR TRIM(language) = ''"))
+        db.session.commit()
+        logger.info("Applied interviews table compatibility migration: %s", ", ".join(alter_sql))
+
+
+def create_app():
+    # Ensure database exists before initializing app
+    # create_database_if_not_exists()
+
+    app = Flask(__name__)
+    app.config.from_object(Config)
+
+    db.init_app(app)
+
+    app.register_blueprint(api, url_prefix='/api')
+    # Some Vercel rewrite configurations may forward /api/* as /*.
+    # Registering once more without prefix keeps compatibility.
+    app.register_blueprint(api, url_prefix='', name_prefix='noprefix')
+
+    # Fallback SPA serving for environments where Python function receives
+    # frontend routes directly.
+    frontend_dist = Path(__file__).resolve().parents[1] / "web" / "dist"
+
+    @app.route("/", methods=["GET"])
+    def _serve_spa_root():
+        index_file = frontend_dist / "index.html"
+        if index_file.exists():
+            return send_from_directory(str(frontend_dist), "index.html")
+        return jsonify({"ok": True, "service": "mirrorview-api"}), 200
+
+    @app.route("/<path:route_path>", methods=["GET"])
+    def _serve_spa_assets(route_path: str):
+        if route_path.startswith("api/"):
+            abort(404)
+
+        candidate = frontend_dist / route_path
+        if candidate.exists() and candidate.is_file():
+            return send_from_directory(str(frontend_dist), route_path)
+
+        index_file = frontend_dist / "index.html"
+        if index_file.exists():
+            return send_from_directory(str(frontend_dist), "index.html")
+        abort(404)
+
+    # --- TTS Integration ---
+    # Register TTS API routes (Boson.ai Higgs Audio v3)
+    try:
+        from server.services.tts_service import HiggsAudioTTS
+        from tts_integration.server.routes_tts import tts_bp
+
+        app.config['TTS_SERVICE'] = HiggsAudioTTS(
+            voice=os.environ.get('BOSON_TTS_VOICE', 'default'),
+        )
+        app.register_blueprint(tts_bp)
+        logger.info("TTS service registered successfully")
+    except ImportError as e:
+        logger.warning(f"TTS integration not available: {e}")
+    except Exception as e:
+        logger.warning(f"TTS service init skipped: {e}")
+    # --- End TTS Integration ---
+
+    with app.app_context():
+        # Create tables
+        try:
+            db.create_all()
+            _ensure_users_table_columns()
+            _ensure_interviews_table_columns()
+            logger.info("Database tables created successfully.")
+
+
+        except Exception as e:
+            logger.error(f"Error creating tables: {e}")
+
+    return app
+
+if __name__ == '__main__':
+    app = create_app()
+    app.run(host='0.0.0.0', port=5001, debug=False)
