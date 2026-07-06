@@ -59,21 +59,49 @@ class AIService:
             return self.careerforge_agent
 
         mode = self._runtime_text(runtime.get("mode") or "platform").lower()
-        if mode != "byok":
-            return self.careerforge_agent
-
         provider = self._runtime_text(runtime.get("provider")).lower()
         model_name = self._runtime_text(runtime.get("model"))
         api_key = self._runtime_text(runtime.get("api_key"))
         base_url = self._runtime_text(runtime.get("base_url"))
 
-        kwargs: Dict[str, Any] = {
-            "temperature": 0.35,
-        }
-        if api_key:
-            kwargs["api_key"] = api_key
-        if base_url:
-            kwargs["base_url"] = base_url
+        # Platform mode defaults to server-side configured provider/model,
+        # but can be overridden by request runtime fields from web settings.
+        if mode == "platform":
+            default_provider = (Config.PLATFORM_PROVIDER or "deepseek").strip().lower() or "deepseek"
+            default_model = (Config.PLATFORM_MODEL or "").strip() or Config.DEEPSEEK_MODEL
+            requested_model = self._runtime_text(runtime.get("model"))
+            provider = provider or default_provider
+            model_name = requested_model or default_model
+            has_override = bool(
+                api_key
+                or base_url
+                or (provider != default_provider)
+                or (requested_model and requested_model != default_model)
+            )
+            if not has_override:
+                return self.careerforge_agent
+        else:
+            # Backward compatibility for legacy BYOK path.
+            provider = provider or "deepseek"
+            model_name = model_name or Config.DEEPSEEK_MODEL
+
+        kwargs: Dict[str, Any] = {"temperature": 0.35}
+
+        if provider == "deepseek":
+            kwargs["api_key"] = api_key or Config.DEEPSEEK_API_KEY
+            kwargs["base_url"] = base_url or Config.DEEPSEEK_BASE_URL
+        elif provider == "openai":
+            kwargs["api_key"] = api_key or Config.OPENAI_API_KEY
+            if base_url:
+                kwargs["base_url"] = base_url
+        elif provider == "anthropic":
+            kwargs["api_key"] = api_key or Config.ANTHROPIC_API_KEY
+            if base_url:
+                kwargs["base_url"] = base_url
+        else:
+            provider = "deepseek"
+            kwargs["api_key"] = api_key or Config.DEEPSEEK_API_KEY
+            kwargs["base_url"] = base_url or Config.DEEPSEEK_BASE_URL
 
         llm = ModelFactory.get_model(provider, model_name, **kwargs)
         return CareerForgeAgent(llm=llm)

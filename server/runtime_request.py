@@ -61,10 +61,13 @@ def parse_runtime_payload(payload: Optional[Dict[str, Any]]) -> Tuple[Optional[D
         runtime = default_platform_runtime()
         requested_model = _as_text(raw.get("model"))
         requested_base_url = _as_text(raw.get("base_url"))
+        requested_api_key = _as_text(raw.get("api_key"))
         if requested_model:
             runtime["model"] = requested_model
         if requested_base_url:
             runtime["base_url"] = requested_base_url
+        if requested_api_key:
+            runtime["api_key"] = requested_api_key
         return runtime, ""
 
     provider = _as_text(raw.get("provider")).lower()

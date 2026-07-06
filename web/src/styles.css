@@ -733,6 +733,14 @@ textarea {
   padding: 16px;
 }
 
+.settings-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 14, 20, 0.14);
+  backdrop-filter: blur(1px);
+  z-index: 39;
+}
+
 .settings-header {
   display: flex;
   justify-content: space-between;

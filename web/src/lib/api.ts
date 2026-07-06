@@ -12,22 +12,12 @@ interface ApiEnvelope<T> {
 }
 
 function buildRuntime(settings: ModelSettings) {
-  const byokEnabled = settings.mode === "byok" && settings.apiKey.trim();
-  if (!byokEnabled) {
-    return {
-      mode: "platform",
-      provider: "deepseek",
-      model: settings.model || "deepseek-chat",
-      api_key: "",
-      base_url: settings.baseUrl || ""
-    };
-  }
   return {
-    mode: "byok",
-    provider: settings.provider,
-    model: settings.model,
-    api_key: settings.apiKey,
-    base_url: settings.baseUrl || ""
+    mode: "platform",
+    provider: "deepseek",
+    model: settings.model || "deepseek-chat",
+    api_key: settings.apiKey.trim(),
+    base_url: settings.baseUrl.trim()
   };
 }
 
