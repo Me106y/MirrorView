@@ -1,4 +1,4 @@
-import { DragEvent, FormEvent, KeyboardEvent, useMemo, useRef, useState } from "react";
+import { DragEvent, FormEvent, KeyboardEvent, SyntheticEvent, useMemo, useRef, useState } from "react";
 import { callCareerforgeSkillMultipart } from "../lib/api";
 import { useModelSettings } from "../context/ModelSettingsContext";
 
@@ -25,6 +25,7 @@ export function ResumeMatchPage() {
   const [resultNotice, setResultNotice] = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [frameHeight, setFrameHeight] = useState(980);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const canSubmit = Boolean(targetRole.trim() && jdText.trim() && resumeFile) && !loading;
@@ -144,6 +145,22 @@ export function ResumeMatchPage() {
     setResultNotice("已导出 HTML 报告");
   };
 
+  const onReportFrameLoad = (e: SyntheticEvent<HTMLIFrameElement>) => {
+    try {
+      const frame = e.currentTarget;
+      const doc = frame.contentDocument;
+      if (!doc) {
+        return;
+      }
+      const bodyHeight = doc.body?.scrollHeight ?? 0;
+      const htmlHeight = doc.documentElement?.scrollHeight ?? 0;
+      const next = Math.max(720, bodyHeight, htmlHeight);
+      setFrameHeight(next + 12);
+    } catch {
+      setFrameHeight(980);
+    }
+  };
+
   return (
     <section className="resume-match-page">
       <div className="resume-match-layout">
@@ -236,6 +253,8 @@ export function ResumeMatchPage() {
                 title="Resume Match HTML Report"
                 className="resume-report-frame"
                 srcDoc={result.reportHtml}
+                onLoad={onReportFrameLoad}
+                style={{ height: `${frameHeight}px` }}
               />
             ) : null}
           </div>
