@@ -1,4 +1,5 @@
 from flask import Blueprint, request, jsonify, current_app, Response, stream_with_context
+from client.core.resume_match_report import build_resume_match_html_report
 from server.models import db, User, Interview, Message, InviteCode, Listener
 from server.services.ai_service import AIService
 from server.services.careerforge_command_agent import CareerForgeCommandAgent
@@ -279,10 +280,25 @@ def careerforge_resume_match():
         },
         runtime=runtime,
     )
+
+    report_name = ""
+    report_html = ""
+    try:
+        report_name, report_html = build_resume_match_html_report(
+            result=result if isinstance(result, dict) else {},
+            resume_text=resume_text,
+            target_role=target_role,
+            jd_text=jd_text,
+        )
+    except Exception as e:
+        logger.warning("resume-match html report generation failed: %s", e)
+
     return jsonify(
         {
             "skill": "resume-match",
             "result": result,
+            "report_name": report_name,
+            "report_html": report_html,
             "meta": meta,
             "process": [
                 "Loaded CareerForge resume-match skill",

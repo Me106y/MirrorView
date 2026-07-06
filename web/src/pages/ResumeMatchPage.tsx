@@ -4,7 +4,8 @@ import { useModelSettings } from "../context/ModelSettingsContext";
 
 type ResultState = {
   kind: "idle" | "report" | "error";
-  text: string;
+  reportHtml: string;
+  message: string;
 };
 
 function isPdfFile(file: File) {
@@ -13,21 +14,13 @@ function isPdfFile(file: File) {
   return byName || byType;
 }
 
-function highlightJson(text: string) {
-  const escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  return escaped
-    .replace(/"([^"\\]*(?:\\.[^"\\]*)*)"(?=\s*:)/g, '<span class="json-key">"$1"</span>')
-    .replace(/:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/g, ': <span class="json-string">"$1"</span>')
-    .replace(/\b(true|false|null)\b/g, '<span class="json-literal">$1</span>')
-    .replace(/(-?\b\d+(?:\.\d+)?\b)/g, '<span class="json-number">$1</span>');
-}
-
 export function ResumeMatchPage() {
   const { settings } = useModelSettings();
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [jdText, setJdText] = useState("");
   const [targetRole, setTargetRole] = useState("");
-  const [result, setResult] = useState<ResultState>({ kind: "idle", text: "" });
+  const [result, setResult] = useState<ResultState>({ kind: "idle", reportHtml: "", message: "" });
+  const [reportName, setReportName] = useState("resume-match-report.html");
   const [uploadHint, setUploadHint] = useState("");
   const [resultNotice, setResultNotice] = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
@@ -36,12 +29,10 @@ export function ResumeMatchPage() {
 
   const canSubmit = Boolean(targetRole.trim() && jdText.trim() && resumeFile) && !loading;
 
-  const highlightedResult = useMemo(() => {
-    if (result.kind !== "report") {
-      return "";
-    }
-    return highlightJson(result.text);
-  }, [result]);
+  const canUseReportActions = useMemo(
+    () => result.kind === "report" && Boolean(result.reportHtml.trim()),
+    [result]
+  );
 
   const setResume = (file: File | null) => {
     if (!file) {
@@ -78,12 +69,12 @@ export function ResumeMatchPage() {
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!resumeFile) {
-      setResult({ kind: "error", text: "请先上传 PDF 简历文件。" });
+      setResult({ kind: "error", reportHtml: "", message: "请先上传 PDF 简历文件。" });
       return;
     }
 
     if (!isPdfFile(resumeFile)) {
-      setResult({ kind: "error", text: "仅支持 PDF 文件。" });
+      setResult({ kind: "error", reportHtml: "", message: "仅支持 PDF 文件。" });
       return;
     }
 
@@ -101,38 +92,56 @@ export function ResumeMatchPage() {
           resume: resumeFile
         }
       );
-      setResult({ kind: "report", text: JSON.stringify(resp.result ?? resp, null, 2) });
+      const reportHtml =
+        (typeof (resp as Record<string, unknown>).report_html === "string" &&
+          ((resp as Record<string, unknown>).report_html as string)) ||
+        "";
+      const nextReportName =
+        (typeof (resp as Record<string, unknown>).report_name === "string" &&
+          ((resp as Record<string, unknown>).report_name as string)) ||
+        "resume-match-report.html";
+      setReportName(nextReportName);
+
+      if (!reportHtml.trim()) {
+        const payload = (resp.result ?? resp) as Record<string, unknown>;
+        const message =
+          (typeof payload.message === "string" && payload.message) ||
+          "报告 HTML 生成失败，请重试。";
+        setResult({ kind: "error", reportHtml: "", message });
+      } else {
+        setResult({ kind: "report", reportHtml, message: "" });
+      }
     } catch (err) {
-      setResult({ kind: "error", text: (err as Error).message });
+      setResult({ kind: "error", reportHtml: "", message: (err as Error).message });
     } finally {
       setLoading(false);
     }
   };
 
   const copyReport = async () => {
-    if (!result.text) {
+    if (!canUseReportActions) {
       return;
     }
     try {
-      await navigator.clipboard.writeText(result.text);
-      setResultNotice("已复制到剪贴板");
+      await navigator.clipboard.writeText(result.reportHtml);
+      setResultNotice("已复制 HTML 到剪贴板");
     } catch {
       setResultNotice("复制失败，请手动复制");
     }
   };
 
   const exportReport = () => {
-    if (!result.text) {
+    if (!canUseReportActions) {
       return;
     }
-    const blob = new Blob([result.text], { type: "text/plain;charset=utf-8" });
+    const blob = new Blob([result.reportHtml], { type: "text/html;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = "resume-match-report.txt";
+    link.download = reportName || "resume-match-report.html";
     link.click();
     URL.revokeObjectURL(url);
-    setResultNotice("已导出文本");
+    setResultNotice("已导出 HTML 报告");
   };
 
   return (
@@ -214,27 +223,29 @@ export function ResumeMatchPage() {
             <span>AI 匹配分析报告</span>
           </header>
 
-          <div className={`resume-result-body${result.kind === "idle" ? " is-empty" : ""}`}>
+          <div className={`resume-result-body${result.kind === "idle" ? " is-empty" : ""}${result.kind === "report" ? " has-report" : ""}`}>
             {result.kind === "idle" ? (
               <div className="resume-result-empty">
                 <span className="resume-result-empty-icon">◌</span>
                 <p>填写左侧信息并提交，匹配分析结果将在此展示。</p>
               </div>
             ) : null}
-            {result.kind === "error" ? <p className="resume-result-error">{result.text}</p> : null}
+            {result.kind === "error" ? <p className="resume-result-error">{result.message}</p> : null}
             {result.kind === "report" ? (
-              <pre className="resume-json-view">
-                <code dangerouslySetInnerHTML={{ __html: highlightedResult }} />
-              </pre>
+              <iframe
+                title="Resume Match HTML Report"
+                className="resume-report-frame"
+                srcDoc={result.reportHtml}
+              />
             ) : null}
           </div>
 
           <div className="resume-result-actions">
-            <button type="button" className="ghost-btn" onClick={copyReport} disabled={!result.text}>
-              复制报告
+            <button type="button" className="ghost-btn" onClick={copyReport} disabled={!canUseReportActions}>
+              复制 HTML
             </button>
-            <button type="button" className="ghost-btn" onClick={exportReport} disabled={!result.text}>
-              导出文本
+            <button type="button" className="ghost-btn" onClick={exportReport} disabled={!canUseReportActions}>
+              导出 HTML
             </button>
           </div>
           {resultNotice ? <p className="resume-result-note">{resultNotice}</p> : null}
