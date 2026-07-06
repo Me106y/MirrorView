@@ -1,16 +1,31 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 
 export function Shell({ onOpenSettings }: { onOpenSettings: () => void }) {
+  const location = useLocation();
+  const isHome = location.pathname === "/";
+
   return (
     <div className="app-shell">
-      <header className="topbar">
+      <header className={`topbar${isHome ? " topbar-home" : ""}`}>
         <div>
-          <h1>MirrorView Web</h1>
-          <p>Phase A Week 1 · Public MVP</p>
+          {isHome ? <span className="topbar-mark">MirrorView</span> : <h1>MirrorView Web</h1>}
+          {isHome ? null : <p>Phase A Week 1 · Public MVP</p>}
         </div>
-        <button className="primary-btn" onClick={onOpenSettings}>
-          模型设置
-        </button>
+        <div className="topbar-actions">
+          <button className="ghost-btn topbar-action-btn" onClick={onOpenSettings}>
+            模型设置
+          </button>
+          {isHome ? (
+            <a
+              className="primary-btn topbar-action-btn github-login-btn"
+              href="https://github.com/login"
+              target="_blank"
+              rel="noreferrer"
+            >
+              GitHub 登录
+            </a>
+          ) : null}
+        </div>
       </header>
 
       <main className="page-main">
