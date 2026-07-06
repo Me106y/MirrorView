@@ -69,16 +69,18 @@ export function ResumeMatchPage() {
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!resumeFile) {
-      setResult({ kind: "error", reportHtml: "", message: "请先上传 PDF 简历文件。" });
+      setUploadHint("请先上传 PDF 简历文件。");
       return;
     }
 
     if (!isPdfFile(resumeFile)) {
-      setResult({ kind: "error", reportHtml: "", message: "仅支持 PDF 文件。" });
+      setUploadHint("仅支持 PDF 文件。");
       return;
     }
 
+    setUploadHint("");
     setLoading(true);
+    setResult({ kind: "idle", reportHtml: "", message: "" });
     try {
       const resp = await callCareerforgeSkillMultipart(
         settings,
@@ -219,37 +221,36 @@ export function ResumeMatchPage() {
           {!canSubmit && !loading ? <p className="resume-form-tip">请填写完整信息后提交分析。</p> : null}
         </form>
 
-        <article className="surface resume-match-result">
-          <header className="resume-result-head">
-            <h3>结果</h3>
-            <span>AI 匹配分析报告</span>
-          </header>
-
-          <div className={`resume-result-body${result.kind === "idle" ? " is-empty" : ""}${result.kind === "report" ? " has-report" : ""}`}>
-            {result.kind === "idle" ? (
-              <div className="resume-result-empty">
-                <span className="resume-result-empty-icon">◌</span>
-                <p>填写左侧信息并提交，匹配分析结果将在此展示。</p>
-              </div>
-            ) : null}
-            {result.kind === "error" ? <p className="resume-result-error">{result.message}</p> : null}
+        {result.kind !== "idle" ? (
+          <section className="resume-match-result-inline" aria-live="polite">
             {result.kind === "report" ? (
-              <iframe
-                title="Resume Match HTML Report"
-                className="resume-report-frame"
-                srcDoc={result.reportHtml}
-                onLoad={onReportFrameLoad}
-                style={{ height: `${frameHeight}px` }}
-              />
-            ) : null}
-          </div>
+              <>
+                <header className="resume-result-head">
+                  <h3>结果</h3>
+                  <span>AI 匹配分析报告</span>
+                </header>
 
-          <div className="resume-result-actions">
-            <button type="button" className="ghost-btn" onClick={exportReport} disabled={!canUseReportActions}>
-              导出 HTML
-            </button>
-          </div>
-        </article>
+                <div className="resume-result-body has-report">
+                  <iframe
+                    title="Resume Match HTML Report"
+                    className="resume-report-frame"
+                    srcDoc={result.reportHtml}
+                    onLoad={onReportFrameLoad}
+                    style={{ height: `${frameHeight}px` }}
+                  />
+                </div>
+
+                <div className="resume-result-actions">
+                  <button type="button" className="ghost-btn" onClick={exportReport} disabled={!canUseReportActions}>
+                    导出 HTML
+                  </button>
+                </div>
+              </>
+            ) : (
+              <p className="resume-result-error">{result.message}</p>
+            )}
+          </section>
+        ) : null}
       </div>
     </section>
   );

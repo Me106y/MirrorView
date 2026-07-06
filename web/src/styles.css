@@ -521,9 +521,10 @@ a {
   font-size: 0.86rem;
 }
 
-.resume-match-result {
+.resume-match-result-inline {
   display: flex;
   flex-direction: column;
+  gap: 12px;
 }
 
 .resume-result-head {
@@ -545,24 +546,17 @@ a {
 }
 
 .resume-result-body {
-  margin-top: 12px;
-  flex: 1;
-  border-radius: 10px;
-  border: 1px dashed rgba(0, 0, 0, 0.14);
-  background: #fbfbfa;
-  padding: 12px;
-  min-height: 320px;
-}
-
-.resume-result-body.is-empty {
-  display: grid;
-  place-items: center;
+  margin-top: 0;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  min-height: 0;
 }
 
 .resume-result-body.has-report {
   padding: 0;
-  border-style: solid;
-  background: #ffffff;
+  border: 0;
+  background: transparent;
 }
 
 .resume-result-empty {
@@ -597,8 +591,9 @@ a {
 }
 
 .resume-result-actions {
-  margin-top: 12px;
+  margin-top: 8px;
   display: flex;
+  justify-content: flex-end;
   gap: 10px;
 }
 
