@@ -61,8 +61,6 @@ export function HomePage() {
           <p>敬请期待</p>
         </article>
       </div>
-
-      <p className="home-landing-footnote">智能求职训练平台 · 让求职更高效</p>
     </section>
   );
 }

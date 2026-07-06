@@ -33,6 +33,9 @@ a {
   max-width: 1180px;
   margin: 0 auto;
   padding: 24px 20px 32px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 .topbar {
@@ -41,12 +44,6 @@ a {
   align-items: center;
   gap: 16px;
   margin-bottom: 10px;
-}
-
-.topbar h1 {
-  margin: 0;
-  font-family: "Sora", sans-serif;
-  font-size: clamp(1.22rem, 2vw, 1.8rem);
 }
 
 .topbar p {
@@ -58,10 +55,17 @@ a {
   margin-bottom: 4px;
 }
 
-.topbar-mark {
-  display: inline-block;
+.topbar-brand-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.topbar-brand-link {
+  text-decoration: none;
+  font-family: "Sora", sans-serif;
   color: #a6bdd7;
-  font-size: 0.85rem;
+  font-size: 0.94rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   font-weight: 700;
@@ -82,6 +86,13 @@ a {
   text-decoration: none;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  height: 38px;
+}
+
+.topbar-actions .primary-btn,
+.topbar-actions .ghost-btn {
+  margin-top: 0;
 }
 
 .ghost-btn.topbar-action-btn {
@@ -97,6 +108,7 @@ a {
 
 .page-main {
   animation: rise 260ms ease;
+  flex: 1;
 }
 
 .home-landing {
@@ -227,13 +239,6 @@ a {
   color: #5d7ea0;
 }
 
-.home-landing-footnote {
-  margin: 20px 0 0;
-  text-align: center;
-  color: #8aa1bb;
-  font-size: 0.86rem;
-}
-
 .card-grid {
   display: grid;
   grid-template-columns: 1.2fr 1fr;
@@ -345,12 +350,28 @@ textarea {
 }
 
 .footer-bar {
-  margin-top: 14px;
+  margin-top: auto;
   display: flex;
-  flex-wrap: wrap;
-  gap: 14px;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding-top: 20px;
   color: var(--muted);
   font-size: 0.9rem;
+}
+
+.footer-home-note {
+  margin: 0;
+  text-align: center;
+  color: #8aa1bb;
+  font-size: 0.86rem;
+}
+
+.footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
 }
 
 .mock-shell .chat-panel {
@@ -488,5 +509,13 @@ textarea {
   .topbar-actions {
     justify-content: flex-start;
     flex-wrap: wrap;
+  }
+
+  .footer-bar {
+    align-items: flex-start;
+  }
+
+  .footer-links {
+    justify-content: flex-start;
   }
 }

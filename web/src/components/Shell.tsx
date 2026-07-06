@@ -7,8 +7,10 @@ export function Shell({ onOpenSettings }: { onOpenSettings: () => void }) {
   return (
     <div className="app-shell">
       <header className={`topbar${isHome ? " topbar-home" : ""}`}>
-        <div>
-          {isHome ? <span className="topbar-mark">MirrorView</span> : <h1>MirrorView Web</h1>}
+        <div className="topbar-brand-wrap">
+          <NavLink to="/" className="topbar-brand-link">
+            MirrorView
+          </NavLink>
           {isHome ? null : <p>Phase A Week 1 · Public MVP</p>}
         </div>
         <div className="topbar-actions">
@@ -33,10 +35,13 @@ export function Shell({ onOpenSettings }: { onOpenSettings: () => void }) {
       </main>
 
       <footer className="footer-bar">
-        <NavLink to="/legal/privacy">隐私政策</NavLink>
-        <NavLink to="/legal/terms">服务条款</NavLink>
-        <NavLink to="/legal/ai-disclaimer">AI 免责声明</NavLink>
-        <NavLink to="/legal/byok-risk">BYOK 风险提示</NavLink>
+        {isHome ? <p className="footer-home-note">智能求职训练平台 · 让求职更高效</p> : null}
+        <nav className="footer-links">
+          <NavLink to="/legal/privacy">隐私政策</NavLink>
+          <NavLink to="/legal/terms">服务条款</NavLink>
+          <NavLink to="/legal/ai-disclaimer">AI 免责声明</NavLink>
+          <NavLink to="/legal/byok-risk">BYOK 风险提示</NavLink>
+        </nav>
       </footer>
     </div>
   );
