@@ -22,7 +22,6 @@ export function ResumeMatchPage() {
   const [result, setResult] = useState<ResultState>({ kind: "idle", reportHtml: "", message: "" });
   const [reportName, setReportName] = useState("resume-match-report.html");
   const [uploadHint, setUploadHint] = useState("");
-  const [resultNotice, setResultNotice] = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
   const [loading, setLoading] = useState(false);
   const [frameHeight, setFrameHeight] = useState(980);
@@ -80,7 +79,6 @@ export function ResumeMatchPage() {
     }
 
     setLoading(true);
-    setResultNotice("");
     try {
       const resp = await callCareerforgeSkillMultipart(
         settings,
@@ -119,18 +117,6 @@ export function ResumeMatchPage() {
     }
   };
 
-  const copyReport = async () => {
-    if (!canUseReportActions) {
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(result.reportHtml);
-      setResultNotice("已复制 HTML 到剪贴板");
-    } catch {
-      setResultNotice("复制失败，请手动复制");
-    }
-  };
-
   const exportReport = () => {
     if (!canUseReportActions) {
       return;
@@ -142,7 +128,6 @@ export function ResumeMatchPage() {
     link.download = reportName || "resume-match-report.html";
     link.click();
     URL.revokeObjectURL(url);
-    setResultNotice("已导出 HTML 报告");
   };
 
   const onReportFrameLoad = (e: SyntheticEvent<HTMLIFrameElement>) => {
@@ -260,14 +245,10 @@ export function ResumeMatchPage() {
           </div>
 
           <div className="resume-result-actions">
-            <button type="button" className="ghost-btn" onClick={copyReport} disabled={!canUseReportActions}>
-              复制 HTML
-            </button>
             <button type="button" className="ghost-btn" onClick={exportReport} disabled={!canUseReportActions}>
               导出 HTML
             </button>
           </div>
-          {resultNotice ? <p className="resume-result-note">{resultNotice}</p> : null}
         </article>
       </div>
     </section>
