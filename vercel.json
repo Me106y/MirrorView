@@ -5,7 +5,7 @@
   "functions": {
     "api/index.py": {
       "maxDuration": 60,
-      "includeFiles": "{api/**,server/**,utils/**,client/__init__.py,client/core/**,skills/CareerForge/skills/**}"
+      "includeFiles": "**"
     }
   },
   "rewrites": [
