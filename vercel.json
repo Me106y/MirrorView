@@ -5,8 +5,7 @@
   "functions": {
     "api/index.py": {
       "maxDuration": 60,
-      "includeFiles": "server/**",
-      "excludeFiles": "{.conda/**,web/**,assets/**,deploy/**,docs/**,test/**,tts_integration/**,client/ui/**,client/streamlit/**,**/__pycache__/**,**/*.pyc,log/**,output/**,test-output/**,.idea/**,.vscode/**}"
+      "includeFiles": "api/**"
     }
   },
   "rewrites": [

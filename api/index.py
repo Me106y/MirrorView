@@ -7,29 +7,40 @@ from pathlib import Path
 _HERE = Path(__file__).resolve()
 _CANDIDATE_ROOTS = [
     _HERE.parent,
-    _HERE.parent / "_runtime",
     _HERE.parents[1],
     Path.cwd(),
 ]
 
+# Ensure imports prefer files colocated with api/index.py.
+_PRIMARY_IMPORT_ROOTS = [_HERE.parent]
+for _root in reversed(_PRIMARY_IMPORT_ROOTS):
+    _path = str(_root)
+    if _path in sys.path:
+        sys.path.remove(_path)
+    sys.path.insert(0, _path)
+
+for _root in _CANDIDATE_ROOTS:
+    _path = str(_root)
+    if _path not in sys.path:
+        sys.path.append(_path)
+
+# Static import first so Vercel packager can trace local dependency files.
+try:
+    from server.app import create_app as _static_create_app  # type: ignore
+except Exception:
+    _static_create_app = None
+
 
 def _load_create_app():
+    if _static_create_app is not None:
+        return _static_create_app
+
     # Prefer loading server/app.py by file path so we don't depend on package import
     # behavior in serverless bundle layout.
     for _root in _CANDIDATE_ROOTS:
         _server_app = _root / "server" / "app.py"
         if not _server_app.exists():
             continue
-
-        if str(_root) not in sys.path:
-            sys.path.insert(0, str(_root))
-
-        try:
-            # Fast path when package import works.
-            from server.app import create_app as imported_create_app  # type: ignore
-            return imported_create_app
-        except Exception:
-            pass
 
         spec = importlib.util.spec_from_file_location("mirrorview_server_app", _server_app)
         if spec and spec.loader:
