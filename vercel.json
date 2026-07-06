@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "rm -rf api/_runtime && mkdir -p api/_runtime && cp -R server api/_runtime/server && mkdir -p api/_runtime/utils && cp -R utils/* api/_runtime/utils/ && mkdir -p api/_runtime/client && cp client/__init__.py api/_runtime/client/__init__.py && cp -R client/core api/_runtime/client/core && mkdir -p api/_runtime/skills/CareerForge && cp -R skills/CareerForge/skills api/_runtime/skills/CareerForge/skills && cd web && npm ci && npm run build",
+  "buildCommand": "bash scripts/vercel_build.sh",
   "outputDirectory": "web/dist",
   "functions": {
     "api/index.py": {
