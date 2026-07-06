@@ -1,7 +1,7 @@
 @import url("https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=Space+Grotesk:wght@400;600&display=swap");
 
 :root {
-  --bg: #ffffff;
+  --bg: #f7f3ea;
   --ink: #111111;
   --muted: #4d4d4d;
   --accent: #111111;
@@ -18,7 +18,7 @@ body {
   margin: 0;
   font-family: "Space Grotesk", "Sora", "Noto Sans SC", sans-serif;
   color: var(--ink);
-  background: #ffffff;
+  background: var(--bg);
   min-height: 100vh;
 }
 
