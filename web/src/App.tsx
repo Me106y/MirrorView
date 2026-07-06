@@ -12,6 +12,7 @@ import { AiDisclaimerPage } from "./pages/legal/AiDisclaimerPage";
 import { ByokRiskPage } from "./pages/legal/ByokRiskPage";
 import { useState } from "react";
 import { ConsentModal } from "./components/ConsentModal";
+import { Analytics } from "@vercel/analytics/react";
 
 export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -34,6 +35,7 @@ export default function App() {
       </Routes>
       <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <ConsentModal />
+      <Analytics />
     </>
   );
 }
