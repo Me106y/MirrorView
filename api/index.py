@@ -6,8 +6,8 @@ from pathlib import Path
 
 _HERE = Path(__file__).resolve()
 _CANDIDATE_ROOTS = [
-    _HERE.parent / "_runtime",
     _HERE.parent,
+    _HERE.parent / "_runtime",
     _HERE.parents[1],
     Path.cwd(),
 ]

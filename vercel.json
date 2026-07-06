@@ -1,11 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "cd web && npm ci && npm run build",
+  "buildCommand": "bash scripts/sync_api_runtime.sh && cd web && npm ci && npm run build",
   "outputDirectory": "web/dist",
   "functions": {
     "api/index.py": {
       "maxDuration": 60,
-      "includeFiles": "_runtime/**",
+      "includeFiles": "server/**",
       "excludeFiles": "{.conda/**,web/**,assets/**,deploy/**,docs/**,test/**,tts_integration/**,client/ui/**,client/streamlit/**,**/__pycache__/**,**/*.pyc,log/**,output/**,test-output/**,.idea/**,.vscode/**}"
     }
   },
