@@ -5,7 +5,12 @@ import sys
 from pathlib import Path
 
 _HERE = Path(__file__).resolve()
-_CANDIDATE_ROOTS = [_HERE.parent, _HERE.parents[1], Path.cwd()]
+_CANDIDATE_ROOTS = [
+    _HERE.parent / "_runtime",
+    _HERE.parent,
+    _HERE.parents[1],
+    Path.cwd(),
+]
 
 
 def _load_create_app():
