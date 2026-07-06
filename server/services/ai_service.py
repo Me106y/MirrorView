@@ -13,8 +13,10 @@ from utils.logger_handler import logger
 
 class AIService:
     def __init__(self):
-        self.llm = self._build_platform_llm()
         self.resume_service = ResumeService()
+        self.llm = self._build_platform_llm()
+        if self.llm is None:
+            logger.warning("Platform LLM unavailable at startup; running in degraded mode.")
         self.careerforge_agent = CareerForgeAgent(llm=self.llm)
 
     @staticmethod
@@ -40,13 +42,17 @@ class AIService:
             return ModelFactory.get_model(provider, model_name, **kwargs)
         except Exception as e:
             logger.warning("Platform model init fallback to deepseek: %s", e)
-            return ModelFactory.get_model(
-                "deepseek",
-                Config.DEEPSEEK_MODEL,
-                temperature=0.7,
-                base_url=Config.DEEPSEEK_BASE_URL,
-                api_key=Config.DEEPSEEK_API_KEY,
-            )
+            try:
+                return ModelFactory.get_model(
+                    "deepseek",
+                    Config.DEEPSEEK_MODEL,
+                    temperature=0.7,
+                    base_url=Config.DEEPSEEK_BASE_URL,
+                    api_key=Config.DEEPSEEK_API_KEY,
+                )
+            except Exception as fallback_e:
+                logger.warning("Platform deepseek fallback init failed: %s", fallback_e)
+                return None
 
     def _build_runtime_agent(self, runtime: Optional[Dict[str, Any]] = None) -> CareerForgeAgent:
         if not runtime:
@@ -84,6 +90,9 @@ class AIService:
         Analyze resume to extract job intention and key projects.
         Returns updated job intention and project summary.
         """
+        if self.llm is None:
+            return {"suggested_position": current_job_intention, "projects_summary": ""}
+
         prompt = ChatPromptTemplate.from_template(
             """
             You are an expert HR and Technical Interviewer.
@@ -126,6 +135,20 @@ class AIService:
         Generate 10 interview questions.
         If resume/projects provided, include 2 project-specific questions.
         """
+        if self.llm is None:
+            return [
+                f"Tell me about yourself and why you want to be a {job_position}.",
+                "What are your greatest strengths and weaknesses?",
+                "Describe a challenging technical problem you solved.",
+                "Where do you see yourself in 5 years?",
+                "Why should we hire you?",
+                "How do you handle conflict in a team?",
+                "What is your preferred working style?",
+                "Tell me about a time you failed.",
+                "What technologies are you most proficient in?",
+                "Do you have any questions for us?",
+            ]
+
         if resume_text and projects_summary:
             template = """
             You are an expert Interviewer. Generate 10 interview questions for a {job_position} role.
@@ -181,6 +204,13 @@ class AIService:
         """
         Evaluate user's answer. Use RAG if user_id is provided (to access resume context).
         """
+        if self.llm is None:
+            return {
+                "score": 5.0,
+                "feedback": "Could not evaluate answer because model is not configured.",
+                "improved_answer_suggestion": "",
+            }
+
         context = ""
         if user_id:
             try:
@@ -239,6 +269,11 @@ class AIService:
         from server.models import Message
 
         normalized_language = self._normalize_language(language)
+        if self.llm is None:
+            if normalized_language == "en":
+                return "Feedback generation is unavailable because model runtime is not configured."
+            return "当前未配置可用模型，暂时无法生成面试反馈。"
+
         output_language = "English" if normalized_language == "en" else "Chinese"
         messages = Message.query.filter_by(interview_id=interview.id).order_by(Message.created_at).all()
         conversation = "\n".join([f"{m.role}: {m.content}" for m in messages])

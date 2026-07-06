@@ -11,6 +11,7 @@ from utils.logger_handler import logger
 from datetime import datetime
 import uuid
 import tempfile
+import os
 from typing import Any, Dict, Optional, Tuple
 
 api = Blueprint('api', __name__)
@@ -25,6 +26,17 @@ HIGH_COST_ENDPOINTS = {
     "cover-letter",
     "mock-interview",
 }
+
+
+@api.route('/health', methods=['GET'])
+def health():
+    return jsonify(
+        {
+            "ok": True,
+            "service": "mirrorview-api",
+            "env": "vercel" if (os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV")) else "local",
+        }
+    ), 200
 
 @api.route('/auth/register', methods=['POST'])
 def register():
@@ -65,7 +77,6 @@ def login():
         }), 200
     return jsonify({'message': 'Invalid username or password'}), 401
 
-import os
 import json
 
 def _is_interview_expired(interview):

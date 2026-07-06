@@ -56,6 +56,9 @@ class Config:
 
     # Database Configuration
     _default_data_dir = basedir / str(_PATH_CONFIG.get("data_dir", "instance"))
+    # Vercel Serverless file system is read-only except /tmp.
+    if os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV"):
+        _default_data_dir = Path("/tmp/mirrorview-data")
     data_dir = Path(
         os.environ.get("MIRRORVIEW_DATA_DIR", str(_default_data_dir))
     ).expanduser()
@@ -164,7 +167,22 @@ class Config:
         str(_default_chroma_dir),
     )
 
-    # Ensure directories exist
-    Path(data_dir).mkdir(parents=True, exist_ok=True)
-    Path(RESUME_UPLOAD_FOLDER).mkdir(parents=True, exist_ok=True)
-    Path(CHROMA_DB_DIR).mkdir(parents=True, exist_ok=True)
+    # Ensure directories exist. Fallback to /tmp if current target is not writable.
+    try:
+        Path(data_dir).mkdir(parents=True, exist_ok=True)
+        Path(RESUME_UPLOAD_FOLDER).mkdir(parents=True, exist_ok=True)
+        Path(CHROMA_DB_DIR).mkdir(parents=True, exist_ok=True)
+    except Exception:
+        _tmp_root = Path("/tmp/mirrorview-data")
+        _tmp_resume = _tmp_root / "uploads" / "resumes"
+        _tmp_chroma = _tmp_root / "chroma_db"
+
+        _tmp_root.mkdir(parents=True, exist_ok=True)
+        _tmp_resume.mkdir(parents=True, exist_ok=True)
+        _tmp_chroma.mkdir(parents=True, exist_ok=True)
+
+        data_dir = _tmp_root
+        db_path = _tmp_root / _default_db_filename
+        SQLALCHEMY_DATABASE_URI = f"sqlite:///{db_path}"
+        RESUME_UPLOAD_FOLDER = str(_tmp_resume)
+        CHROMA_DB_DIR = str(_tmp_chroma)
