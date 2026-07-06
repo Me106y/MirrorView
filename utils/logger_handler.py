@@ -5,11 +5,38 @@ import sys
 from datetime import datetime
 from utils.path_tool import get_abs_path
 
-# 日志保存的根目录
-LOG_ROOT = get_abs_path("log")
 
-# 确保日志的目录存在
-os.makedirs(LOG_ROOT, exist_ok=True)
+def _resolve_log_root():
+    """
+    Pick a writable log directory.
+    - Local dev: prefer repo ./log
+    - Serverless/read-only env (e.g., Vercel): fall back to /tmp
+    """
+    candidates = []
+
+    env_log_dir = (os.environ.get("MIRRORVIEW_LOG_DIR") or "").strip()
+    if env_log_dir:
+        candidates.append(env_log_dir)
+
+    if os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV"):
+        candidates.append("/tmp/mirrorview-log")
+    else:
+        candidates.append(get_abs_path("log"))
+        candidates.append("/tmp/mirrorview-log")
+
+    for path in candidates:
+        try:
+            os.makedirs(path, exist_ok=True)
+            if os.access(path, os.W_OK):
+                return path
+        except Exception:
+            continue
+
+    return None
+
+
+# 日志保存的根目录（None 表示仅控制台）
+LOG_ROOT = _resolve_log_root()
 
 # 日志的格式配置
 DEFAULT_LOG_FORMAT = logging.Formatter(
@@ -93,16 +120,19 @@ def get_logger(
     console_handler.addFilter(SensitiveDataFilter())
     logger.addHandler(console_handler)
 
-    # 文件Handler
-    if not log_file:
-        log_file = os.path.join(LOG_ROOT, f"{name}_{datetime.now().strftime('%Y%m%d')}.log")
+    # 文件Handler（若目录不可写则自动跳过）
+    if LOG_ROOT:
+        if not log_file:
+            log_file = os.path.join(LOG_ROOT, f"{name}_{datetime.now().strftime('%Y%m%d')}.log")
+        try:
+            file_handler = logging.FileHandler(log_file, encoding="utf-8")
+            file_handler.setLevel(file_level)
+            file_handler.setFormatter(DEFAULT_LOG_FORMAT)
+            file_handler.addFilter(SensitiveDataFilter())
+            logger.addHandler(file_handler)
+        except Exception as e:
+            print(f"[logger] file logging disabled: {e}", file=sys.stderr)
 
-    file_handler = logging.FileHandler(log_file, encoding="utf-8")
-    file_handler.setLevel(file_level)
-    file_handler.setFormatter(DEFAULT_LOG_FORMAT)
-    file_handler.addFilter(SensitiveDataFilter())
-
-    logger.addHandler(file_handler)
     return logger
 
 # 快捷获取日志器
