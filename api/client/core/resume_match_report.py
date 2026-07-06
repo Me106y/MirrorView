@@ -202,16 +202,14 @@ def build_resume_match_html_report(result: dict, resume_text: str, target_role: 
       --red: #ef4444;
       --green: #22c55e;
       --orange: #f59e0b;
-      --bg: #f8f9fa;
+      --bg: #f7f3ea;
       --card: #ffffff;
       --border: #e5e7eb;
     }}
     * {{ box-sizing: border-box; }}
     body {{
       margin: 0;
-      background: radial-gradient(circle at 10% 10%, #eef3f1 0%, transparent 42%),
-                  radial-gradient(circle at 90% 80%, #f6efe1 0%, transparent 38%),
-                  var(--bg);
+      background: var(--bg);
       color: var(--ink);
       font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
       line-height: 1.65;
@@ -667,5 +665,4 @@ def build_resume_match_html_report(result: dict, resume_text: str, target_role: 
 </html>
 """
     return file_name, html_doc
-
 
