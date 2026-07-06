@@ -55,29 +55,6 @@ a {
   color: var(--muted);
 }
 
-.nav-grid {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 10px;
-  margin-bottom: 16px;
-}
-
-.nav-grid a {
-  text-decoration: none;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 12px;
-  text-align: center;
-  background: var(--surface);
-}
-
-.nav-grid a.active {
-  border-color: transparent;
-  background: linear-gradient(130deg, #0b9479, #199c80);
-  color: white;
-  box-shadow: var(--shadow);
-}
-
 .page-main {
   animation: rise 260ms ease;
 }
@@ -368,10 +345,6 @@ textarea {
 }
 
 @media (max-width: 940px) {
-  .nav-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .home-hub {
     min-height: auto;
   }

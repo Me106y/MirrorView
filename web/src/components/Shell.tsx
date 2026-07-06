@@ -13,14 +13,6 @@ export function Shell({ onOpenSettings }: { onOpenSettings: () => void }) {
         </button>
       </header>
 
-      <nav className="nav-grid">
-        <NavLink to="/resume-match">Resume Match</NavLink>
-        <NavLink to="/resume-craft">Resume Craft</NavLink>
-        <NavLink to="/cover-letter">Cover Letter</NavLink>
-        <NavLink to="/mock-interview">Mock Interview</NavLink>
-        <NavLink to="/job-hunt">Job Hunt</NavLink>
-      </nav>
-
       <main className="page-main">
         <Outlet />
       </main>
