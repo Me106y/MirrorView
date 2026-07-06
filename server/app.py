@@ -8,7 +8,7 @@ if __package__ in {None, ""}:
     if str(_REPO_ROOT) not in sys.path:
         sys.path.insert(0, str(_REPO_ROOT))
 
-from flask import Flask
+from flask import Flask, abort, jsonify, send_from_directory
 # import pymysql
 from sqlalchemy import inspect, text
 from utils.logger_handler import logger
@@ -109,6 +109,34 @@ def create_app():
     db.init_app(app)
 
     app.register_blueprint(api, url_prefix='/api')
+    # Some Vercel rewrite configurations may forward /api/* as /*.
+    # Registering once more without prefix keeps compatibility.
+    app.register_blueprint(api, url_prefix='', name_prefix='noprefix')
+
+    # Fallback SPA serving for environments where Python function receives
+    # frontend routes directly.
+    frontend_dist = Path(__file__).resolve().parents[1] / "web" / "dist"
+
+    @app.route("/", methods=["GET"])
+    def _serve_spa_root():
+        index_file = frontend_dist / "index.html"
+        if index_file.exists():
+            return send_from_directory(str(frontend_dist), "index.html")
+        return jsonify({"ok": True, "service": "mirrorview-api"}), 200
+
+    @app.route("/<path:route_path>", methods=["GET"])
+    def _serve_spa_assets(route_path: str):
+        if route_path.startswith("api/"):
+            abort(404)
+
+        candidate = frontend_dist / route_path
+        if candidate.exists() and candidate.is_file():
+            return send_from_directory(str(frontend_dist), route_path)
+
+        index_file = frontend_dist / "index.html"
+        if index_file.exists():
+            return send_from_directory(str(frontend_dist), "index.html")
+        abort(404)
 
     # --- TTS Integration ---
     # Register TTS API routes (Boson.ai Higgs Audio v3)
