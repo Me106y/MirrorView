@@ -14,7 +14,6 @@ import { ByokRiskPage } from "./pages/legal/ByokRiskPage";
 import { useState } from "react";
 import { ConsentModal } from "./components/ConsentModal";
 import { Analytics } from "@vercel/analytics/react";
-import { SpeedInsights } from "@vercel/speed-insights/react";
 
 export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -38,7 +37,6 @@ export default function App() {
       <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <ConsentModal />
       <Analytics />
-      <SpeedInsights />
     </>
   );
 }

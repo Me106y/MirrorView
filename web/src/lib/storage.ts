@@ -1,6 +1,6 @@
 import type { ModelSettings } from "../types";
 
-export const MODEL_SETTINGS_KEY = "mirrorview:web:model-settings:v1";
+export const MODEL_SETTINGS_KEY = "mirrorview:web:model-settings:v2";
 export const CONSENT_ACCEPTED_KEY = "mirrorview:web:consent:v1";
 
 export const defaultSettings: ModelSettings = {
