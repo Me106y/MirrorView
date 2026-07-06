@@ -4,9 +4,9 @@
 venv/
 env/
 
-# Keep root app.py for local convenience, but do not deploy it to Vercel.
-# Otherwise Vercel may auto-create a root Python Function and shadow static routes.
-app.py
+# Keep only root app.py out of deployment for route safety.
+# Use anchored path so nested server/app.py files are still shipped.
+/app.py
 
 # VCS / IDE
 .git/
