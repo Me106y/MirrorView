@@ -10,7 +10,7 @@ set -euo pipefail
 #   DEEPSEEK_API_KEY   your platform key
 #
 # Optional env vars:
-#   DOMAIN             default: mirrorview.qzz.io
+#   DOMAIN             default: mirrorview.dpdns.org
 #   BRANCH             default: main
 #   REMOTE_DIR         default: /opt/mirrorview
 #   SOURCE_MODE        default: local (local | git)
@@ -36,7 +36,7 @@ require_var SERVER_IP
 require_var SERVER_USER
 require_var DEEPSEEK_API_KEY
 
-DOMAIN="${DOMAIN:-mirrorview.qzz.io}"
+DOMAIN="${DOMAIN:-mirrorview.dpdns.org}"
 BRANCH="${BRANCH:-main}"
 REMOTE_DIR="${REMOTE_DIR:-/opt/mirrorview}"
 SOURCE_MODE="${SOURCE_MODE:-local}"
