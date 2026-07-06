@@ -186,6 +186,63 @@ class AIService:
         }
         return any(str(item).strip().lower() in markers for item in assumptions)
 
+    @staticmethod
+    def _extract_runtime_error_text(result: Any) -> str:
+        if not isinstance(result, dict):
+            return str(result or "")
+        return str(result.get("error") or result.get("message") or result.get("assumptions") or "")
+
+    @staticmethod
+    def _looks_like_auth_failure(text: str) -> bool:
+        lower = (text or "").lower()
+        markers = (
+            "authentication fails",
+            "authentication_error",
+            "invalid api key",
+            "api key is invalid",
+            "invalid_request_error",
+            "unauthorized",
+            "error code: 401",
+            "401",
+        )
+        return any(marker in lower for marker in markers)
+
+    @staticmethod
+    def _normalize_fallback_reason(reason: str) -> str:
+        lower = (reason or "").lower()
+        if AIService._looks_like_auth_failure(lower):
+            return "platform_model_auth_failed"
+        if "timeout" in lower or "timed out" in lower:
+            return "platform_model_timeout"
+        if "llm_not_ready" in lower or "missing_api_key_or_model_init_failed" in lower:
+            return "platform_model_not_ready"
+        if "model_output_not_json" in lower:
+            return "platform_model_non_json"
+        if "model_call_failed" in lower:
+            return "platform_model_call_failed"
+        if "runtime_exception" in lower:
+            return "platform_runtime_exception"
+        return "platform_model_unavailable"
+
+    @staticmethod
+    def _can_retry_with_server_platform_key(runtime: Optional[Dict[str, Any]], reason: str) -> bool:
+        if not isinstance(runtime, dict):
+            return False
+        mode = str(runtime.get("mode") or "platform").strip().lower()
+        if mode != "platform":
+            return False
+        runtime_key = str(runtime.get("api_key") or "").strip()
+        if not runtime_key:
+            return False
+        return AIService._looks_like_auth_failure(reason)
+
+    @staticmethod
+    def _runtime_without_api_key(runtime: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        clean = dict(runtime or {})
+        clean["mode"] = "platform"
+        clean["api_key"] = ""
+        return clean
+
     def _fallback_resume_match(self, payload: Dict[str, Any], reason: str) -> Dict[str, Any]:
         resume_text = str(payload.get("resume_text") or "")
         jd_text = str(payload.get("jd_text") or "")
@@ -282,6 +339,7 @@ class AIService:
             ]
         )
 
+        normalized_reason = self._normalize_fallback_reason(reason)
         return {
             "overall_score": overall,
             "match_level": match_level,
@@ -294,7 +352,7 @@ class AIService:
             "assumptions": [
                 "platform_model_unavailable_fallback_used",
                 "keyword_based_heuristic_analysis",
-                f"fallback_reason:{str(reason)[:180]}",
+                f"fallback_reason:{normalized_reason}",
             ],
         }
 
@@ -530,9 +588,17 @@ class AIService:
         try:
             result = self._build_runtime_agent(runtime).run_resume_match(payload)
             if self._should_fallback_resume_match(result):
-                reason = ""
-                if isinstance(result, dict):
-                    reason = str(result.get("error") or result.get("message") or result.get("assumptions") or "")
+                reason = self._extract_runtime_error_text(result)
+                if self._can_retry_with_server_platform_key(runtime, reason):
+                    try:
+                        retry_runtime = self._runtime_without_api_key(runtime)
+                        retried = self._build_runtime_agent(retry_runtime).run_resume_match(payload)
+                        if not self._should_fallback_resume_match(retried):
+                            return retried
+                        reason = self._extract_runtime_error_text(retried) or reason
+                    except Exception as retry_error:
+                        logger.warning("run_resume_match platform retry failed: %s", retry_error)
+                        reason = f"runtime_exception:{retry_error}"
                 return self._fallback_resume_match(payload, reason or "resume_match_runtime_unavailable")
             return result
         except Exception as e:
