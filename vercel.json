@@ -5,8 +5,30 @@
   "functions": {
     "api/index.py": {
       "maxDuration": 60,
-      "includeFiles": "{server/**,utils/**,client/core/**,skills/CareerForge/skills/**}",
-      "excludeFiles": "{.conda/**,web/**,assets/**,deploy/**,docs/**,test/**,tts_integration/**,client/ui/**,client/streamlit/**,**/__pycache__/**,**/*.pyc,log/**,output/**,test-output/**,.idea/**,.vscode/**}"
+      "includeFiles": [
+        "server/**",
+        "utils/**",
+        "client/core/**",
+        "skills/CareerForge/skills/**"
+      ],
+      "excludeFiles": [
+        ".conda/**",
+        "web/**",
+        "assets/**",
+        "deploy/**",
+        "docs/**",
+        "test/**",
+        "tts_integration/**",
+        "client/ui/**",
+        "client/streamlit/**",
+        "**/__pycache__/**",
+        "**/*.pyc",
+        "log/**",
+        "output/**",
+        "test-output/**",
+        ".idea/**",
+        ".vscode/**"
+      ]
     }
   },
   "rewrites": [
