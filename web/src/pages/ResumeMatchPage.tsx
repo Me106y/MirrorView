@@ -153,7 +153,7 @@ export function ResumeMatchPage() {
       <div className="resume-match-layout">
         <form className="surface resume-match-form" onSubmit={onSubmit}>
           <header className="resume-match-form-head">
-            <h2>Resume Match</h2>
+            <h2>简历匹配分析</h2>
             <p>上传简历与岗位 JD，AI 自动计算匹配度并给出优化建议。</p>
           </header>
 
