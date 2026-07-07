@@ -401,11 +401,18 @@ You MUST follow the provided Skill specification when answering.
         template_display = (payload.get("template_display") or "").strip()[:120]
         language = (payload.get("language") or "中文").strip()[:40]
         photo_pref = (payload.get("photo_pref") or "未明确").strip()[:40]
+        photo_token = (payload.get("photo_token") or "__PHOTO_DATA_URL__").strip()[:120] or "__PHOTO_DATA_URL__"
         base_template = payload.get("base_template") or ""
         preview_snippet = payload.get("preview_snippet") or ""
         profile_context = payload.get("profile_context") or "（无）"
         history_text = payload.get("history_text") or ""
         extra_instruction = (payload.get("extra_instruction") or "").strip()
+        photo_rule = (
+            f'8) 本次要求放照片：必须输出 <img class="header-photo" src="{photo_token}" ...>，'
+            "src 必须是该占位 token，禁止写死 URL 或其他 base64。"
+            if photo_pref == "放照片"
+            else "8) 本次不放照片：不要输出头像图片标签。"
+        )
 
         return f"""
 您是简历 HTML 生成器。请直接输出最终 HTML，不要任何解释文字。
@@ -418,6 +425,7 @@ You MUST follow the provided Skill specification when answering.
 5) 必须包含导出按钮（window.print）、@page A4、@media print、分页控制。
 6) 内容结构与视觉风格遵循 SKILL.md，且不编造事实。
 7) 若用户已在早期选定模板，禁止再次确认模板。
+{photo_rule}
 
 [SKILL.md 规范全文节选]
 {skill_spec[:18000]}

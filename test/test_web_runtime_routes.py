@@ -71,6 +71,8 @@ def test_resume_craft_chat_turn_returns_400_for_empty_message():
     body = resp.get_json()
     assert body["error"] == "empty_message"
     assert body["intent"] == "resume-craft"
+    assert body["render_ready"] is False
+    assert "message" in body["missing_fields"]
 
 
 def test_resume_craft_chat_turn_returns_reply(monkeypatch):
@@ -95,6 +97,39 @@ def test_resume_craft_chat_turn_returns_reply(monkeypatch):
     assert body["intent"] == "resume-craft"
     assert body["action"] == "chat_turn"
     assert "教育背景" in body["reply"]
+    assert body["render_ready"] is False
+    assert "conversation_turns" in body["missing_fields"]
+
+
+def test_resume_craft_chat_turn_returns_ready_when_required_fields_present(monkeypatch):
+    Config.TURNSTILE_ENFORCE = False
+    Config.RATE_LIMIT_ENFORCE = False
+
+    monkeypatch.setattr(routes.ai_service, "run_resume_craft_dialog", lambda payload, runtime=None: "信息已足够。")
+
+    client = _client()
+    resp = client.post(
+        "/api/careerforge/resume-craft/chat-turn",
+        json={
+            "message": "联系方式补充：邮箱 a@b.com，电话 13800000000。",
+            "history": [
+                {"role": "assistant", "content": "请介绍背景。"},
+                {
+                    "role": "user",
+                    "content": "目标岗位是 AI 应用开发。教育背景：清华大学计算机硕士。"
+                    "工作项目经历：负责 RAG 平台。技能：Python、LangChain。",
+                },
+            ],
+            "template_code": "02",
+            "language": "zh",
+            "photo_pref": "with_photo",
+            "photo_uploaded": True,
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["render_ready"] is True
+    assert body["missing_fields"] == []
 
 
 def test_resume_craft_render_returns_html(monkeypatch):
@@ -126,6 +161,60 @@ def test_resume_craft_render_returns_html(monkeypatch):
     assert "<!DOCTYPE html>" in body["report_html"]
 
 
+def test_resume_craft_render_returns_400_when_photo_missing(monkeypatch):
+    Config.TURNSTILE_ENFORCE = False
+    Config.RATE_LIMIT_ENFORCE = False
+
+    monkeypatch.setattr(
+        routes.ai_service,
+        "run_resume_craft_html",
+        lambda payload, runtime=None: "<!DOCTYPE html><html><body><h1>Resume</h1></body></html>",
+    )
+
+    client = _client()
+    resp = client.post(
+        "/api/careerforge/resume-craft/render",
+        json={
+            "history": [{"role": "user", "content": "请生成简历"}],
+            "template_code": "02",
+            "language": "zh",
+            "photo_pref": "with_photo",
+        },
+    )
+    assert resp.status_code == 400
+    body = resp.get_json()
+    assert body["error"] == "missing_photo"
+
+
+def test_resume_craft_render_injects_photo_data_url(monkeypatch):
+    Config.TURNSTILE_ENFORCE = False
+    Config.RATE_LIMIT_ENFORCE = False
+
+    monkeypatch.setattr(
+        routes.ai_service,
+        "run_resume_craft_html",
+        lambda payload, runtime=None: (
+            "<!DOCTYPE html><html><body><img class='header-photo' src='__PHOTO_DATA_URL__'></body></html>"
+        ),
+    )
+
+    client = _client()
+    resp = client.post(
+        "/api/careerforge/resume-craft/render",
+        json={
+            "history": [{"role": "user", "content": "请生成简历"}],
+            "template_code": "02",
+            "language": "zh",
+            "photo_pref": "with_photo",
+            "photo_data_url": "data:image/png;base64,QUJD",
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert "data:image/png;base64,QUJD" in body["report_html"]
+    assert "__PHOTO_DATA_URL__" not in body["report_html"]
+
+
 def test_resume_craft_render_retries_when_first_response_is_not_html(monkeypatch):
     Config.TURNSTILE_ENFORCE = False
     Config.RATE_LIMIT_ENFORCE = False
@@ -147,7 +236,7 @@ def test_resume_craft_render_retries_when_first_response_is_not_html(monkeypatch
             "history": [{"role": "user", "content": "请开始生成简历"}],
             "template_code": "06",
             "language": "both",
-            "photo_pref": "with_photo",
+            "photo_pref": "no_photo",
         },
     )
     assert resp.status_code == 200

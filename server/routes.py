@@ -40,6 +40,79 @@ RESUME_CRAFT_TEMPLATE_MAP: Dict[str, Tuple[str, str]] = {
     "06": ("Clean Teal", "Clean Teal 清新青色"),
     "07": ("Elegant", "Elegant 优雅对称"),
 }
+RESUME_CRAFT_PHOTO_TOKEN = "__PHOTO_DATA_URL__"
+RESUME_CRAFT_MAX_PHOTO_DATA_URL_LENGTH = 2_000_000
+RESUME_CRAFT_READY_KEYWORDS: Dict[str, List[str]] = {
+    "target_role": [
+        "目标岗位",
+        "求职岗位",
+        "岗位",
+        "职位",
+        "应聘",
+        "target role",
+        "desired role",
+        "job target",
+        "position",
+        "job role",
+    ],
+    "education": [
+        "教育",
+        "学历",
+        "学校",
+        "大学",
+        "学院",
+        "专业",
+        "学位",
+        "education",
+        "university",
+        "college",
+        "major",
+        "degree",
+    ],
+    "experience": [
+        "经历",
+        "项目",
+        "工作",
+        "实习",
+        "公司",
+        "职责",
+        "成果",
+        "experience",
+        "project",
+        "projects",
+        "intern",
+        "employment",
+        "worked",
+    ],
+    "skills": [
+        "技能",
+        "技术",
+        "技术栈",
+        "工具",
+        "熟悉",
+        "掌握",
+        "skill",
+        "skills",
+        "tech",
+        "stack",
+        "framework",
+        "language",
+    ],
+    "contact": [
+        "联系方式",
+        "联系",
+        "手机",
+        "电话",
+        "邮箱",
+        "邮件",
+        "github",
+        "linkedin",
+        "城市",
+        "email",
+        "phone",
+        "location",
+    ],
+}
 
 
 @api.route('/health', methods=['GET'])
@@ -250,6 +323,15 @@ def _normalize_resume_craft_photo_pref(value: Any) -> str:
     return "不放照片"
 
 
+def _normalize_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    text = str(value or "").strip().lower()
+    return text in {"1", "true", "yes", "on", "y"}
+
+
 def _history_to_text(history: Any, max_turns: int = 32) -> str:
     if not isinstance(history, list):
         return ""
@@ -301,6 +383,110 @@ def _extract_html_document(text: str) -> str:
         if "<!doctype" not in doc.lower():
             doc = "<!DOCTYPE html>\n" + doc
         return doc
+    return ""
+
+
+def _resume_craft_user_turns(history: Any, latest_user_input: str = "", max_turns: int = 32) -> List[str]:
+    turns: List[str] = []
+    if isinstance(history, list):
+        for item in history[-max_turns:]:
+            if not isinstance(item, dict):
+                continue
+            role_raw = str(item.get("role") or "").strip().lower()
+            if role_raw != "user":
+                continue
+            content = str(item.get("content") or "").strip()
+            if content:
+                turns.append(content)
+    latest = str(latest_user_input or "").strip()
+    if latest:
+        turns.append(latest)
+    return turns
+
+
+def _has_any_keyword(text_lower: str, keywords: List[str]) -> bool:
+    return any(keyword.lower() in text_lower for keyword in keywords)
+
+
+def _evaluate_resume_craft_readiness(
+    history: Any,
+    latest_user_input: str,
+    template_code: str,
+    language: str,
+    photo_pref: str,
+    photo_uploaded: bool,
+) -> Dict[str, Any]:
+    missing_fields: List[str] = []
+    if template_code not in RESUME_CRAFT_TEMPLATE_MAP:
+        missing_fields.append("template")
+    if language not in {"中文", "英文", "中英文双版"}:
+        missing_fields.append("language")
+    if photo_pref not in {"放照片", "不放照片"}:
+        missing_fields.append("photo_pref")
+    if photo_pref == "放照片" and not photo_uploaded:
+        missing_fields.append("photo")
+
+    user_turns = _resume_craft_user_turns(history, latest_user_input=latest_user_input, max_turns=32)
+    if len(user_turns) < 2:
+        missing_fields.append("conversation_turns")
+
+    combined_text_lower = "\n".join(user_turns).lower()
+    for field, keywords in RESUME_CRAFT_READY_KEYWORDS.items():
+        if not _has_any_keyword(combined_text_lower, keywords):
+            missing_fields.append(field)
+
+    return {
+        "render_ready": len(missing_fields) == 0,
+        "missing_fields": missing_fields,
+    }
+
+
+def _validate_photo_data_url(photo_data_url: str) -> Tuple[bool, str]:
+    value = str(photo_data_url or "").strip()
+    if not value:
+        return False, "missing_photo"
+    if len(value) > RESUME_CRAFT_MAX_PHOTO_DATA_URL_LENGTH:
+        return False, "photo_too_large"
+    pattern = re.compile(r"^data:image/(png|jpe?g);base64,[a-z0-9+/=\r\n]+$", re.IGNORECASE)
+    if not pattern.match(value):
+        return False, "invalid_photo_format"
+    return True, ""
+
+
+def _inject_photo_data_url_into_html(html_doc: str, photo_data_url: str, token: str) -> str:
+    html_text = str(html_doc or "")
+    photo_src = str(photo_data_url or "").strip()
+    if not html_text or not photo_src:
+        return ""
+
+    if token and token in html_text:
+        return html_text.replace(token, photo_src)
+
+    with_src = re.sub(
+        r'(<img\b[^>]*class=["\'][^"\']*header-photo[^"\']*["\'][^>]*\bsrc=["\'])([^"\']*)(["\'])',
+        rf"\1{photo_src}\3",
+        html_text,
+        count=1,
+        flags=re.IGNORECASE,
+    )
+    if with_src != html_text:
+        return with_src
+
+    def _append_src(match: re.Match[str]) -> str:
+        tag = match.group(0)
+        if re.search(r'\bsrc=["\']', tag, flags=re.IGNORECASE):
+            return tag
+        return tag[:-1] + f' src="{photo_src}">'
+
+    appended = re.sub(
+        r'<img\b[^>]*class=["\'][^"\']*header-photo[^"\']*["\'][^>]*>',
+        _append_src,
+        html_text,
+        count=1,
+        flags=re.IGNORECASE,
+    )
+    if appended != html_text:
+        return appended
     return ""
 
 @api.route('/user/<int:user_id>/upload_resume', methods=['POST'])
@@ -501,6 +687,8 @@ def careerforge_resume_craft_chat_turn():
                 "reply": "请先输入消息内容。",
                 "intent": "resume-craft",
                 "action": "noop",
+                "render_ready": False,
+                "missing_fields": ["message"],
                 "meta": meta,
                 "error": "empty_message",
             }
@@ -509,7 +697,17 @@ def careerforge_resume_craft_chat_turn():
     template_code = _normalize_resume_craft_template_code(data.get("template_code"))
     language = _normalize_resume_craft_language(data.get("language"))
     photo_pref = _normalize_resume_craft_photo_pref(data.get("photo_pref"))
-    history_text = _history_to_text(data.get("history") or [], max_turns=24)
+    photo_uploaded = _normalize_bool(data.get("photo_uploaded"))
+    history = data.get("history") or []
+    history_text = _history_to_text(history, max_turns=24)
+    readiness = _evaluate_resume_craft_readiness(
+        history=history,
+        latest_user_input=message,
+        template_code=template_code,
+        language=language,
+        photo_pref=photo_pref,
+        photo_uploaded=photo_uploaded,
+    )
     control_context = (
         "【页面参数（优先）】\n"
         f"- 模板编号: {template_code}\n"
@@ -531,6 +729,8 @@ def careerforge_resume_craft_chat_turn():
             "reply": reply,
             "intent": "resume-craft",
             "action": "chat_turn",
+            "render_ready": readiness["render_ready"],
+            "missing_fields": readiness["missing_fields"],
             "meta": meta,
             "error": "",
         }
@@ -559,6 +759,12 @@ def careerforge_resume_craft_render():
     template_en, template_display = RESUME_CRAFT_TEMPLATE_MAP.get(template_code, RESUME_CRAFT_TEMPLATE_MAP["02"])
     language = _normalize_resume_craft_language(data.get("language"))
     photo_pref = _normalize_resume_craft_photo_pref(data.get("photo_pref"))
+    photo_data_url = str(data.get("photo_data_url") or "").strip()
+    if photo_pref == "放照片":
+        ok, reason = _validate_photo_data_url(photo_data_url)
+        if not ok:
+            return jsonify({"error": reason, "message": "请上传 PNG/JPG 照片后再生成简历。", "meta": meta}), 400
+
     templates = _load_resume_craft_templates()
     preview_snippet = _extract_preview_snippet(templates.get("preview_template", ""), template_code)
 
@@ -578,17 +784,30 @@ def careerforge_resume_craft_render():
             "- 当前页面仅做从零生成简历，不切换到优化已有简历流程。"
         ),
         "history_text": history_text,
+        "photo_token": RESUME_CRAFT_PHOTO_TOKEN,
     }
 
     raw_html = ai_service.run_resume_craft_html(html_payload, runtime=runtime)
     report_html = _extract_html_document(raw_html)
+    if report_html and photo_pref == "放照片":
+        report_html = _inject_photo_data_url_into_html(report_html, photo_data_url, RESUME_CRAFT_PHOTO_TOKEN)
     if not report_html:
         strict_payload = dict(html_payload)
-        strict_payload["extra_instruction"] = (
-            "再次强调：仅输出完整HTML文档。必须包含<!DOCTYPE html>和</html>，"
-            "不要输出解释文本。"
-        )
-        report_html = _extract_html_document(ai_service.run_resume_craft_html(strict_payload, runtime=runtime))
+        if photo_pref == "放照片":
+            strict_payload["extra_instruction"] = (
+                "再次强调：仅输出完整HTML文档，并且必须包含照片标签。"
+                f'照片标签使用 <img class="header-photo" src="{RESUME_CRAFT_PHOTO_TOKEN}" ...> 的形式，'
+                "不要输出解释文本。"
+            )
+        else:
+            strict_payload["extra_instruction"] = (
+                "再次强调：仅输出完整HTML文档。必须包含<!DOCTYPE html>和</html>，"
+                "不要输出解释文本。"
+            )
+        retry_html = _extract_html_document(ai_service.run_resume_craft_html(strict_payload, runtime=runtime))
+        if retry_html and photo_pref == "放照片":
+            retry_html = _inject_photo_data_url_into_html(retry_html, photo_data_url, RESUME_CRAFT_PHOTO_TOKEN)
+        report_html = retry_html
 
     if not report_html:
         return jsonify(
