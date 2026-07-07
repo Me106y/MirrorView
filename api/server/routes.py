@@ -41,6 +41,35 @@ RESUME_CRAFT_TEMPLATE_MAP: Dict[str, Tuple[str, str]] = {
 }
 RESUME_CRAFT_PHOTO_TOKEN = "__PHOTO_DATA_URL__"
 RESUME_CRAFT_MAX_PHOTO_DATA_URL_LENGTH = 2_000_000
+RESUME_CRAFT_FIELD_ORDER = ["target_role", "education", "experience", "skills", "contact"]
+RESUME_CRAFT_ROLE_HINTS = [
+    "开发",
+    "工程师",
+    "产品",
+    "运营",
+    "设计",
+    "算法",
+    "测试",
+    "经理",
+    "顾问",
+    "分析师",
+    "架构师",
+    "dev",
+    "developer",
+    "engineer",
+    "manager",
+    "analyst",
+    "scientist",
+]
+RESUME_CRAFT_FIELD_PROMPTS = {
+    "target_role": "请先补充目标岗位这个字段（例如：AI 应用开发工程师）。",
+    "education": "请补充教育背景这个字段（学校/专业/学位/时间）。",
+    "experience": "请补充项目或工作经历这个字段（公司/项目/职责/成果）。",
+    "skills": "请补充技能与工具这个字段（技术栈/工具/熟练度）。",
+    "contact": "请补充联系方式这个字段（邮箱/电话/城市/GitHub 等）。",
+    "conversation_turns": "请继续补充信息，我们每轮只收集一个字段。",
+    "photo": "你选择了放照片，请先上传 PNG/JPG 照片。",
+}
 RESUME_CRAFT_READY_KEYWORDS: Dict[str, List[str]] = {
     "target_role": [
         "目标岗位",
@@ -430,7 +459,21 @@ def _evaluate_resume_craft_readiness(
         missing_fields.append("conversation_turns")
 
     combined_text_lower = "\n".join(user_turns).lower()
-    for field, keywords in RESUME_CRAFT_READY_KEYWORDS.items():
+
+    # Step2 首轮默认就是目标岗位，因此允许短回答（如“AI应用开发”）直接视为已填写。
+    target_role_provided = False
+    if user_turns:
+        first_turn = user_turns[0].strip()
+        target_role_provided = (
+            _has_any_keyword(combined_text_lower, RESUME_CRAFT_READY_KEYWORDS["target_role"])
+            or len(first_turn) <= 32
+            or any(marker in first_turn.lower() for marker in RESUME_CRAFT_ROLE_HINTS)
+        )
+    if not target_role_provided:
+        missing_fields.append("target_role")
+
+    for field in RESUME_CRAFT_FIELD_ORDER[1:]:
+        keywords = RESUME_CRAFT_READY_KEYWORDS[field]
         if not _has_any_keyword(combined_text_lower, keywords):
             missing_fields.append(field)
 
@@ -438,6 +481,17 @@ def _evaluate_resume_craft_readiness(
         "render_ready": len(missing_fields) == 0,
         "missing_fields": missing_fields,
     }
+
+
+def _next_resume_craft_prompt(missing_fields: List[str]) -> str:
+    ordered = [field for field in RESUME_CRAFT_FIELD_ORDER if field in missing_fields]
+    for field in ordered:
+        if field in RESUME_CRAFT_FIELD_PROMPTS:
+            return RESUME_CRAFT_FIELD_PROMPTS[field]
+    for field in missing_fields:
+        if field in RESUME_CRAFT_FIELD_PROMPTS:
+            return RESUME_CRAFT_FIELD_PROMPTS[field]
+    return "请继续补充下一项字段信息。"
 
 
 def _validate_photo_data_url(photo_data_url: str) -> Tuple[bool, str]:
@@ -706,7 +760,7 @@ def careerforge_resume_craft_chat_turn():
     }
     reply = (ai_service.run_resume_craft_dialog(dialog_payload, runtime=runtime) or "").strip()
     if not reply:
-        reply = "我已收到你的信息。请先补充目标岗位这个字段。"
+        reply = f"我已收到你的信息。{_next_resume_craft_prompt(readiness['missing_fields'])}"
 
     return jsonify(
         {

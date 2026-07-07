@@ -81,10 +81,13 @@ export function ResumeCraftPage() {
   const [result, setResult] = useState<ResultState>({ kind: "idle", reportHtml: "", message: "" });
   const [reportName, setReportName] = useState("resume-craft-report.html");
   const [frameHeight, setFrameHeight] = useState(980);
+  const [viewportHeight, setViewportHeight] = useState<number | null>(null);
 
   const previewFrameRef = useRef<HTMLIFrameElement | null>(null);
   const photoInputRef = useRef<HTMLInputElement | null>(null);
   const wizardTrackRef = useRef<HTMLDivElement | null>(null);
+  const step1CardRef = useRef<HTMLElement | null>(null);
+  const step2CardRef = useRef<HTMLElement | null>(null);
 
   const hasUserMessages = useMemo(() => messages.some((msg) => msg.role === "user"), [messages]);
   const canGoNext = useMemo(() => {
@@ -116,6 +119,23 @@ export function ResumeCraftPage() {
       gsap.killTweensOf(track);
     };
   }, [step]);
+
+  useEffect(() => {
+    const activeCard = step === 1 ? step1CardRef.current : step2CardRef.current;
+    if (!activeCard) {
+      return;
+    }
+    const updateHeight = () => {
+      setViewportHeight(activeCard.offsetHeight);
+    };
+    updateHeight();
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
+    const observer = new ResizeObserver(() => updateHeight());
+    observer.observe(activeCard);
+    return () => observer.disconnect();
+  }, [step, photoPref, photoDataUrl, photoHint, photoLoading, messages.length, chatLoading, renderLoading, result.kind]);
 
   const savePhotoFile = async (file: File | null) => {
     if (!file) {
@@ -305,9 +325,12 @@ export function ResumeCraftPage() {
   return (
     <section className="resume-craft-page">
       <div className="resume-craft-layout">
-        <div className="resume-craft-wizard-viewport">
+        <div
+          className="resume-craft-wizard-viewport"
+          style={viewportHeight ? { height: `${viewportHeight}px` } : undefined}
+        >
           <div className="resume-craft-wizard-track" ref={wizardTrackRef}>
-            <article className="surface resume-craft-step-card">
+            <article className="surface resume-craft-step-card" ref={step1CardRef}>
               <header className="resume-craft-step-head">
                 <span className="resume-craft-step-tag">Step 1 / 2</span>
                 <h2>先设置生成参数</h2>
@@ -420,7 +443,7 @@ export function ResumeCraftPage() {
               </div>
             </article>
 
-            <article className="surface resume-craft-step-card resume-craft-chat-step">
+            <article className="surface resume-craft-step-card resume-craft-chat-step" ref={step2CardRef}>
               <header className="resume-craft-chat-head">
                 <div className="resume-craft-chat-head-left">
                   <span className="resume-craft-step-tag">Step 2 / 2</span>

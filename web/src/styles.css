@@ -638,6 +638,7 @@ a {
 .resume-craft-wizard-viewport {
   overflow: hidden;
   border-radius: 22px;
+  transition: height 280ms ease;
 }
 
 .resume-craft-wizard-track {
