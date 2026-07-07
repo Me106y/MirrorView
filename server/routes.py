@@ -43,6 +43,19 @@ RESUME_CRAFT_TEMPLATE_MAP: Dict[str, Tuple[str, str]] = {
 RESUME_CRAFT_PHOTO_TOKEN = "__PHOTO_DATA_URL__"
 RESUME_CRAFT_MAX_PHOTO_DATA_URL_LENGTH = 2_000_000
 RESUME_CRAFT_FIELD_ORDER = ["target_role", "education", "experience", "skills", "contact"]
+RESUME_CRAFT_GRILL_MAX_FOLLOWUPS = 3
+RESUME_CRAFT_GRILL_MIN_FOLLOWUPS = 2
+RESUME_CRAFT_ALLOWED_STEP2_ASK_TOKENS = [
+    "经历",
+    "项目",
+    "职责",
+    "挑战",
+    "结果",
+    "量化",
+    "指标",
+    "技术",
+    "行动",
+]
 RESUME_CRAFT_ROLE_HINTS = [
     "开发",
     "工程师",
@@ -562,6 +575,164 @@ def _looks_like_target_role_answer(message: str) -> bool:
     return False
 
 
+def _normalize_step1_profile(raw: Any) -> Dict[str, Any]:
+    profile = raw if isinstance(raw, dict) else {}
+    personal = profile.get("personal_info") if isinstance(profile.get("personal_info"), dict) else {}
+    education_items = profile.get("education") if isinstance(profile.get("education"), list) else []
+
+    def _clean_list(values: Any, limit: int = 20) -> List[str]:
+        if not isinstance(values, list):
+            return []
+        out: List[str] = []
+        for item in values:
+            text = str(item or "").strip()
+            if text:
+                out.append(text[:120])
+            if len(out) >= limit:
+                break
+        return out
+
+    cleaned_education: List[Dict[str, str]] = []
+    for item in education_items[:5]:
+        if not isinstance(item, dict):
+            continue
+        school = str(item.get("school") or "").strip()
+        major = str(item.get("major") or "").strip()
+        degree = str(item.get("degree") or "").strip()
+        period = str(item.get("period") or "").strip()
+        highlights = str(item.get("highlights") or "").strip()
+        if any([school, major, degree, period, highlights]):
+            cleaned_education.append(
+                {
+                    "school": school[:120],
+                    "major": major[:120],
+                    "degree": degree[:120],
+                    "period": period[:60],
+                    "highlights": highlights[:240],
+                }
+            )
+
+    expected_count = profile.get("expected_experience_count")
+    try:
+        expected = int(expected_count)
+    except Exception:
+        expected = 1
+    expected = max(1, min(expected, 5))
+
+    return {
+        "template_code": _normalize_resume_craft_template_code(profile.get("template_code")),
+        "language": _normalize_resume_craft_language(profile.get("language")),
+        "photo_pref": _normalize_resume_craft_photo_pref(profile.get("photo_pref")),
+        "target_role": str(profile.get("target_role") or "").strip()[:120],
+        "jd_summary": str(profile.get("jd_summary") or "").strip()[:800],
+        "focus_points": str(profile.get("focus_points") or "").strip()[:600],
+        "tone_pref": str(profile.get("tone_pref") or "").strip()[:120],
+        "expected_experience_count": expected,
+        "personal_info": {
+            "name": str(personal.get("name") or "").strip()[:80],
+            "phone": str(personal.get("phone") or "").strip()[:40],
+            "email": str(personal.get("email") or "").strip()[:120],
+            "city": str(personal.get("city") or "").strip()[:80],
+            "links": _clean_list(personal.get("links"), limit=8),
+        },
+        "education": cleaned_education,
+        "skills": _clean_list(profile.get("skills"), limit=30),
+        "certificates": _clean_list(profile.get("certificates"), limit=20),
+    }
+
+
+def _normalize_experience_state(raw: Any) -> Dict[str, Any]:
+    state = raw if isinstance(raw, dict) else {}
+    drafts = state.get("drafts") if isinstance(state.get("drafts"), list) else []
+    finalized = state.get("finalized_experiences") if isinstance(state.get("finalized_experiences"), list) else []
+
+    def _clean_exp_list(items: List[Any], limit: int = 10) -> List[str]:
+        out: List[str] = []
+        for item in items[:limit]:
+            text = str(item or "").strip()
+            if text:
+                out.append(text[:2400])
+        return out
+
+    try:
+        current_index = int(state.get("current_index", 1))
+    except Exception:
+        current_index = 1
+    try:
+        followup_count = int(state.get("followup_count", 0))
+    except Exception:
+        followup_count = 0
+
+    return {
+        "current_index": max(1, current_index),
+        "followup_count": max(0, min(followup_count, 12)),
+        "drafts": _clean_exp_list(drafts, limit=20),
+        "finalized_experiences": _clean_exp_list(finalized, limit=20),
+    }
+
+
+def _build_step1_profile_context(profile: Dict[str, Any], template_code: str, language: str, photo_pref: str) -> str:
+    personal = profile.get("personal_info") or {}
+    edu = profile.get("education") or []
+    skills = profile.get("skills") or []
+    certs = profile.get("certificates") or []
+    lines = [
+        "【Step1 已定稿信息】",
+        f"- 模板编号: {template_code}",
+        f"- 语言: {language}",
+        f"- 照片偏好: {photo_pref}",
+        f"- 目标岗位: {profile.get('target_role') or '未填写'}",
+        f"- JD摘要: {profile.get('jd_summary') or '无'}",
+        f"- 姓名: {personal.get('name') or '未填写'}",
+        f"- 联系方式: 手机={personal.get('phone') or '未填写'} 邮箱={personal.get('email') or '未填写'} 城市={personal.get('city') or '未填写'}",
+        f"- 链接: {', '.join(personal.get('links') or []) or '无'}",
+        f"- 教育条目数: {len(edu)}",
+        f"- 技能: {', '.join(skills) if skills else '无'}",
+        f"- 证书: {', '.join(certs) if certs else '无'}",
+        f"- 突出偏好: {profile.get('focus_points') or '无'}",
+        f"- 语气偏好: {profile.get('tone_pref') or '无'}",
+        "- Step2 仅收集工作/项目经历，并围绕经历执行 Grill 深挖。",
+    ]
+    return "\n".join(lines)
+
+
+def _compose_experience_followup(
+    step1_profile: Dict[str, Any],
+    experience_state: Dict[str, Any],
+    latest_input: str,
+) -> str:
+    followup = int(experience_state.get("followup_count", 0))
+    idx = int(experience_state.get("current_index", 1))
+    target_role = str(step1_profile.get("target_role") or "目标岗位").strip() or "目标岗位"
+    latest = str(latest_input or "").strip()
+
+    if followup <= 0:
+        return (
+            f"我们进入第 {idx} 段经历的深挖。请按“场景-职责-行动-结果”描述，"
+            "并补充你在该经历里承担的核心职责。"
+        )
+    if followup == 1:
+        return (
+            f"这段经历很关键。请补充你遇到的挑战，以及你采取的关键行动。"
+            f"尽量贴近“{target_role}”的相关能力。"
+        )
+    return (
+        "最后请补充可量化结果（如效率提升、成本下降、交付时长、影响范围等）。"
+        "如果没有绝对数字，也请给出相对变化或可验证结果。"
+    )
+
+
+def _enforce_experience_only_reply(reply: str, fallback_question: str) -> str:
+    text = str(reply or "").strip()
+    if not text:
+        return fallback_question
+    if any(token in text for token in ["目标岗位", "教育", "技能", "联系方式", "证书", "语言", "模板"]):
+        return fallback_question
+    if not any(token in text for token in RESUME_CRAFT_ALLOWED_STEP2_ASK_TOKENS):
+        return fallback_question
+    return text
+
+
 def _validate_photo_data_url(photo_data_url: str) -> Tuple[bool, str]:
     value = str(photo_data_url or "").strip()
     if not value:
@@ -821,6 +992,71 @@ def careerforge_resume_craft_chat_turn():
     photo_uploaded = _normalize_bool(data.get("photo_uploaded"))
     history = data.get("history") or []
     history_text = _history_to_text(history, max_turns=24)
+
+    step1_profile_raw = data.get("step1_profile")
+    experience_state_raw = data.get("experience_state")
+    if isinstance(step1_profile_raw, dict):
+        step1_profile = _normalize_step1_profile(step1_profile_raw)
+        if template_code not in RESUME_CRAFT_TEMPLATE_MAP:
+            template_code = step1_profile["template_code"]
+        if language not in {"中文", "英文", "中英文双版"}:
+            language = step1_profile["language"]
+        if photo_pref not in {"放照片", "不放照片"}:
+            photo_pref = step1_profile["photo_pref"]
+
+        exp_state = _normalize_experience_state(experience_state_raw)
+        exp_state["drafts"].append(message[:2400])
+        exp_state["followup_count"] = int(exp_state["followup_count"]) + 1
+
+        expected_count = int(step1_profile.get("expected_experience_count") or 1)
+        expected_count = max(1, min(expected_count, 5))
+        action = "grill_followup"
+        render_ready = False
+
+        if exp_state["followup_count"] >= RESUME_CRAFT_GRILL_MAX_FOLLOWUPS:
+            merged = "\\n".join(exp_state["drafts"]).strip()[:3000]
+            if merged:
+                exp_state["finalized_experiences"].append(merged)
+            exp_state["drafts"] = []
+            exp_state["followup_count"] = 0
+            exp_state["current_index"] = int(exp_state["current_index"]) + 1
+            action = "experience_done"
+
+        if len(exp_state["finalized_experiences"]) >= expected_count:
+            render_ready = True
+            action = "finalize"
+
+        followup_question = _compose_experience_followup(step1_profile, exp_state, message)
+        dialog_payload = {
+            "profile_context": _build_step1_profile_context(step1_profile, template_code, language, photo_pref),
+            "history_text": history_text,
+            "user_input": message,
+            "next_prompt": followup_question,
+        }
+        model_reply = (ai_service.run_resume_craft_dialog(dialog_payload, runtime=runtime) or "").strip()
+        reply = _enforce_experience_only_reply(model_reply, followup_question)
+        if action == "finalize":
+            reply = "经历信息已完成收集，我将基于 Step1 与经历内容生成简历预览。"
+
+        missing_fields = [] if render_ready else ["experience"]
+        return jsonify(
+            {
+                "reply": reply,
+                "intent": "resume-craft",
+                "action": action,
+                "render_ready": render_ready,
+                "missing_fields": missing_fields,
+                "experience_state": exp_state,
+                    "meta": {
+                        **meta,
+                        "resume_craft_chat_turn_version": "2026-07-07-v5",
+                        "api_runtime_version": meta.get("api_runtime_version", ""),
+                    },
+                "error": "",
+            }
+        ), 200
+
+    # Legacy compatibility branch
     readiness = _evaluate_resume_craft_readiness(
         history=history,
         latest_user_input=message,
@@ -853,12 +1089,9 @@ def careerforge_resume_craft_chat_turn():
     elif "target_role" not in readiness["missing_fields"] and _is_target_role_prompt_reply(reply):
         reply = f"我已收到你的信息。{_next_resume_craft_prompt(readiness['missing_fields'])}"
 
-    # 强制兜底：目标岗位已确认后，任何“继续追问目标岗位”的回复都改写为下一字段。
     if "target_role" not in readiness["missing_fields"] and _is_target_role_prompt_reply(reply):
         reply = f"我已收到你的信息。{_next_resume_craft_prompt(readiness['missing_fields'])}"
 
-    # 最终兜底：若用户本轮看起来已经回答了岗位，且上一轮助手在问岗位，
-    # 则无条件移除 target_role，杜绝重复追问。
     if (
         "target_role" in readiness["missing_fields"]
         and _assistant_recently_asked_target_role(history)
@@ -875,7 +1108,11 @@ def careerforge_resume_craft_chat_turn():
             "action": "chat_turn",
             "render_ready": readiness["render_ready"],
             "missing_fields": readiness["missing_fields"],
-            "meta": {**meta, "resume_craft_chat_turn_version": "2026-07-07-v3"},
+            "meta": {
+                **meta,
+                "resume_craft_chat_turn_version": "2026-07-07-v5",
+                "api_runtime_version": meta.get("api_runtime_version", ""),
+            },
             "error": "",
         }
     ), 200
@@ -896,13 +1133,21 @@ def careerforge_resume_craft_render():
 
     history = data.get("history") or []
     history_text = _history_to_text(history, max_turns=32)
-    if not history_text.strip():
-        return jsonify({"error": "missing_history", "message": "请先和助手对话，再生成简历。"}), 400
+    step1_profile = _normalize_step1_profile(data.get("step1_profile") or {})
+    finalized_experiences = data.get("finalized_experiences")
+    if finalized_experiences is None and isinstance(data.get("experience_state"), dict):
+        finalized_experiences = (data.get("experience_state") or {}).get("finalized_experiences")
+    finalized_list = []
+    if isinstance(finalized_experiences, list):
+        finalized_list = [str(item or "").strip()[:2400] for item in finalized_experiences if str(item or "").strip()]
 
-    template_code = _normalize_resume_craft_template_code(data.get("template_code"))
+    if not history_text.strip() and not finalized_list:
+        return jsonify({"error": "missing_history", "message": "请先补充经历信息，再生成简历。"}), 400
+
+    template_code = _normalize_resume_craft_template_code(data.get("template_code") or step1_profile.get("template_code"))
     template_en, template_display = RESUME_CRAFT_TEMPLATE_MAP.get(template_code, RESUME_CRAFT_TEMPLATE_MAP["02"])
-    language = _normalize_resume_craft_language(data.get("language"))
-    photo_pref = _normalize_resume_craft_photo_pref(data.get("photo_pref"))
+    language = _normalize_resume_craft_language(data.get("language") or step1_profile.get("language"))
+    photo_pref = _normalize_resume_craft_photo_pref(data.get("photo_pref") or step1_profile.get("photo_pref"))
     photo_data_url = str(data.get("photo_data_url") or "").strip()
     if photo_pref == "放照片":
         ok, reason = _validate_photo_data_url(photo_data_url)
@@ -912,6 +1157,12 @@ def careerforge_resume_craft_render():
     templates = _load_resume_craft_templates()
     preview_snippet = _extract_preview_snippet(templates.get("preview_template", ""), template_code)
 
+    step1_context = _build_step1_profile_context(step1_profile, template_code, language, photo_pref)
+    experience_context = "\n".join([f"- 经历{i+1}: {item}" for i, item in enumerate(finalized_list)])
+    combined_history_text = history_text
+    if experience_context:
+        combined_history_text = (history_text + "\n\n【Step2 已定稿经历】\n" + experience_context).strip()
+
     html_payload = {
         "template_code": template_code,
         "template_en": template_en,
@@ -920,14 +1171,8 @@ def careerforge_resume_craft_render():
         "photo_pref": photo_pref,
         "base_template": templates.get("base_template", ""),
         "preview_snippet": preview_snippet,
-        "profile_context": (
-            "【页面参数（优先）】\n"
-            f"- 模板编号: {template_code}\n"
-            f"- 语言: {language}\n"
-            f"- 照片偏好: {photo_pref}\n"
-            "- 当前页面仅做从零生成简历，不切换到优化已有简历流程。"
-        ),
-        "history_text": history_text,
+        "profile_context": step1_context,
+        "history_text": combined_history_text,
         "photo_token": RESUME_CRAFT_PHOTO_TOKEN,
     }
 

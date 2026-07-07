@@ -184,7 +184,120 @@ def test_resume_craft_chat_turn_forces_role_capture_when_last_assistant_asks_rol
     body = resp.get_json()
     assert "target_role" not in body["missing_fields"]
     assert "教育背景" in body["reply"]
-    assert body["meta"]["resume_craft_chat_turn_version"] == "2026-07-07-v3"
+    assert body["meta"]["resume_craft_chat_turn_version"] == "2026-07-07-v5"
+
+
+def test_resume_craft_chat_turn_step1_profile_experience_only(monkeypatch):
+    Config.TURNSTILE_ENFORCE = False
+    Config.RATE_LIMIT_ENFORCE = False
+
+    monkeypatch.setattr(
+        routes.ai_service,
+        "run_resume_craft_dialog",
+        lambda payload, runtime=None: "请继续补充教育背景。",
+    )
+
+    client = _client()
+    resp = client.post(
+        "/api/careerforge/resume-craft/chat-turn",
+        json={
+            "message": "我负责搭建 RAG 检索服务。",
+            "history": [{"role": "assistant", "content": "请描述第一段经历。"}],
+            "step1_profile": {
+                "template_code": "02",
+                "language": "zh",
+                "photo_pref": "no_photo",
+                "target_role": "AI应用开发",
+                "personal_info": {"name": "A", "phone": "1", "email": "a@b.com", "city": "上海", "links": []},
+                "education": [{"school": "X", "major": "CS", "degree": "硕士", "period": "2020-2023", "highlights": ""}],
+                "skills": ["Python"],
+                "certificates": [],
+                "expected_experience_count": 1,
+            },
+            "experience_state": {"current_index": 1, "followup_count": 0, "drafts": [], "finalized_experiences": []},
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["action"] in {"grill_followup", "experience_done", "finalize"}
+    assert "experience_state" in body
+    assert "教育背景" not in body["reply"]
+    assert body["meta"]["resume_craft_chat_turn_version"] == "2026-07-07-v5"
+
+
+def test_resume_craft_chat_turn_step1_profile_auto_finalize_after_max_grill(monkeypatch):
+    Config.TURNSTILE_ENFORCE = False
+    Config.RATE_LIMIT_ENFORCE = False
+
+    monkeypatch.setattr(
+        routes.ai_service,
+        "run_resume_craft_dialog",
+        lambda payload, runtime=None: "请补充经历结果与量化指标。",
+    )
+
+    client = _client()
+    resp = client.post(
+        "/api/careerforge/resume-craft/chat-turn",
+        json={
+            "message": "结果是响应时延降低 35%。",
+            "history": [{"role": "assistant", "content": "请补充挑战和行动。"}],
+            "step1_profile": {
+                "template_code": "02",
+                "language": "zh",
+                "photo_pref": "no_photo",
+                "target_role": "AI应用开发",
+                "personal_info": {"name": "A", "phone": "1", "email": "a@b.com", "city": "上海", "links": []},
+                "education": [{"school": "X", "major": "CS", "degree": "硕士", "period": "2020-2023", "highlights": ""}],
+                "skills": ["Python"],
+                "certificates": [],
+                "expected_experience_count": 1,
+            },
+            "experience_state": {
+                "current_index": 1,
+                "followup_count": 2,
+                "drafts": ["我负责搭建 RAG 检索服务。", "挑战是并发抖动明显。"],
+                "finalized_experiences": [],
+            },
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["render_ready"] is True
+    assert body["action"] == "finalize"
+    assert body["experience_state"]["finalized_experiences"]
+
+
+def test_resume_craft_render_works_with_step1_profile_and_finalized_experiences(monkeypatch):
+    Config.TURNSTILE_ENFORCE = False
+    Config.RATE_LIMIT_ENFORCE = False
+
+    monkeypatch.setattr(
+        routes.ai_service,
+        "run_resume_craft_html",
+        lambda payload, runtime=None: "<!DOCTYPE html><html><body><h1>Resume</h1></body></html>",
+    )
+
+    client = _client()
+    resp = client.post(
+        "/api/careerforge/resume-craft/render",
+        json={
+            "step1_profile": {
+                "template_code": "02",
+                "language": "zh",
+                "photo_pref": "no_photo",
+                "target_role": "AI应用开发",
+                "personal_info": {"name": "A", "phone": "1", "email": "a@b.com", "city": "上海", "links": []},
+                "education": [{"school": "X", "major": "CS", "degree": "硕士", "period": "2020-2023", "highlights": ""}],
+                "skills": ["Python"],
+                "certificates": [],
+                "expected_experience_count": 1,
+            },
+            "finalized_experiences": ["我负责搭建 RAG 检索服务，将响应时延降低 35%。"],
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert "<!DOCTYPE html>" in body["report_html"]
 
 
 def test_resume_craft_render_returns_html(monkeypatch):

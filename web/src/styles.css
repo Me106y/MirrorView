@@ -864,6 +864,54 @@ a {
   margin-top: 6px;
 }
 
+.resume-craft-form-grid {
+  margin-top: 14px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.resume-craft-form-grid .resume-craft-control input,
+.resume-craft-form-grid .resume-craft-control textarea,
+.resume-craft-form-grid .resume-craft-control select {
+  width: 100%;
+  border: 1px solid rgba(142, 153, 165, 0.45);
+  border-radius: 10px;
+  min-height: 40px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.resume-craft-form-grid .resume-craft-control textarea {
+  min-height: 72px;
+  resize: vertical;
+}
+
+.resume-craft-education-wrap {
+  margin-top: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.resume-craft-education-wrap h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.resume-craft-edu-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 0.9fr 0.9fr 1.2fr;
+  gap: 8px;
+}
+
+.resume-craft-edu-row input {
+  border: 1px solid rgba(142, 153, 165, 0.45);
+  border-radius: 10px;
+  min-height: 40px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.92);
+}
+
 .resume-craft-next-btn {
   margin-top: 0;
   min-width: 136px;
@@ -1519,6 +1567,14 @@ textarea {
   }
 
   .resume-craft-step-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .resume-craft-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .resume-craft-edu-row {
     grid-template-columns: 1fr;
   }
 
