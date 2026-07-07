@@ -301,52 +301,82 @@ export function ResumeCraftPage() {
                 <span className="resume-craft-step-tag">Step 1 / 2</span>
                 <h2>先设置生成参数</h2>
                 <p>选择模板、语言和照片偏好，再进入对话收集信息。</p>
+                <div className="resume-craft-head-divider" />
               </header>
 
               <div className="resume-craft-step-grid">
                 <label className="resume-craft-control">
-                  <span>模板</span>
-                  <select value={templateCode} onChange={(e) => setTemplateCode(e.target.value)}>
-                    {TEMPLATE_OPTIONS.map((item) => (
-                      <option key={item.value} value={item.value}>
-                        {item.label}
-                      </option>
-                    ))}
-                  </select>
+                  <span className="resume-craft-control-label">模板</span>
+                  <div className="resume-craft-select-shell">
+                    <span className="resume-craft-select-icon" aria-hidden="true">
+                      TM
+                    </span>
+                    <select value={templateCode} onChange={(e) => setTemplateCode(e.target.value)}>
+                      {TEMPLATE_OPTIONS.map((item) => (
+                        <option key={item.value} value={item.value}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </label>
 
                 <label className="resume-craft-control">
-                  <span>语言</span>
-                  <select value={language} onChange={(e) => setLanguage(e.target.value)}>
-                    {LANGUAGE_OPTIONS.map((item) => (
-                      <option key={item.value} value={item.value}>
-                        {item.label}
-                      </option>
-                    ))}
-                  </select>
+                  <span className="resume-craft-control-label">语言</span>
+                  <div className="resume-craft-select-shell">
+                    <span className="resume-craft-select-icon" aria-hidden="true">
+                      LG
+                    </span>
+                    <select value={language} onChange={(e) => setLanguage(e.target.value)}>
+                      {LANGUAGE_OPTIONS.map((item) => (
+                        <option key={item.value} value={item.value}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </label>
 
                 <label className="resume-craft-control">
-                  <span>照片偏好</span>
-                  <select
-                    value={photoPref}
-                    onChange={(e) => {
-                      const next = e.target.value;
-                      setPhotoPref(next);
-                      if (next === "with_photo" && !photoDataUrl) {
-                        setPhotoHint("选择“放照片”后，必须上传 PNG/JPG 照片。");
-                      } else if (next === "no_photo") {
-                        setPhotoHint("");
-                      }
-                    }}
-                  >
-                    {PHOTO_OPTIONS.map((item) => (
-                      <option key={item.value} value={item.value}>
-                        {item.label}
-                      </option>
-                    ))}
-                  </select>
+                  <span className="resume-craft-control-label">照片偏好</span>
+                  <div className="resume-craft-select-shell">
+                    <span className="resume-craft-select-icon" aria-hidden="true">
+                      PH
+                    </span>
+                    <select
+                      value={photoPref}
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        setPhotoPref(next);
+                        if (next === "with_photo" && !photoDataUrl) {
+                          setPhotoHint("选择“放照片”后，必须上传 PNG/JPG 照片。");
+                        } else if (next === "no_photo") {
+                          setPhotoHint("");
+                        }
+                      }}
+                    >
+                      {PHOTO_OPTIONS.map((item) => (
+                        <option key={item.value} value={item.value}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </label>
+              </div>
+
+              <div className="resume-craft-step-illustration">
+                <div className="resume-craft-wireframe" aria-hidden="true">
+                  <div className="resume-craft-wireframe-head" />
+                  <div className="resume-craft-wireframe-line" />
+                  <div className="resume-craft-wireframe-line short" />
+                  <div className="resume-craft-wireframe-blocks">
+                    <span />
+                    <span />
+                    <span />
+                  </div>
+                </div>
+                <p>完成设置后，将进入 AI 对话收集信息并自动生成预览。</p>
               </div>
 
               {photoPref === "with_photo" ? (
@@ -368,8 +398,13 @@ export function ResumeCraftPage() {
               ) : null}
 
               <div className="resume-craft-step-actions">
-                <button type="button" className="primary-btn resume-craft-next-btn" onClick={onNextStep} disabled={!canGoNext}>
-                  下一步
+                <button
+                  type="button"
+                  className={`primary-btn resume-craft-next-btn${photoLoading ? " is-loading" : ""}`}
+                  onClick={onNextStep}
+                  disabled={!canGoNext}
+                >
+                  {photoLoading ? "处理中..." : "下一步"}
                 </button>
               </div>
             </article>
@@ -380,6 +415,7 @@ export function ResumeCraftPage() {
                   <span className="resume-craft-step-tag">Step 2 / 2</span>
                   <h2>Resume Craft Agent</h2>
                   <p>通过多轮对话收集信息，系统达到完整度后会自动生成简历预览。</p>
+                  <div className="resume-craft-head-divider" />
                 </div>
                 <button type="button" className="ghost-btn resume-craft-back-btn" onClick={() => setStep(1)}>
                   上一步
@@ -387,19 +423,27 @@ export function ResumeCraftPage() {
               </header>
 
               <div className="resume-craft-param-brief">
-                <span>模板 {templateCode}</span>
-                <span>{language === "zh" ? "中文" : language === "en" ? "英文" : "中英文双版"}</span>
-                <span>{photoPref === "with_photo" ? "放照片" : "不放照片"}</span>
+                <span className="resume-craft-pill template">模板 {templateCode}</span>
+                <span className="resume-craft-pill language">{language === "zh" ? "中文" : language === "en" ? "英文" : "中英文双版"}</span>
+                <span className="resume-craft-pill photo">{photoPref === "with_photo" ? "放照片" : "不放照片"}</span>
               </div>
 
               <div className="chat-log resume-craft-chat-log">
                 {messages.map((msg, idx) => (
                   <div key={`${msg.role}-${idx}`} className={`msg ${msg.role}`}>
+                    {msg.role === "assistant" ? (
+                      <span className="msg-ai-avatar" aria-hidden="true">
+                        AI
+                      </span>
+                    ) : null}
                     <span>{msg.content}</span>
                   </div>
                 ))}
                 {chatLoading ? (
                   <div className="msg assistant">
+                    <span className="msg-ai-avatar" aria-hidden="true">
+                      AI
+                    </span>
                     <span>正在思考，请稍候...</span>
                   </div>
                 ) : null}
@@ -411,7 +455,7 @@ export function ResumeCraftPage() {
                   onChange={(e) => setInput(e.target.value)}
                   placeholder="例如：我在上一家公司负责 RAG 服务落地，支持 8 个业务场景"
                 />
-                <button className="primary-btn" disabled={!input.trim() || chatLoading || renderLoading}>
+                <button className="primary-btn resume-craft-send-btn" disabled={!input.trim() || chatLoading || renderLoading}>
                   {chatLoading ? "发送中..." : "发送"}
                 </button>
               </form>
@@ -427,7 +471,17 @@ export function ResumeCraftPage() {
               </div>
 
               <section className="resume-craft-output">
-                {result.kind === "idle" ? <p className="muted">达到完整度后会自动在这里展示简历预览。</p> : null}
+                {result.kind === "idle" ? (
+                  <div className="resume-craft-preview-placeholder">
+                    <div className="resume-craft-preview-wire" aria-hidden="true">
+                      <span className="head" />
+                      <span className="line" />
+                      <span className="line short" />
+                      <span className="line" />
+                    </div>
+                    <p>达到完整度后，这里会展示完整简历预览。</p>
+                  </div>
+                ) : null}
                 {result.kind === "error" ? <p className="resume-result-error">{result.message}</p> : null}
                 {result.kind === "report" ? (
                   <>
