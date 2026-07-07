@@ -385,7 +385,11 @@ You MUST follow the provided Skill specification when answering.
                 yield chunk
         except Exception as e:
             logger.error("resume-craft dialog stream failed: %s", e)
-            yield "我已收到你的信息。请先补充目标岗位这个字段。"
+            next_prompt = (payload.get("next_prompt") or "").strip()
+            if next_prompt:
+                yield f"我已收到你的信息。{next_prompt}"
+            else:
+                yield "我已收到你的信息。请继续补充下一项字段信息。"
 
     def run_resume_craft_dialog(self, payload: dict) -> str:
         if self.llm is None:

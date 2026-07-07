@@ -13,6 +13,26 @@ export const defaultSettings: ModelSettings = {
   apiBaseUrl: "/api"
 };
 
+function normalizeApiBaseUrl(value: unknown): string {
+  const raw = String(value ?? "").trim();
+  if (!raw) {
+    return "/api";
+  }
+
+  // Keep same-origin default in production to avoid stale legacy endpoints
+  // stored in localStorage from older builds.
+  if (raw.startsWith("/")) {
+    return raw;
+  }
+
+  // Allow local absolute URLs for developer debugging only.
+  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/.*)?$/i.test(raw)) {
+    return raw;
+  }
+
+  return "/api";
+}
+
 export function loadSettings(): ModelSettings {
   try {
     const raw = localStorage.getItem(MODEL_SETTINGS_KEY);
@@ -20,9 +40,13 @@ export function loadSettings(): ModelSettings {
       return defaultSettings;
     }
     const parsed = JSON.parse(raw) as Partial<ModelSettings>;
-    return {
+    const merged = {
       ...defaultSettings,
       ...parsed
+    };
+    return {
+      ...merged,
+      apiBaseUrl: normalizeApiBaseUrl(merged.apiBaseUrl),
     };
   } catch {
     return defaultSettings;

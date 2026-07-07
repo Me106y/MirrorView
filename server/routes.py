@@ -437,6 +437,32 @@ def _has_any_keyword(text_lower: str, keywords: List[str]) -> bool:
     return any(keyword.lower() in text_lower for keyword in keywords)
 
 
+def _extract_target_role_from_turns(user_turns: List[str]) -> str:
+    for raw in reversed(user_turns):
+        turn = str(raw or "").strip()
+        if not turn:
+            continue
+        labeled = re.search(
+            r"(?:目标岗位|求职岗位|应聘岗位|岗位|职位)\s*[:：]\s*([^\n，。,；;]+)",
+            turn,
+            re.IGNORECASE,
+        )
+        if labeled:
+            value = labeled.group(1).strip()
+            if value:
+                return value[:80]
+
+    for raw in reversed(user_turns):
+        turn = str(raw or "").strip()
+        low = turn.lower()
+        if not turn:
+            continue
+        if any(marker in low for marker in RESUME_CRAFT_ROLE_HINTS) and len(turn) <= 64:
+            return turn[:80]
+
+    return ""
+
+
 def _evaluate_resume_craft_readiness(
     history: Any,
     latest_user_input: str,
@@ -461,13 +487,14 @@ def _evaluate_resume_craft_readiness(
 
     combined_text_lower = "\n".join(user_turns).lower()
 
-    # 目标岗位识别：任意用户轮次命中“岗位关键词/岗位短语特征”都视为已填写。
+    # 目标岗位识别：优先结构化提取，其次关键词/岗位短语特征。
+    extracted_target_role = _extract_target_role_from_turns(user_turns)
     role_hint_in_any_turn = any(
         any(marker in turn.lower() for marker in RESUME_CRAFT_ROLE_HINTS)
         for turn in user_turns
     )
     short_role_phrase_in_any_turn = any(len(turn.strip()) <= 32 for turn in user_turns)
-    target_role_provided = (
+    target_role_provided = bool(extracted_target_role) or (
         _has_any_keyword(combined_text_lower, RESUME_CRAFT_READY_KEYWORDS["target_role"])
         or role_hint_in_any_turn
         or short_role_phrase_in_any_turn
@@ -495,6 +522,44 @@ def _next_resume_craft_prompt(missing_fields: List[str]) -> str:
         if field in RESUME_CRAFT_FIELD_PROMPTS:
             return RESUME_CRAFT_FIELD_PROMPTS[field]
     return "请继续补充下一项字段信息。"
+
+
+def _is_target_role_prompt_reply(text: str) -> bool:
+    t = str(text or "").strip()
+    if not t:
+        return False
+    has_target_role = any(token in t for token in ["目标岗位", "求职岗位", "岗位", "职位", "第一个字段"])
+    has_ask = any(token in t for token in ["补充", "告诉", "填写", "提供", "先", "请", "需要"])
+    return has_target_role and has_ask
+
+
+def _assistant_recently_asked_target_role(history: Any, max_turns: int = 6) -> bool:
+    if not isinstance(history, list):
+        return False
+    for item in reversed(history[-max_turns:]):
+        if not isinstance(item, dict):
+            continue
+        role_raw = str(item.get("role") or "").strip().lower()
+        if role_raw != "assistant":
+            continue
+        content = str(item.get("content") or "").strip()
+        if not content:
+            continue
+        if any(token in content for token in ["目标岗位", "求职岗位", "岗位", "职位", "第一个字段"]):
+            return True
+    return False
+
+
+def _looks_like_target_role_answer(message: str) -> bool:
+    text = str(message or "").strip()
+    if not text:
+        return False
+    low = text.lower()
+    if re.search(r"(?:目标岗位|求职岗位|岗位|职位)\s*[:：]\s*", text):
+        return True
+    if any(marker in low for marker in RESUME_CRAFT_ROLE_HINTS) and len(text) <= 64:
+        return True
+    return False
 
 
 def _validate_photo_data_url(photo_data_url: str) -> Tuple[bool, str]:
@@ -764,20 +829,43 @@ def careerforge_resume_craft_chat_turn():
         photo_pref=photo_pref,
         photo_uploaded=photo_uploaded,
     )
+    user_turns = _resume_craft_user_turns(history, latest_user_input=message, max_turns=32)
+    extracted_target_role = _extract_target_role_from_turns(user_turns)
+    role_context_line = f"- 已确认目标岗位: {extracted_target_role}\n" if extracted_target_role else ""
+
     control_context = (
         "【页面参数（优先）】\n"
         f"- 模板编号: {template_code}\n"
         f"- 语言: {language}\n"
         f"- 照片偏好: {photo_pref}\n"
+        f"{role_context_line}"
         "- 当前页面仅做从零生成简历，不切换到优化已有简历流程。"
     )
     dialog_payload = {
         "profile_context": control_context,
         "history_text": history_text,
         "user_input": message,
+        "next_prompt": _next_resume_craft_prompt(readiness["missing_fields"]),
     }
     reply = (ai_service.run_resume_craft_dialog(dialog_payload, runtime=runtime) or "").strip()
     if not reply:
+        reply = f"我已收到你的信息。{_next_resume_craft_prompt(readiness['missing_fields'])}"
+    elif "target_role" not in readiness["missing_fields"] and _is_target_role_prompt_reply(reply):
+        reply = f"我已收到你的信息。{_next_resume_craft_prompt(readiness['missing_fields'])}"
+
+    # 强制兜底：目标岗位已确认后，任何“继续追问目标岗位”的回复都改写为下一字段。
+    if "target_role" not in readiness["missing_fields"] and _is_target_role_prompt_reply(reply):
+        reply = f"我已收到你的信息。{_next_resume_craft_prompt(readiness['missing_fields'])}"
+
+    # 最终兜底：若用户本轮看起来已经回答了岗位，且上一轮助手在问岗位，
+    # 则无条件移除 target_role，杜绝重复追问。
+    if (
+        "target_role" in readiness["missing_fields"]
+        and _assistant_recently_asked_target_role(history)
+        and _looks_like_target_role_answer(message)
+    ):
+        readiness["missing_fields"] = [field for field in readiness["missing_fields"] if field != "target_role"]
+        readiness["render_ready"] = len(readiness["missing_fields"]) == 0
         reply = f"我已收到你的信息。{_next_resume_craft_prompt(readiness['missing_fields'])}"
 
     return jsonify(
@@ -787,7 +875,7 @@ def careerforge_resume_craft_chat_turn():
             "action": "chat_turn",
             "render_ready": readiness["render_ready"],
             "missing_fields": readiness["missing_fields"],
-            "meta": meta,
+            "meta": {**meta, "resume_craft_chat_turn_version": "2026-07-07-v3"},
             "error": "",
         }
     ), 200

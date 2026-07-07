@@ -11,6 +11,20 @@ interface ApiEnvelope<T> {
   };
 }
 
+function normalizeApiBaseUrl(value: string): string {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return "/api";
+  }
+  if (raw.startsWith("/")) {
+    return raw;
+  }
+  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/.*)?$/i.test(raw)) {
+    return raw;
+  }
+  return "/api";
+}
+
 function buildRuntime(settings: ModelSettings) {
   return {
     mode: "platform",
@@ -77,7 +91,8 @@ export async function callCareerforgeSkill<T>(
     runtime,
     turnstile_token: settings.turnstileToken || ""
   };
-  const url = `${settings.apiBaseUrl}${endpoint}`;
+  const base = normalizeApiBaseUrl(settings.apiBaseUrl);
+  const url = `${base}${endpoint}`;
   return postJson<T>(url, body);
 }
 
@@ -107,6 +122,7 @@ export async function callCareerforgeSkillMultipart<T>(
   form.append("runtime", JSON.stringify(runtime));
   form.append("turnstile_token", settings.turnstileToken || "");
 
-  const url = `${settings.apiBaseUrl}${endpoint}`;
+  const base = normalizeApiBaseUrl(settings.apiBaseUrl);
+  const url = `${base}${endpoint}`;
   return postForm<T>(url, form);
 }

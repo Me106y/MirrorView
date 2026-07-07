@@ -132,6 +132,61 @@ def test_resume_craft_chat_turn_returns_ready_when_required_fields_present(monke
     assert body["missing_fields"] == []
 
 
+def test_resume_craft_chat_turn_rewrites_target_role_reask_when_role_already_provided(monkeypatch):
+    Config.TURNSTILE_ENFORCE = False
+    Config.RATE_LIMIT_ENFORCE = False
+
+    monkeypatch.setattr(
+        routes.ai_service,
+        "run_resume_craft_dialog",
+        lambda payload, runtime=None: "我已收到你的信息。请先补充目标岗位这个字段。",
+    )
+
+    client = _client()
+    resp = client.post(
+        "/api/careerforge/resume-craft/chat-turn",
+        json={
+            "message": "AI应用开发",
+            "history": [{"role": "assistant", "content": "我们先从第一个字段开始：请告诉我你的目标岗位。"}],
+            "template_code": "02",
+            "language": "zh",
+            "photo_pref": "no_photo",
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert "目标岗位" not in body["missing_fields"]
+    assert "教育背景" in body["reply"]
+
+
+def test_resume_craft_chat_turn_forces_role_capture_when_last_assistant_asks_role(monkeypatch):
+    Config.TURNSTILE_ENFORCE = False
+    Config.RATE_LIMIT_ENFORCE = False
+
+    monkeypatch.setattr(
+        routes.ai_service,
+        "run_resume_craft_dialog",
+        lambda payload, runtime=None: "我已收到你的信息。请先补充目标岗位这个字段。",
+    )
+
+    client = _client()
+    resp = client.post(
+        "/api/careerforge/resume-craft/chat-turn",
+        json={
+            "message": "AI应用开发",
+            "history": [{"role": "assistant", "content": "我们先从第一个字段开始：请告诉我你的目标岗位。"}],
+            "template_code": "02",
+            "language": "zh",
+            "photo_pref": "no_photo",
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert "target_role" not in body["missing_fields"]
+    assert "教育背景" in body["reply"]
+    assert body["meta"]["resume_craft_chat_turn_version"] == "2026-07-07-v3"
+
+
 def test_resume_craft_render_returns_html(monkeypatch):
     Config.TURNSTILE_ENFORCE = False
     Config.RATE_LIMIT_ENFORCE = False
