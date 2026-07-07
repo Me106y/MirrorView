@@ -333,6 +333,20 @@ class AIService:
                 "message": "Model runtime call failed.",
             }
 
+    def run_resume_craft_dialog(self, payload, runtime: Optional[Dict[str, Any]] = None):
+        try:
+            return self._build_runtime_agent(runtime).run_resume_craft_dialog(payload)
+        except Exception as e:
+            logger.error("run_resume_craft_dialog runtime error: %s", e)
+            return "简历助手暂时不可用，请稍后重试。"
+
+    def run_resume_craft_html(self, payload, runtime: Optional[Dict[str, Any]] = None):
+        try:
+            return self._build_runtime_agent(runtime).run_resume_craft_html(payload)
+        except Exception as e:
+            logger.error("run_resume_craft_html runtime error: %s", e)
+            return ""
+
     def run_cover_letter(self, payload, runtime: Optional[Dict[str, Any]] = None):
         try:
             return self._build_runtime_agent(runtime).run_cover_letter(payload)

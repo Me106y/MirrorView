@@ -12,7 +12,10 @@ from datetime import datetime
 import uuid
 import tempfile
 import os
-from typing import Any, Dict, Optional, Tuple
+import re
+from functools import lru_cache
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 api = Blueprint('api', __name__)
 
@@ -25,6 +28,16 @@ HIGH_COST_ENDPOINTS = {
     "resume-craft",
     "cover-letter",
     "mock-interview",
+}
+
+RESUME_CRAFT_TEMPLATE_MAP: Dict[str, Tuple[str, str]] = {
+    "01": ("Editorial", "Editorial 杂志编辑风"),
+    "02": ("Minimal", "Minimal 极简主义"),
+    "03": ("Sidebar Navy", "Sidebar Navy 深蓝双栏"),
+    "04": ("Sidebar Dark", "Sidebar Dark 深灰左栏"),
+    "05": ("Dark Header", "Dark Header 深色头部"),
+    "06": ("Clean Teal", "Clean Teal 清新青色"),
+    "07": ("Elegant", "Elegant 优雅对称"),
 }
 
 
@@ -175,6 +188,119 @@ def _guard_high_cost_request(endpoint_name: str, data: Dict[str, Any]) -> Option
     if allowed:
         return None
     return err, status_code
+
+
+def _resolve_repo_root() -> Path:
+    current = Path(__file__).resolve()
+    for parent in current.parents:
+        if (parent / "skills").exists() and (parent / "server").exists():
+            return parent
+    return current.parents[2]
+
+
+REPO_ROOT = _resolve_repo_root()
+RESUME_CRAFT_DIR = REPO_ROOT / "skills" / "CareerForge" / "skills" / "resume-craft"
+RESUME_CRAFT_BASE_TEMPLATE_FILE = RESUME_CRAFT_DIR / "templates" / "resume-template.html"
+RESUME_CRAFT_PREVIEW_TEMPLATE_FILE = RESUME_CRAFT_DIR / "templates" / "CareerForge-模板预览.html"
+
+
+@lru_cache(maxsize=1)
+def _load_resume_craft_templates() -> Dict[str, str]:
+    base_template = ""
+    preview_template = ""
+    try:
+        if RESUME_CRAFT_BASE_TEMPLATE_FILE.exists():
+            base_template = RESUME_CRAFT_BASE_TEMPLATE_FILE.read_text(encoding="utf-8", errors="ignore")
+    except Exception as e:
+        logger.warning("failed to load resume-craft base template: %s", e)
+
+    try:
+        if RESUME_CRAFT_PREVIEW_TEMPLATE_FILE.exists():
+            preview_template = RESUME_CRAFT_PREVIEW_TEMPLATE_FILE.read_text(encoding="utf-8", errors="ignore")
+    except Exception as e:
+        logger.warning("failed to load resume-craft preview template: %s", e)
+
+    return {"base_template": base_template, "preview_template": preview_template}
+
+
+def _normalize_resume_craft_template_code(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return "02"
+    m = re.search(r"([1-7])", text)
+    if not m:
+        return "02"
+    return f"0{m.group(1)}"
+
+
+def _normalize_resume_craft_language(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    if text in {"en", "english", "英文"}:
+        return "英文"
+    if text in {"both", "zh-en", "zh_en", "双语", "中英文", "中英文双版"}:
+        return "中英文双版"
+    return "中文"
+
+
+def _normalize_resume_craft_photo_pref(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    if text in {"with_photo", "with-photo", "photo", "yes", "1", "放照片", "放"}:
+        return "放照片"
+    return "不放照片"
+
+
+def _history_to_text(history: Any, max_turns: int = 32) -> str:
+    if not isinstance(history, list):
+        return ""
+    lines: List[str] = []
+    for item in history[-max_turns:]:
+        if not isinstance(item, dict):
+            continue
+        role_raw = str(item.get("role") or "").strip().lower()
+        role = "用户" if role_raw == "user" else "助手"
+        content = str(item.get("content") or "").strip()
+        if not content:
+            continue
+        lines.append(f"{role}：{content}")
+    return "\n".join(lines)
+
+
+def _extract_preview_snippet(preview_html: str, template_code: str) -> str:
+    if not preview_html:
+        return ""
+    try:
+        idx = int(template_code)
+    except Exception:
+        idx = 2
+    css_marker = f"/* == T{idx}:"
+    css_start = preview_html.find(css_marker)
+    css_part = preview_html[css_start:css_start + 2500] if css_start != -1 else ""
+
+    card_marker = f"<!-- T{idx}"
+    card_start = preview_html.find(card_marker)
+    card_part = preview_html[card_start:card_start + 3500] if card_start != -1 else ""
+    return (css_part + "\n\n" + card_part).strip()[:5000]
+
+
+def _extract_html_document(text: str) -> str:
+    raw = (text or "").strip()
+    if not raw:
+        return ""
+
+    fenced = re.search(r"```(?:html)?\s*(.*?)```", raw, re.IGNORECASE | re.DOTALL)
+    candidate = fenced.group(1).strip() if fenced else raw
+
+    matched = re.search(r"(?is)<!doctype\s+html.*?</html>", candidate)
+    if matched:
+        return matched.group(0).strip()
+
+    matched = re.search(r"(?is)<html.*?</html>", candidate)
+    if matched:
+        doc = matched.group(0).strip()
+        if "<!doctype" not in doc.lower():
+            doc = "<!DOCTYPE html>\n" + doc
+        return doc
+    return ""
 
 @api.route('/user/<int:user_id>/upload_resume', methods=['POST'])
 def upload_resume(user_id):
@@ -335,6 +461,135 @@ def careerforge_resume_craft():
                 "Built optimized resume content",
                 "Prepared visual style and next actions",
             ],
+        }
+    ), 200
+
+
+@api.route('/careerforge/resume-craft/chat-turn', methods=['POST'])
+def careerforge_resume_craft_chat_turn():
+    data = _coerce_request_data()
+    runtime, runtime_error, meta = _resolve_runtime(data)
+    if runtime_error:
+        payload, status = runtime_error
+        return jsonify(payload), status
+
+    guard_error = _guard_high_cost_request("resume-craft", data)
+    if guard_error:
+        payload, status = guard_error
+        return jsonify(payload), status
+
+    message = (data.get("message") or "").strip()
+    if not message:
+        return jsonify(
+            {
+                "reply": "请先输入消息内容。",
+                "intent": "resume-craft",
+                "action": "noop",
+                "meta": meta,
+                "error": "empty_message",
+            }
+        ), 400
+
+    template_code = _normalize_resume_craft_template_code(data.get("template_code"))
+    language = _normalize_resume_craft_language(data.get("language"))
+    photo_pref = _normalize_resume_craft_photo_pref(data.get("photo_pref"))
+    history_text = _history_to_text(data.get("history") or [], max_turns=24)
+    control_context = (
+        "【页面参数（优先）】\n"
+        f"- 模板编号: {template_code}\n"
+        f"- 语言: {language}\n"
+        f"- 照片偏好: {photo_pref}\n"
+        "- 当前页面仅做从零生成简历，不切换到优化已有简历流程。"
+    )
+    dialog_payload = {
+        "profile_context": control_context,
+        "history_text": history_text,
+        "user_input": message,
+    }
+    reply = (ai_service.run_resume_craft_dialog(dialog_payload, runtime=runtime) or "").strip()
+    if not reply:
+        reply = "我已收到你的信息。请继续补充你的教育背景、项目经历和技能情况。"
+
+    return jsonify(
+        {
+            "reply": reply,
+            "intent": "resume-craft",
+            "action": "chat_turn",
+            "meta": meta,
+            "error": "",
+        }
+    ), 200
+
+
+@api.route('/careerforge/resume-craft/render', methods=['POST'])
+def careerforge_resume_craft_render():
+    data = _coerce_request_data()
+    runtime, runtime_error, meta = _resolve_runtime(data)
+    if runtime_error:
+        payload, status = runtime_error
+        return jsonify(payload), status
+
+    guard_error = _guard_high_cost_request("resume-craft", data)
+    if guard_error:
+        payload, status = guard_error
+        return jsonify(payload), status
+
+    history = data.get("history") or []
+    history_text = _history_to_text(history, max_turns=32)
+    if not history_text.strip():
+        return jsonify({"error": "missing_history", "message": "请先和助手对话，再生成简历。"}), 400
+
+    template_code = _normalize_resume_craft_template_code(data.get("template_code"))
+    template_en, template_display = RESUME_CRAFT_TEMPLATE_MAP.get(template_code, RESUME_CRAFT_TEMPLATE_MAP["02"])
+    language = _normalize_resume_craft_language(data.get("language"))
+    photo_pref = _normalize_resume_craft_photo_pref(data.get("photo_pref"))
+    templates = _load_resume_craft_templates()
+    preview_snippet = _extract_preview_snippet(templates.get("preview_template", ""), template_code)
+
+    html_payload = {
+        "template_code": template_code,
+        "template_en": template_en,
+        "template_display": template_display,
+        "language": language,
+        "photo_pref": photo_pref,
+        "base_template": templates.get("base_template", ""),
+        "preview_snippet": preview_snippet,
+        "profile_context": (
+            "【页面参数（优先）】\n"
+            f"- 模板编号: {template_code}\n"
+            f"- 语言: {language}\n"
+            f"- 照片偏好: {photo_pref}\n"
+            "- 当前页面仅做从零生成简历，不切换到优化已有简历流程。"
+        ),
+        "history_text": history_text,
+    }
+
+    raw_html = ai_service.run_resume_craft_html(html_payload, runtime=runtime)
+    report_html = _extract_html_document(raw_html)
+    if not report_html:
+        strict_payload = dict(html_payload)
+        strict_payload["extra_instruction"] = (
+            "再次强调：仅输出完整HTML文档。必须包含<!DOCTYPE html>和</html>，"
+            "不要输出解释文本。"
+        )
+        report_html = _extract_html_document(ai_service.run_resume_craft_html(strict_payload, runtime=runtime))
+
+    if not report_html:
+        return jsonify(
+            {
+                "error": "render_failed",
+                "message": "模型未返回有效 HTML，请继续补充信息后重试。",
+                "meta": meta,
+            }
+        ), 500
+
+    report_name = f"resume-craft-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}.html"
+    return jsonify(
+        {
+            "report_name": report_name,
+            "report_html": report_html,
+            "meta": meta,
+            "error": "",
         }
     ), 200
 
