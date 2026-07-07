@@ -365,9 +365,9 @@ You MUST follow the provided Skill specification when answering.
 
 [运行约束]
 1) 始终围绕简历生成，不跑题。
-2) 每轮最多追问 2-3 个问题。
+2) 每轮只追问 1 个字段，禁止一次询问多个字段。
 3) 不编造经历，不夸大资历。
-4) 若用户尚未明确模板/语言/照片偏好，优先引导补齐。
+4) 模板/语言/照片偏好已在页面第一步确定，禁止再次询问这三项。
 5) 不输出 JSON，不输出代码块。
 """
         )
@@ -384,7 +384,7 @@ You MUST follow the provided Skill specification when answering.
                 yield chunk
         except Exception as e:
             logger.error("resume-craft dialog stream failed: %s", e)
-            yield "我已收到你的信息。请继续补充目标岗位、模板编号、语言和照片偏好。"
+            yield "我已收到你的信息。请先补充目标岗位这个字段。"
 
     def run_resume_craft_dialog(self, payload: dict) -> str:
         if self.llm is None:

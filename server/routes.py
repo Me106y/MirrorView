@@ -722,7 +722,7 @@ def careerforge_resume_craft_chat_turn():
     }
     reply = (ai_service.run_resume_craft_dialog(dialog_payload, runtime=runtime) or "").strip()
     if not reply:
-        reply = "我已收到你的信息。请继续补充你的教育背景、项目经历和技能情况。"
+        reply = "我已收到你的信息。请先补充目标岗位这个字段。"
 
     return jsonify(
         {

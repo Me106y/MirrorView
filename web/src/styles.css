@@ -906,6 +906,17 @@ a {
   min-width: 96px;
 }
 
+.resume-craft-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.resume-craft-restart-btn {
+  margin-top: 0;
+  min-width: 96px;
+}
+
 .resume-craft-param-brief {
   display: flex;
   flex-wrap: wrap;
@@ -1518,7 +1529,17 @@ textarea {
     flex-wrap: wrap;
   }
 
+  .resume-craft-head-actions {
+    width: 100%;
+  }
+
   .resume-craft-back-btn {
     width: 100%;
+    flex: 1 1 0;
+  }
+
+  .resume-craft-restart-btn {
+    width: 100%;
+    flex: 1 1 0;
   }
 }

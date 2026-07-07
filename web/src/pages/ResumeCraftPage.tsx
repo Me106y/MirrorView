@@ -32,8 +32,7 @@ const PHOTO_OPTIONS = [
   { value: "with_photo", label: "放照片" }
 ];
 
-const INITIAL_MESSAGE =
-  "我们从零开始制作简历。请先告诉我目标岗位、教育背景、工作或项目经历，以及想重点突出的能力。";
+const INITIAL_MESSAGE = "我们先从第一个字段开始：请告诉我你的目标岗位。";
 
 const MISSING_LABEL_MAP: Record<string, string> = {
   conversation_turns: "至少两轮用户信息",
@@ -287,6 +286,18 @@ export function ResumeCraftPage() {
     setStep(2);
   };
 
+  const onRestartChat = () => {
+    if (chatLoading || renderLoading) {
+      return;
+    }
+    setMessages([{ role: "assistant", content: INITIAL_MESSAGE }]);
+    setInput("");
+    setMissingFields([]);
+    setResult({ kind: "idle", reportHtml: "", message: "" });
+    setReportName("resume-craft-report.html");
+    setFrameHeight(980);
+  };
+
   const readableMissingFields = missingFields
     .map((item) => MISSING_LABEL_MAP[item] || item)
     .filter((item, index, arr) => arr.indexOf(item) === index);
@@ -417,9 +428,14 @@ export function ResumeCraftPage() {
                   <p>通过多轮对话收集信息，系统达到完整度后会自动生成简历预览。</p>
                   <div className="resume-craft-head-divider" />
                 </div>
-                <button type="button" className="ghost-btn resume-craft-back-btn" onClick={() => setStep(1)}>
-                  上一步
-                </button>
+                <div className="resume-craft-head-actions">
+                  <button type="button" className="ghost-btn resume-craft-back-btn" onClick={() => setStep(1)}>
+                    上一步
+                  </button>
+                  <button type="button" className="ghost-btn resume-craft-restart-btn" onClick={onRestartChat} disabled={chatLoading || renderLoading}>
+                    重新开始
+                  </button>
+                </div>
               </header>
 
               <div className="resume-craft-param-brief">
