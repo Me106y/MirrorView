@@ -2,6 +2,7 @@ import { FormEvent, SyntheticEvent, useEffect, useMemo, useRef, useState } from 
 import { gsap } from "gsap";
 import { callCareerforgeSkill } from "../lib/api";
 import { useModelSettings } from "../context/ModelSettingsContext";
+import { FRONTEND_BUILD_VERSION } from "../buildInfo";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
@@ -47,6 +48,95 @@ const MISSING_LABEL_MAP: Record<string, string> = {
   photo_pref: "照片偏好"
 };
 
+const FIELD_PROMPT_MAP: Record<string, string> = {
+  target_role: "请先补充目标岗位这个字段（例如：AI 应用开发工程师）。",
+  education: "请补充教育背景这个字段（学校/专业/学位/时间）。",
+  experience: "请补充项目或工作经历这个字段（公司/项目/职责/成果）。",
+  skills: "请补充技能与工具这个字段（技术栈/工具/熟练度）。",
+  contact: "请补充联系方式这个字段（邮箱/电话/城市/GitHub 等）。",
+  photo: "你选择了放照片，请先上传 PNG/JPG 照片。",
+  conversation_turns: "请继续补充信息，我们每轮只收集一个字段。",
+};
+
+const FIELD_ORDER = ["target_role", "education", "experience", "skills", "contact", "photo", "conversation_turns"];
+const CORE_FIELD_ORDER = ["target_role", "education", "experience", "skills", "contact"];
+
+function nextPromptFromMissing(missingFields: string[]) {
+  for (const field of FIELD_ORDER) {
+    if (missingFields.includes(field) && FIELD_PROMPT_MAP[field]) {
+      return FIELD_PROMPT_MAP[field];
+    }
+  }
+  for (const field of missingFields) {
+    if (FIELD_PROMPT_MAP[field]) {
+      return FIELD_PROMPT_MAP[field];
+    }
+  }
+  return "请继续补充下一项字段信息。";
+}
+
+function isTargetRolePromptReply(text: string) {
+  const content = String(text || "").trim();
+  if (!content) {
+    return false;
+  }
+  const hasTargetRole = ["目标岗位", "求职岗位", "岗位", "职位", "第一个字段"].some((token) =>
+    content.includes(token)
+  );
+  const hasAsk = ["补充", "告诉", "填写", "提供", "先", "请", "需要"].some((token) => content.includes(token));
+  return hasTargetRole && hasAsk;
+}
+
+function assistantRecentlyAskedTargetRole(history: Msg[]) {
+  for (let i = history.length - 1; i >= Math.max(0, history.length - 6); i -= 1) {
+    const msg = history[i];
+    if (!msg || msg.role !== "assistant") {
+      continue;
+    }
+    if (["目标岗位", "求职岗位", "岗位", "职位", "第一个字段"].some((token) => msg.content.includes(token))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function looksLikeTargetRoleAnswer(text: string) {
+  const value = String(text || "").trim();
+  if (!value) {
+    return false;
+  }
+  if (/(?:目标岗位|求职岗位|岗位|职位)\s*[:：]\s*/i.test(value)) {
+    return true;
+  }
+  const lower = value.toLowerCase();
+  const roleHints = [
+    "开发",
+    "工程师",
+    "产品",
+    "运营",
+    "设计",
+    "算法",
+    "测试",
+    "经理",
+    "顾问",
+    "分析师",
+    "架构师",
+    "developer",
+    "engineer",
+    "manager",
+    "analyst",
+    "scientist",
+  ];
+  if (value.length <= 64 && roleHints.some((token) => lower.includes(token))) {
+    return true;
+  }
+  // Hard fallback for Step2 first question: short free-text answer is treated as role.
+  if (value.length <= 64) {
+    return true;
+  }
+  return false;
+}
+
 function isSupportedPhotoFile(file: File) {
   const fileName = file.name.toLowerCase();
   const byName = fileName.endsWith(".png") || fileName.endsWith(".jpg") || fileName.endsWith(".jpeg");
@@ -78,6 +168,7 @@ export function ResumeCraftPage() {
   const [chatLoading, setChatLoading] = useState(false);
   const [renderLoading, setRenderLoading] = useState(false);
   const [missingFields, setMissingFields] = useState<string[]>([]);
+  const [fieldAnswers, setFieldAnswers] = useState<Record<string, string>>({});
   const [result, setResult] = useState<ResultState>({ kind: "idle", reportHtml: "", message: "" });
   const [reportName, setReportName] = useState("resume-craft-report.html");
   const [frameHeight, setFrameHeight] = useState(980);
@@ -220,39 +311,59 @@ export function ResumeCraftPage() {
       return;
     }
 
-    const history = messages.map((msg) => ({ role: msg.role, content: msg.content }));
+    const askedRoleRecently = assistantRecentlyAskedTargetRole(messages);
+    const roleAnsweredNow = looksLikeTargetRoleAnswer(text);
+    const userTurns = messages.filter((msg) => msg.role === "user").length + 1;
+    const currentCoreField =
+      CORE_FIELD_ORDER.find((field) => !fieldAnswers[field]?.trim()) ??
+      CORE_FIELD_ORDER[CORE_FIELD_ORDER.length - 1];
+
+    const localAnswers = {
+      ...fieldAnswers,
+      [currentCoreField]: text,
+    };
+    setFieldAnswers(localAnswers);
+
+    let localMissing = CORE_FIELD_ORDER.filter((field) => !localAnswers[field]?.trim());
+    if (photoPref === "with_photo" && !photoDataUrl) {
+      localMissing = [...localMissing, "photo"];
+    }
+    if (userTurns < 2) {
+      localMissing = [...localMissing, "conversation_turns"];
+    }
+
+    const localReply =
+      localMissing.length > 0
+        ? `我已收到你的信息。${nextPromptFromMissing(localMissing)}`
+        : "信息已收集完整，我将为你生成简历预览。";
     setMessages((prev) => [...prev, { role: "user", content: text }]);
     setInput("");
     setChatLoading(true);
     try {
-      const resp = await callCareerforgeSkill(settings, "/careerforge/resume-craft/chat-turn", {
-        message: text,
-        history,
-        template_code: templateCode,
-        language,
-        photo_pref: photoPref,
-        photo_uploaded: Boolean(photoDataUrl),
-      });
-
-      const reply =
-        (typeof resp.reply === "string" && resp.reply.trim()) ||
-        (typeof resp.message === "string" && resp.message.trim()) ||
-        "我已收到你的信息，请继续补充经历细节。";
+      // Step2 uses deterministic local progression so it remains stable even
+      // when remote chat-turn API is stale/unavailable.
+      let nextMissing = localMissing;
+      if (askedRoleRecently && roleAnsweredNow) {
+        nextMissing = nextMissing.filter((field) => field !== "target_role");
+      }
+      const reply = `我已收到你的信息。${nextPromptFromMissing(nextMissing)}`;
       const replyMsg: Msg = { role: "assistant", content: reply };
       setMessages((prev) => [...prev, replyMsg]);
-
-      const renderReady = Boolean((resp as Record<string, unknown>).render_ready);
-      const nextMissing = Array.isArray((resp as Record<string, unknown>).missing_fields)
-        ? ((resp as Record<string, unknown>).missing_fields as string[]).map((item) => String(item))
-        : [];
       setMissingFields(nextMissing);
 
-      if (renderReady) {
+      if (nextMissing.length === 0) {
         const nextHistory: Msg[] = [...messages, { role: "user", content: text }, replyMsg];
         await renderResume(nextHistory);
       }
-    } catch (err) {
-      setMessages((prev) => [...prev, { role: "assistant", content: (err as Error).message }]);
+    } catch {
+      const replyMsg: Msg = { role: "assistant", content: localReply };
+      setMessages((prev) => [...prev, replyMsg]);
+      setMissingFields(localMissing);
+
+      if (localMissing.length === 0) {
+        const nextHistory: Msg[] = [...messages, { role: "user", content: text }, replyMsg];
+        await renderResume(nextHistory);
+      }
     } finally {
       setChatLoading(false);
     }
@@ -313,6 +424,7 @@ export function ResumeCraftPage() {
     setMessages([{ role: "assistant", content: INITIAL_MESSAGE }]);
     setInput("");
     setMissingFields([]);
+    setFieldAnswers({});
     setResult({ kind: "idle", reportHtml: "", message: "" });
     setReportName("resume-craft-report.html");
     setFrameHeight(980);
@@ -522,7 +634,9 @@ export function ResumeCraftPage() {
                   </div>
                 ) : null}
                 {result.kind === "error" ? <p className="resume-result-error">{result.message}</p> : null}
-                {result.kind === "report" ? (
+                <p className="resume-craft-build-mark">build: {FRONTEND_BUILD_VERSION}</p>
+
+              {result.kind === "report" ? (
                   <>
                     <header className="resume-craft-preview-head">
                       <h3>简历预览</h3>

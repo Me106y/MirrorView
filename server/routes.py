@@ -20,6 +20,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 api = Blueprint('api', __name__)
 
+API_RUNTIME_VERSION = '2026-07-07-resume-craft-v4'
+
 ai_service = AIService()
 command_agent = CareerForgeCommandAgent(ai_service)
 rtmp_service = RTMPService(Config.RTMP_SERVER_URL)
@@ -150,6 +152,7 @@ def health():
         {
             "ok": True,
             "service": "mirrorview-api",
+            "api_runtime_version": API_RUNTIME_VERSION,
             "env": "vercel" if (os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV")) else "local",
         }
     ), 200
@@ -461,6 +464,48 @@ def _extract_target_role_from_turns(user_turns: List[str]) -> str:
             return turn[:80]
 
     return ""
+
+
+def _evaluate_resume_craft_step_progress(
+    history: Any,
+    latest_user_input: str,
+    template_code: str,
+    language: str,
+    photo_pref: str,
+    photo_uploaded: bool,
+) -> Dict[str, Any]:
+    user_turns = _resume_craft_user_turns(history, latest_user_input=latest_user_input, max_turns=32)
+    answered_count = min(len(user_turns), len(RESUME_CRAFT_FIELD_ORDER))
+    sequential_missing: List[str] = list(RESUME_CRAFT_FIELD_ORDER[answered_count:])
+
+    heuristic = _evaluate_resume_craft_readiness(
+        history=history,
+        latest_user_input=latest_user_input,
+        template_code=template_code,
+        language=language,
+        photo_pref=photo_pref,
+        photo_uploaded=photo_uploaded,
+    )
+    heuristic_missing = list(heuristic.get("missing_fields") or [])
+
+    # Keep one-field-at-a-time progression, but honor packed answers when users
+    # provide multiple fields in a single turn.
+    missing_fields: List[str] = [field for field in sequential_missing if field in heuristic_missing]
+
+    if "conversation_turns" in heuristic_missing:
+        missing_fields.append("conversation_turns")
+
+    if photo_pref == "放照片" and not photo_uploaded and "photo" not in missing_fields:
+        missing_fields.append("photo")
+
+    required_core_missing = [f for f in missing_fields if f in RESUME_CRAFT_FIELD_ORDER or f == "photo"]
+    render_ready = len(required_core_missing) == 0
+
+    return {
+        "answered_count": answered_count,
+        "render_ready": render_ready,
+        "missing_fields": missing_fields,
+    }
 
 
 def _evaluate_resume_craft_readiness(
@@ -821,7 +866,9 @@ def careerforge_resume_craft_chat_turn():
     photo_uploaded = _normalize_bool(data.get("photo_uploaded"))
     history = data.get("history") or []
     history_text = _history_to_text(history, max_turns=24)
-    readiness = _evaluate_resume_craft_readiness(
+    # Step2 uses deterministic field progression to avoid repeated prompts:
+    # target_role -> education -> experience -> skills -> contact.
+    readiness = _evaluate_resume_craft_step_progress(
         history=history,
         latest_user_input=message,
         template_code=template_code,
@@ -829,44 +876,11 @@ def careerforge_resume_craft_chat_turn():
         photo_pref=photo_pref,
         photo_uploaded=photo_uploaded,
     )
-    user_turns = _resume_craft_user_turns(history, latest_user_input=message, max_turns=32)
-    extracted_target_role = _extract_target_role_from_turns(user_turns)
-    role_context_line = f"- 已确认目标岗位: {extracted_target_role}\n" if extracted_target_role else ""
 
-    control_context = (
-        "【页面参数（优先）】\n"
-        f"- 模板编号: {template_code}\n"
-        f"- 语言: {language}\n"
-        f"- 照片偏好: {photo_pref}\n"
-        f"{role_context_line}"
-        "- 当前页面仅做从零生成简历，不切换到优化已有简历流程。"
-    )
-    dialog_payload = {
-        "profile_context": control_context,
-        "history_text": history_text,
-        "user_input": message,
-        "next_prompt": _next_resume_craft_prompt(readiness["missing_fields"]),
-    }
-    reply = (ai_service.run_resume_craft_dialog(dialog_payload, runtime=runtime) or "").strip()
-    if not reply:
+    if readiness["missing_fields"]:
         reply = f"我已收到你的信息。{_next_resume_craft_prompt(readiness['missing_fields'])}"
-    elif "target_role" not in readiness["missing_fields"] and _is_target_role_prompt_reply(reply):
-        reply = f"我已收到你的信息。{_next_resume_craft_prompt(readiness['missing_fields'])}"
-
-    # 强制兜底：目标岗位已确认后，任何“继续追问目标岗位”的回复都改写为下一字段。
-    if "target_role" not in readiness["missing_fields"] and _is_target_role_prompt_reply(reply):
-        reply = f"我已收到你的信息。{_next_resume_craft_prompt(readiness['missing_fields'])}"
-
-    # 最终兜底：若用户本轮看起来已经回答了岗位，且上一轮助手在问岗位，
-    # 则无条件移除 target_role，杜绝重复追问。
-    if (
-        "target_role" in readiness["missing_fields"]
-        and _assistant_recently_asked_target_role(history)
-        and _looks_like_target_role_answer(message)
-    ):
-        readiness["missing_fields"] = [field for field in readiness["missing_fields"] if field != "target_role"]
-        readiness["render_ready"] = len(readiness["missing_fields"]) == 0
-        reply = f"我已收到你的信息。{_next_resume_craft_prompt(readiness['missing_fields'])}"
+    else:
+        reply = "信息已收集完整，我将为你生成简历预览。"
 
     return jsonify(
         {
@@ -875,7 +889,7 @@ def careerforge_resume_craft_chat_turn():
             "action": "chat_turn",
             "render_ready": readiness["render_ready"],
             "missing_fields": readiness["missing_fields"],
-            "meta": {**meta, "resume_craft_chat_turn_version": "2026-07-07-v3"},
+            "meta": {**meta, "resume_craft_chat_turn_version": "2026-07-07-v4", "api_runtime_version": API_RUNTIME_VERSION},
             "error": "",
         }
     ), 200

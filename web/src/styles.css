@@ -1039,6 +1039,12 @@ a {
   font-size: 0.86rem;
 }
 
+.resume-craft-build-mark {
+  margin: 6px 0 0;
+  color: #8f8f8f;
+  font-size: 0.75rem;
+}
+
 .resume-craft-preview-placeholder {
   border-radius: 14px;
   border: 1px dashed rgba(111, 141, 168, 0.44);
