@@ -6,15 +6,16 @@ from pathlib import Path
 
 _HERE = Path(__file__).resolve()
 _CANDIDATE_ROOTS = [
-    _HERE.parent,
-    _HERE.parent / "api",
     _HERE.parents[1],
+    _HERE.parent,
     _HERE.parents[1] / "api",
+    _HERE.parent / "api",
     Path.cwd(),
 ]
 
-# Ensure imports prefer files colocated with api/index.py.
-_PRIMARY_IMPORT_ROOTS = [_HERE.parent]
+# Ensure imports prefer repository-root modules first (server/*),
+# then fall back to api/* mirrors for compatibility.
+_PRIMARY_IMPORT_ROOTS = [_HERE.parents[1], _HERE.parent]
 for _root in reversed(_PRIMARY_IMPORT_ROOTS):
     _path = str(_root)
     if _path in sys.path:
