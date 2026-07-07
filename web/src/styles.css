@@ -644,6 +644,7 @@ a {
   display: flex;
   width: 200%;
   transform: translateX(0%);
+  align-items: flex-start;
 }
 
 .resume-craft-step-card {
@@ -653,6 +654,7 @@ a {
   flex-direction: column;
   gap: 14px;
   border-radius: 20px;
+  height: fit-content;
 }
 
 .resume-craft-step-head h2 {
@@ -674,8 +676,8 @@ a {
   font-size: 0.74rem;
   font-weight: 700;
   color: #ffffff;
-  background: linear-gradient(145deg, #89a4bb, #6f8da8);
-  box-shadow: 0 6px 12px rgba(96, 126, 150, 0.26);
+  background: linear-gradient(145deg, #151515, #050505);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.26);
 }
 
 .resume-craft-head-divider {

@@ -12,13 +12,13 @@ type ResultState = {
 };
 
 const TEMPLATE_OPTIONS = [
-  { value: "01", label: "01 Editorial 杂志编辑风" },
-  { value: "02", label: "02 Minimal 极简主义" },
-  { value: "03", label: "03 Sidebar Navy 深蓝双栏" },
-  { value: "04", label: "04 Sidebar Dark 深灰左栏" },
-  { value: "05", label: "05 Dark Header 深色头部" },
-  { value: "06", label: "06 Clean Teal 清新青色" },
-  { value: "07", label: "07 Elegant 优雅对称" }
+  { value: "01", label: "杂志编辑风" },
+  { value: "02", label: "极简主义" },
+  { value: "03", label: "深蓝双栏" },
+  { value: "04", label: "深灰左栏" },
+  { value: "05", label: "深色头部" },
+  { value: "06", label: "清新青色" },
+  { value: "07", label: "优雅对称" }
 ];
 
 const LANGUAGE_OPTIONS = [
