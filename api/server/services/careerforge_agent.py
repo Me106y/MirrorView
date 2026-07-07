@@ -369,6 +369,7 @@ You MUST follow the provided Skill specification when answering.
 3) 不编造经历，不夸大资历。
 4) 模板/语言/照片偏好已在页面第一步确定，禁止再次询问这三项。
 5) 不输出 JSON，不输出代码块。
+6) 若用户输入看起来是岗位名（如“AI应用开发”“后端工程师”等），必须视为“目标岗位已确认”，下一轮改问教育背景，禁止继续追问目标岗位。
 """
         )
         chain = prompt | self.llm | StrOutputParser()

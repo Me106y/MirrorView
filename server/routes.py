@@ -461,15 +461,17 @@ def _evaluate_resume_craft_readiness(
 
     combined_text_lower = "\n".join(user_turns).lower()
 
-    # Step2 首轮默认就是目标岗位，因此允许短回答（如“AI应用开发”）直接视为已填写。
-    target_role_provided = False
-    if user_turns:
-        first_turn = user_turns[0].strip()
-        target_role_provided = (
-            _has_any_keyword(combined_text_lower, RESUME_CRAFT_READY_KEYWORDS["target_role"])
-            or len(first_turn) <= 32
-            or any(marker in first_turn.lower() for marker in RESUME_CRAFT_ROLE_HINTS)
-        )
+    # 目标岗位识别：任意用户轮次命中“岗位关键词/岗位短语特征”都视为已填写。
+    role_hint_in_any_turn = any(
+        any(marker in turn.lower() for marker in RESUME_CRAFT_ROLE_HINTS)
+        for turn in user_turns
+    )
+    short_role_phrase_in_any_turn = any(len(turn.strip()) <= 32 for turn in user_turns)
+    target_role_provided = (
+        _has_any_keyword(combined_text_lower, RESUME_CRAFT_READY_KEYWORDS["target_role"])
+        or role_hint_in_any_turn
+        or short_role_phrase_in_any_turn
+    )
     if not target_role_provided:
         missing_fields.append("target_role")
 
