@@ -435,9 +435,12 @@ export function ResumeCraftPage() {
       <div className="resume-craft-layout">
         <div className="resume-craft-wizard-viewport" style={viewportHeight ? { height: `${viewportHeight}px` } : undefined}>
           <div className="resume-craft-wizard-track" ref={wizardTrackRef}>
-            <article className="surface resume-craft-step-card" ref={step1CardRef}>
+            <article className="surface resume-craft-step-card resume-craft-step1-card" ref={step1CardRef}>
               <header className="resume-craft-step-head">
-                <span className="resume-craft-step-tag">Step 1 / 2</span>
+                <div className="resume-craft-step-title-row">
+                  <span className="resume-craft-step-tag">Step 1 / 2</span>
+                  <span className="resume-craft-step-progress-note">共2步，当前基础信息填写</span>
+                </div>
                 <h2>先完成基础信息（前五流程）</h2>
                 <p>在这里填写目标岗位、个人信息、教育、技能与偏好。Step2 只做经历深挖。</p>
                 <div className="resume-craft-head-divider" />
@@ -512,17 +515,26 @@ export function ResumeCraftPage() {
 
               <div className="resume-craft-form-grid">
                 <label className="resume-craft-control">
-                  <span className="resume-craft-control-label">目标岗位</span>
-                  <input value={profile.target_role} onChange={(e) => setProfile((prev) => ({ ...prev, target_role: e.target.value }))} />
+                  <span className="resume-craft-control-label">目标岗位 <em>*</em></span>
+                  <input
+                    value={profile.target_role}
+                    placeholder="例如：AI 应用开发工程师"
+                    onChange={(e) => setProfile((prev) => ({ ...prev, target_role: e.target.value }))}
+                  />
                 </label>
                 <label className="resume-craft-control">
                   <span className="resume-craft-control-label">目标 JD 摘要</span>
-                  <textarea value={profile.jd_summary} onChange={(e) => setProfile((prev) => ({ ...prev, jd_summary: e.target.value }))} />
+                  <textarea
+                    placeholder="可粘贴核心职责、技术要求、业务场景关键词"
+                    value={profile.jd_summary}
+                    onChange={(e) => setProfile((prev) => ({ ...prev, jd_summary: e.target.value }))}
+                  />
                 </label>
 
                 <label className="resume-craft-control">
-                  <span className="resume-craft-control-label">姓名</span>
+                  <span className="resume-craft-control-label">姓名 <em>*</em></span>
                   <input
+                    placeholder="真实姓名"
                     value={profile.personal_info.name}
                     onChange={(e) =>
                       setProfile((prev) => ({ ...prev, personal_info: { ...prev.personal_info, name: e.target.value } }))
@@ -532,6 +544,7 @@ export function ResumeCraftPage() {
                 <label className="resume-craft-control">
                   <span className="resume-craft-control-label">手机</span>
                   <input
+                    placeholder="例如：13800000000"
                     value={profile.personal_info.phone}
                     onChange={(e) =>
                       setProfile((prev) => ({ ...prev, personal_info: { ...prev.personal_info, phone: e.target.value } }))
@@ -541,6 +554,7 @@ export function ResumeCraftPage() {
                 <label className="resume-craft-control">
                   <span className="resume-craft-control-label">邮箱</span>
                   <input
+                    placeholder="例如：name@example.com"
                     value={profile.personal_info.email}
                     onChange={(e) =>
                       setProfile((prev) => ({ ...prev, personal_info: { ...prev.personal_info, email: e.target.value } }))
@@ -550,6 +564,7 @@ export function ResumeCraftPage() {
                 <label className="resume-craft-control">
                   <span className="resume-craft-control-label">城市</span>
                   <input
+                    placeholder="例如：上海"
                     value={profile.personal_info.city}
                     onChange={(e) =>
                       setProfile((prev) => ({ ...prev, personal_info: { ...prev.personal_info, city: e.target.value } }))
@@ -558,43 +573,59 @@ export function ResumeCraftPage() {
                 </label>
                 <label className="resume-craft-control">
                   <span className="resume-craft-control-label">链接（逗号分隔）</span>
-                  <input value={linksInput} onChange={(e) => setLinksInput(e.target.value)} placeholder="GitHub, LinkedIn" />
+                  <input value={linksInput} onChange={(e) => setLinksInput(e.target.value)} placeholder="例如：GitHub, LinkedIn, 作品集链接" />
                 </label>
 
                 <label className="resume-craft-control">
                   <span className="resume-craft-control-label">技能（逗号分隔）</span>
-                  <input value={skillsInput} onChange={(e) => setSkillsInput(e.target.value)} placeholder="Python, LangChain, RAG" />
+                  <input value={skillsInput} onChange={(e) => setSkillsInput(e.target.value)} placeholder="例如：Python, LangChain, RAG" />
                 </label>
                 <label className="resume-craft-control">
                   <span className="resume-craft-control-label">证书（逗号分隔）</span>
-                  <input value={certInput} onChange={(e) => setCertInput(e.target.value)} placeholder="PMP, AWS SAA" />
+                  <input value={certInput} onChange={(e) => setCertInput(e.target.value)} placeholder="例如：PMP, AWS SAA" />
                 </label>
                 <label className="resume-craft-control">
                   <span className="resume-craft-control-label">希望突出项</span>
-                  <input value={profile.focus_points} onChange={(e) => setProfile((prev) => ({ ...prev, focus_points: e.target.value }))} />
+                  <input
+                    value={profile.focus_points}
+                    placeholder="例如：技术深度、业务结果、跨团队协作"
+                    onChange={(e) => setProfile((prev) => ({ ...prev, focus_points: e.target.value }))}
+                  />
                 </label>
                 <label className="resume-craft-control">
                   <span className="resume-craft-control-label">语气偏好</span>
-                  <select value={profile.tone_pref} onChange={(e) => setProfile((prev) => ({ ...prev, tone_pref: e.target.value }))}>
-                    {TONE_OPTIONS.map((item) => (
-                      <option key={item} value={item}>{item}</option>
-                    ))}
-                  </select>
+                  <div className="resume-craft-select-shell">
+                    <span className="resume-craft-select-icon tone" aria-hidden="true">TN</span>
+                    <select value={profile.tone_pref} onChange={(e) => setProfile((prev) => ({ ...prev, tone_pref: e.target.value }))}>
+                      {TONE_OPTIONS.map((item) => (
+                        <option key={item} value={item}>{item}</option>
+                      ))}
+                    </select>
+                  </div>
                 </label>
                 <label className="resume-craft-control">
                   <span className="resume-craft-control-label">计划收集几段经历</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={5}
-                    value={profile.expected_experience_count}
-                    onChange={(e) => setProfile((prev) => ({ ...prev, expected_experience_count: Number(e.target.value || 1) }))}
-                  />
+                  <div className="resume-craft-select-shell">
+                    <span className="resume-craft-select-icon count" aria-hidden="true">CT</span>
+                    <select
+                      value={String(profile.expected_experience_count)}
+                      onChange={(e) => setProfile((prev) => ({ ...prev, expected_experience_count: Number(e.target.value || 1) }))}
+                    >
+                      {[1, 2, 3, 4, 5].map((item) => (
+                        <option key={item} value={String(item)}>
+                          {item} 段
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </label>
               </div>
 
               <div className="resume-craft-education-wrap">
-                <h3>教育背景</h3>
+                <h3>
+                  <span className="resume-craft-edu-icon" aria-hidden="true">EDU</span>
+                  教育背景
+                </h3>
                 {educationDraft.map((item, idx) => (
                   <div key={`edu-${idx}`} className="resume-craft-edu-row">
                     <input placeholder="学校" value={item.school} onChange={(e) => updateEducation(idx, "school", e.target.value)} />
@@ -620,7 +651,7 @@ export function ResumeCraftPage() {
                   onClick={onNextStep}
                   disabled={!canGoNext}
                 >
-                  {photoLoading ? "处理中..." : "下一步（进入经历深挖）"}
+                  {photoLoading ? "处理中..." : "下一步  ->"}
                 </button>
               </div>
             </article>

@@ -658,15 +658,45 @@ a {
   height: fit-content;
 }
 
+.resume-craft-step1-card {
+  border-radius: 16px;
+  border: 1px solid rgba(225, 214, 192, 0.58);
+  background:
+    radial-gradient(circle at 48% 34%, rgba(255, 255, 255, 0.98) 0%, rgba(255, 252, 246, 0.96) 48%, rgba(247, 240, 228, 0.9) 100%);
+  box-shadow:
+    0 18px 40px rgba(178, 160, 126, 0.12),
+    0 6px 18px rgba(43, 52, 57, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 0 0 1px rgba(255, 248, 238, 0.65);
+  padding: 30px 30px 24px;
+  gap: 18px;
+}
+
+.resume-craft-step-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.resume-craft-step-progress-note {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #828282;
+}
+
 .resume-craft-step-head h2 {
-  margin: 0;
-  color: #121212;
+  margin: 2px 0 0;
+  color: #2b2b2b;
+  letter-spacing: 0.02em;
+  font-size: 2rem;
+  font-weight: 700;
 }
 
 .resume-craft-step-head p {
-  margin: 6px 0 0;
-  color: #6f6f6f;
-  font-size: 0.92rem;
+  margin: 10px 0 0;
+  color: #848484;
+  font-size: 0.86rem;
+  line-height: 1.7;
 }
 
 .resume-craft-step-tag {
@@ -682,16 +712,16 @@ a {
 }
 
 .resume-craft-head-divider {
-  margin-top: 10px;
+  margin-top: 12px;
   height: 1px;
   width: 100%;
-  background: linear-gradient(90deg, rgba(125, 148, 166, 0.35), rgba(125, 148, 166, 0.03));
+  background: linear-gradient(90deg, rgba(148, 159, 170, 0.28), rgba(148, 159, 170, 0.04));
 }
 
 .resume-craft-step-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  gap: 16px;
 }
 
 .resume-craft-control {
@@ -702,7 +732,14 @@ a {
 
 .resume-craft-control-label {
   font-size: 0.84rem;
-  color: #5f5f5f;
+  color: #4f4f4f;
+  font-weight: 700;
+}
+
+.resume-craft-control-label em {
+  margin-left: 4px;
+  font-style: normal;
+  color: #9a9a9a;
   font-weight: 600;
 }
 
@@ -711,15 +748,16 @@ a {
   align-items: center;
   gap: 10px;
   border-radius: 12px;
-  border: 1px solid rgba(150, 159, 168, 0.34);
-  background: linear-gradient(180deg, rgba(247, 247, 245, 0.96), rgba(255, 255, 255, 0.98));
-  padding: 0 10px;
-  min-height: 46px;
+  border: 1px solid rgba(170, 177, 182, 0.5);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(251, 251, 249, 0.98));
+  padding: 0 12px;
+  min-height: 48px;
   transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
 }
 
 .resume-craft-select-shell:hover {
-  border-color: rgba(111, 141, 168, 0.46);
+  border-color: rgba(113, 132, 150, 0.62);
+  background: linear-gradient(180deg, rgba(252, 254, 255, 0.98), rgba(246, 250, 253, 0.98));
   transform: translateY(-1px);
 }
 
@@ -744,6 +782,36 @@ a {
   border: 1px solid rgba(111, 141, 168, 0.24);
 }
 
+.resume-craft-step-grid .resume-craft-control:nth-child(1) .resume-craft-select-icon {
+  color: #666666;
+  background: linear-gradient(145deg, #efefec, #e7e6e2);
+  border-color: rgba(149, 149, 149, 0.24);
+}
+
+.resume-craft-step-grid .resume-craft-control:nth-child(2) .resume-craft-select-icon {
+  color: #516d88;
+  background: linear-gradient(145deg, #e7f1fb, #dce9f6);
+  border-color: rgba(116, 146, 172, 0.28);
+}
+
+.resume-craft-step-grid .resume-craft-control:nth-child(3) .resume-craft-select-icon {
+  color: #7e6547;
+  background: linear-gradient(145deg, #f2ebe1, #ebdfcf);
+  border-color: rgba(168, 143, 108, 0.28);
+}
+
+.resume-craft-select-icon.tone {
+  color: #536d88;
+  background: linear-gradient(145deg, #e9f2fb, #dce8f5);
+  border-color: rgba(112, 143, 170, 0.28);
+}
+
+.resume-craft-select-icon.count {
+  color: #6f6a5a;
+  background: linear-gradient(145deg, #f0ede5, #e8e4d8);
+  border-color: rgba(154, 146, 125, 0.26);
+}
+
 .resume-craft-control select {
   border: none;
   border-radius: 0;
@@ -759,11 +827,11 @@ a {
 }
 
 .resume-craft-step-illustration {
-  margin-top: 2px;
+  margin-top: 6px;
   border-radius: 14px;
-  border: 1px solid rgba(0, 0, 0, 0.07);
+  border: 1px solid rgba(198, 204, 208, 0.36);
   background: linear-gradient(180deg, rgba(249, 249, 246, 0.7), rgba(254, 254, 253, 0.95));
-  padding: 16px 14px;
+  padding: 18px 16px;
   display: grid;
   place-items: center;
   gap: 12px;
@@ -818,10 +886,10 @@ a {
 }
 
 .resume-craft-photo-box {
-  border: 1px dashed rgba(111, 141, 168, 0.35);
+  border: 1px dashed rgba(153, 166, 178, 0.45);
   border-radius: 14px;
-  padding: 14px;
-  background: linear-gradient(180deg, rgba(251, 250, 246, 0.84), rgba(255, 255, 255, 0.96));
+  padding: 16px;
+  background: linear-gradient(180deg, rgba(252, 250, 245, 0.9), rgba(255, 255, 255, 0.97));
 }
 
 .resume-craft-photo-label {
@@ -861,13 +929,13 @@ a {
 .resume-craft-step-actions {
   display: flex;
   justify-content: flex-end;
-  margin-top: 6px;
+  margin-top: 14px;
 }
 
 .resume-craft-form-grid {
-  margin-top: 14px;
+  margin-top: 6px;
   display: grid;
-  gap: 12px;
+  gap: 16px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
@@ -875,51 +943,116 @@ a {
 .resume-craft-form-grid .resume-craft-control textarea,
 .resume-craft-form-grid .resume-craft-control select {
   width: 100%;
-  border: 1px solid rgba(142, 153, 165, 0.45);
+  border: 1px solid rgba(178, 185, 190, 0.68);
   border-radius: 10px;
-  min-height: 40px;
-  padding: 8px 10px;
-  background: rgba(255, 255, 255, 0.92);
+  min-height: 42px;
+  padding: 9px 11px;
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.resume-craft-form-grid .resume-craft-control input::placeholder,
+.resume-craft-form-grid .resume-craft-control textarea::placeholder {
+  color: #a1a1a1;
+  font-size: 0.84rem;
+  font-style: italic;
+}
+
+.resume-craft-form-grid .resume-craft-control input:hover,
+.resume-craft-form-grid .resume-craft-control textarea:hover {
+  border-color: rgba(128, 148, 166, 0.52);
+  background: rgba(249, 249, 246, 0.98);
+}
+
+.resume-craft-form-grid .resume-craft-control input:focus,
+.resume-craft-form-grid .resume-craft-control textarea:focus {
+  border-color: rgba(104, 128, 148, 0.74);
+  box-shadow: 0 0 0 3px rgba(111, 141, 168, 0.14);
 }
 
 .resume-craft-form-grid .resume-craft-control textarea {
-  min-height: 72px;
+  min-height: 94px;
   resize: vertical;
 }
 
 .resume-craft-education-wrap {
-  margin-top: 14px;
+  margin-top: 4px;
   display: grid;
-  gap: 10px;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(184, 190, 193, 0.4);
 }
 
 .resume-craft-education-wrap h3 {
   margin: 0;
-  font-size: 0.95rem;
+  font-size: 1rem;
+  color: #323232;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.resume-craft-edu-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 24px;
+  border-radius: 8px;
+  font-size: 0.66rem;
+  letter-spacing: 0.02em;
+  font-weight: 700;
+  color: #5b6f84;
+  border: 1px solid rgba(111, 141, 168, 0.28);
+  background: linear-gradient(150deg, #edf3f8, #e2eaf2);
 }
 
 .resume-craft-edu-row {
   display: grid;
   grid-template-columns: 1fr 1fr 0.9fr 0.9fr 1.2fr;
-  gap: 8px;
+  gap: 10px;
+  border-radius: 11px;
+  padding: 9px 8px;
+  transition: background 150ms ease;
+}
+
+.resume-craft-edu-row:hover {
+  background: rgba(244, 245, 241, 0.78);
 }
 
 .resume-craft-edu-row input {
-  border: 1px solid rgba(142, 153, 165, 0.45);
+  border: 1px solid rgba(177, 184, 189, 0.66);
   border-radius: 10px;
-  min-height: 40px;
-  padding: 8px 10px;
-  background: rgba(255, 255, 255, 0.92);
+  min-height: 42px;
+  padding: 9px 10px;
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.resume-craft-education-wrap .ghost-btn {
+  justify-self: center;
+  min-width: 180px;
+  margin-top: 2px;
+  background: linear-gradient(145deg, #f4efe4, #ece6da);
+  color: #676767;
+  border: 1px solid rgba(181, 173, 156, 0.44);
+}
+
+.resume-craft-education-wrap .ghost-btn:hover:not(:disabled) {
+  background: linear-gradient(145deg, #efe9dc, #e5dece);
+  color: #4a4a4a;
+  border-color: rgba(158, 149, 132, 0.55);
 }
 
 .resume-craft-next-btn {
   margin-top: 0;
-  min-width: 136px;
-  background: linear-gradient(145deg, #161616, #0f0f0f);
+  min-width: 156px;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #202020, #0f0f0f);
 }
 
 .resume-craft-next-btn:hover:not(:disabled) {
-  background: linear-gradient(145deg, #2f3e4d, #6f8da8);
+  background: linear-gradient(145deg, #2c3a47, #5f7890);
+  box-shadow: 0 12px 22px rgba(53, 73, 91, 0.24);
+  transform: translateY(-1px);
 }
 
 .resume-craft-next-btn.is-loading {
