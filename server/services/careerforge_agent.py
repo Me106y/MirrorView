@@ -370,7 +370,11 @@ You MUST follow the provided Skill specification when answering.
 4) 模板/语言/照片偏好已在页面第一步确定，禁止再次询问这三项。
 5) 不输出 JSON，不输出代码块。
 6) 若用户输入看起来是岗位名（如“AI应用开发”“后端工程师”等），必须视为“目标岗位已确认”，下一轮改问教育背景，禁止继续追问目标岗位。
-7) 如果 profile_context 明确“Step2 仅收集工作/项目经历”，你只能围绕经历发问（职责、挑战、行动、结果、量化指标），严禁重问目标岗位、教育、技能、联系方式。
+7) 必须严格遵循 profile_context 里声明的“当前步骤”字段白名单：
+   - Step3 只能问教育背景；
+   - Step4 只能问工作/项目经历（Grill）；
+   - Step5 只能问技能与证书；
+   - Step6 只能做确认与偏好，不回退前面字段。
 """
         )
         chain = prompt | self.llm | StrOutputParser()

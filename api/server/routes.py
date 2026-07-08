@@ -56,6 +56,9 @@ RESUME_CRAFT_ALLOWED_STEP2_ASK_TOKENS = [
     "技术",
     "行动",
 ]
+RESUME_CRAFT_ALLOWED_STEP3_ASK_TOKENS = ["教育", "学校", "专业", "学位", "在读", "毕业", "奖学金", "荣誉"]
+RESUME_CRAFT_ALLOWED_STEP5_ASK_TOKENS = ["技能", "工具", "证书", "语言能力", "熟练度", "技术栈"]
+RESUME_CRAFT_ALLOWED_STEP6_ASK_TOKENS = ["确认", "偏好", "突出", "语气", "排版", "风格", "生成"]
 RESUME_CRAFT_ROLE_HINTS = [
     "开发",
     "工程师",
@@ -671,6 +674,126 @@ def _normalize_experience_state(raw: Any) -> Dict[str, Any]:
     }
 
 
+def _normalize_step_chat_state(raw: Any) -> Dict[str, Any]:
+    value = raw if isinstance(raw, dict) else {}
+    try:
+        turn_count = int(value.get("turn_count", 0))
+    except Exception:
+        turn_count = 0
+    return {
+        "turn_count": max(0, min(turn_count, 20)),
+        "confirmed": bool(value.get("confirmed", False)),
+    }
+
+
+def _normalize_wizard_state(raw: Any) -> Dict[str, Any]:
+    data = raw if isinstance(raw, dict) else {}
+    collected_raw = data.get("collected_by_step") if isinstance(data.get("collected_by_step"), dict) else {}
+    history_raw = data.get("chat_history_by_step") if isinstance(data.get("chat_history_by_step"), dict) else {}
+    step_states_raw = data.get("step_states") if isinstance(data.get("step_states"), dict) else {}
+
+    def _clean_lines(values: Any, limit: int = 30) -> List[str]:
+        if not isinstance(values, list):
+            return []
+        out: List[str] = []
+        for item in values[:limit]:
+            text = str(item or "").strip()
+            if text:
+                out.append(text[:1800])
+        return out
+
+    try:
+        step_num = int(data.get("current_step", 3))
+    except Exception:
+        step_num = 3
+    if step_num not in {3, 4, 5, 6}:
+        step_num = 3
+
+    return {
+        "current_step": step_num,
+        "collected_by_step": {
+            "education": _clean_lines(collected_raw.get("education"), limit=20),
+            "experiences": _clean_lines(collected_raw.get("experiences"), limit=20),
+            "skills_and_certs": _clean_lines(collected_raw.get("skills_and_certs"), limit=20),
+            "final_preferences": str(collected_raw.get("final_preferences") or "").strip()[:1600],
+            "step6_confirmed": bool(collected_raw.get("step6_confirmed", False)),
+        },
+        "chat_history_by_step": {
+            "step3": _clean_lines(history_raw.get("step3"), limit=20),
+            "step4": _clean_lines(history_raw.get("step4"), limit=20),
+            "step5": _clean_lines(history_raw.get("step5"), limit=20),
+            "step6": _clean_lines(history_raw.get("step6"), limit=20),
+        },
+        "step_states": {
+            "step3": _normalize_step_chat_state(step_states_raw.get("step3")),
+            "step4": _normalize_experience_state(step_states_raw.get("step4")),
+            "step5": _normalize_step_chat_state(step_states_raw.get("step5")),
+            "step6": _normalize_step_chat_state(step_states_raw.get("step6")),
+        },
+    }
+
+
+def _build_step_context_for_prompt(step_num: int, step1_profile: Dict[str, Any]) -> str:
+    if step_num == 3:
+        return (
+            _build_step1_profile_context(
+                step1_profile,
+                step1_profile.get("template_code") or "02",
+                step1_profile.get("language") or "中文",
+                step1_profile.get("photo_pref") or "不放照片",
+            )
+            + "\n- 当前步骤: Step3 教育背景收集。只能询问教育相关字段。"
+        )
+    if step_num == 4:
+        return (
+            _build_step1_profile_context(
+                step1_profile,
+                step1_profile.get("template_code") or "02",
+                step1_profile.get("language") or "中文",
+                step1_profile.get("photo_pref") or "不放照片",
+            )
+            + "\n- 当前步骤: Step4 工作/项目经历收集（Grill）。只能围绕经历追问。"
+        )
+    if step_num == 5:
+        return (
+            _build_step1_profile_context(
+                step1_profile,
+                step1_profile.get("template_code") or "02",
+                step1_profile.get("language") or "中文",
+                step1_profile.get("photo_pref") or "不放照片",
+            )
+            + "\n- 当前步骤: Step5 技能与证书收集。只能询问技能、证书、语言能力。"
+        )
+    return (
+        _build_step1_profile_context(
+            step1_profile,
+            step1_profile.get("template_code") or "02",
+            step1_profile.get("language") or "中文",
+            step1_profile.get("photo_pref") or "不放照片",
+        )
+        + "\n- 当前步骤: Step6 最终确认与偏好。只能确认偏好与是否生成。"
+    )
+
+
+def _enforce_step_reply(reply: str, fallback_question: str, step_num: int) -> str:
+    text = str(reply or "").strip()
+    if not text:
+        return fallback_question
+    if step_num == 3:
+        allowed_tokens = RESUME_CRAFT_ALLOWED_STEP3_ASK_TOKENS
+    elif step_num == 4:
+        allowed_tokens = RESUME_CRAFT_ALLOWED_STEP2_ASK_TOKENS
+    elif step_num == 5:
+        allowed_tokens = RESUME_CRAFT_ALLOWED_STEP5_ASK_TOKENS
+    else:
+        allowed_tokens = RESUME_CRAFT_ALLOWED_STEP6_ASK_TOKENS
+    if not any(token in text for token in allowed_tokens):
+        return fallback_question
+    if step_num != 4 and any(token in text for token in ["目标岗位", "联系方式", "教育背景", "工作经历", "项目经历"]):
+        return fallback_question
+    return text
+
+
 def _build_step1_profile_context(profile: Dict[str, Any], template_code: str, language: str, photo_pref: str) -> str:
     personal = profile.get("personal_info") or {}
     edu = profile.get("education") or []
@@ -995,6 +1118,8 @@ def careerforge_resume_craft_chat_turn():
 
     step1_profile_raw = data.get("step1_profile")
     experience_state_raw = data.get("experience_state")
+    current_step = data.get("current_step")
+    wizard_state_raw = data.get("wizard_state")
     if isinstance(step1_profile_raw, dict):
         step1_profile = _normalize_step1_profile(step1_profile_raw)
         if template_code not in RESUME_CRAFT_TEMPLATE_MAP:
@@ -1004,54 +1129,99 @@ def careerforge_resume_craft_chat_turn():
         if photo_pref not in {"放照片", "不放照片"}:
             photo_pref = step1_profile["photo_pref"]
 
-        exp_state = _normalize_experience_state(experience_state_raw)
-        exp_state["drafts"].append(message[:2400])
-        exp_state["followup_count"] = int(exp_state["followup_count"]) + 1
+        try:
+            step_num = int(current_step)
+        except Exception:
+            step_num = 4
+        if step_num not in {3, 4, 5, 6}:
+            step_num = 4
 
-        expected_count = int(step1_profile.get("expected_experience_count") or 1)
-        expected_count = max(1, min(expected_count, 5))
-        action = "grill_followup"
+        wizard_state = _normalize_wizard_state(wizard_state_raw)
+        wizard_state["current_step"] = step_num
+        state_key = f"step{step_num}"
+        wizard_state["chat_history_by_step"][state_key].append(message[:1800])
+        wizard_state["step_states"][state_key]["turn_count"] = int(wizard_state["step_states"][state_key].get("turn_count", 0)) + 1
+
         render_ready = False
+        next_step_suggestion = "stay"
+        missing_fields: List[str] = []
+        action = "collect_experience"
 
-        if exp_state["followup_count"] >= RESUME_CRAFT_GRILL_MAX_FOLLOWUPS:
-            merged = "\\n".join(exp_state["drafts"]).strip()[:3000]
-            if merged:
-                exp_state["finalized_experiences"].append(merged)
-            exp_state["drafts"] = []
-            exp_state["followup_count"] = 0
-            exp_state["current_index"] = int(exp_state["current_index"]) + 1
-            action = "experience_done"
-
-        if len(exp_state["finalized_experiences"]) >= expected_count:
+        if step_num == 3:
+            wizard_state["collected_by_step"]["education"].append(message[:1800])
+            action = "collect_education"
+            if wizard_state["step_states"]["step3"]["turn_count"] >= 2:
+                wizard_state["step_states"]["step3"]["confirmed"] = True
+                next_step_suggestion = "next"
+            missing_fields = [] if wizard_state["step_states"]["step3"]["confirmed"] else ["education"]
+            fallback_question = "请继续补充教育背景：学校、专业、学位、时间，以及最想强调的亮点。"
+        elif step_num == 4:
+            exp_state = _normalize_experience_state(experience_state_raw or wizard_state["step_states"]["step4"])
+            exp_state["drafts"].append(message[:2400])
+            exp_state["followup_count"] = int(exp_state["followup_count"]) + 1
+            expected_count = int(step1_profile.get("expected_experience_count") or 1)
+            expected_count = max(1, min(expected_count, 5))
+            action = "grill_experience"
+            fallback_question = _compose_experience_followup(step1_profile, exp_state, message)
+            if exp_state["followup_count"] >= RESUME_CRAFT_GRILL_MAX_FOLLOWUPS:
+                merged = "\\n".join(exp_state["drafts"]).strip()[:3000]
+                if merged:
+                    exp_state["finalized_experiences"].append(merged)
+                exp_state["drafts"] = []
+                exp_state["followup_count"] = 0
+                exp_state["current_index"] = int(exp_state["current_index"]) + 1
+                action = "experience_done"
+                wizard_state["collected_by_step"]["experiences"] = list(exp_state["finalized_experiences"])
+            wizard_state["step_states"]["step4"] = exp_state
+            if len(exp_state["finalized_experiences"]) >= expected_count:
+                next_step_suggestion = "next"
+            missing_fields = [] if len(exp_state["finalized_experiences"]) >= expected_count else ["experience"]
+        elif step_num == 5:
+            wizard_state["collected_by_step"]["skills_and_certs"].append(message[:1800])
+            action = "collect_skills"
+            if wizard_state["step_states"]["step5"]["turn_count"] >= 2:
+                wizard_state["step_states"]["step5"]["confirmed"] = True
+                next_step_suggestion = "next"
+            missing_fields = [] if wizard_state["step_states"]["step5"]["confirmed"] else ["skills"]
+            fallback_question = "请继续补充技能与证书，可包含技术栈、工具熟练度、语言能力和证书。"
+        else:
+            wizard_state["collected_by_step"]["final_preferences"] = message[:1600]
+            wizard_state["collected_by_step"]["step6_confirmed"] = True
+            wizard_state["step_states"]["step6"]["confirmed"] = True
+            action = "confirm_finalize"
             render_ready = True
-            action = "finalize"
+            missing_fields = []
+            next_step_suggestion = "stay"
+            fallback_question = "如果确认信息无误，我将按当前内容生成简历。你也可以补充排版或语气偏好。"
 
-        followup_question = _compose_experience_followup(step1_profile, exp_state, message)
         dialog_payload = {
-            "profile_context": _build_step1_profile_context(step1_profile, template_code, language, photo_pref),
+            "profile_context": _build_step_context_for_prompt(step_num, step1_profile),
             "history_text": history_text,
             "user_input": message,
-            "next_prompt": followup_question,
+            "next_prompt": fallback_question,
         }
         model_reply = (ai_service.run_resume_craft_dialog(dialog_payload, runtime=runtime) or "").strip()
-        reply = _enforce_experience_only_reply(model_reply, followup_question)
-        if action == "finalize":
-            reply = "经历信息已完成收集，我将基于 Step1 与经历内容生成简历预览。"
+        reply = _enforce_step_reply(model_reply, fallback_question, step_num)
+        if step_num == 4 and action == "experience_done":
+            reply = "这一段经历已完成深挖。请继续补充下一段经历。"
+        if step_num == 6 and render_ready:
+            reply = "已完成最终确认。请点击“生成简历”开始渲染。"
 
-        missing_fields = [] if render_ready else ["experience"]
         return jsonify(
             {
                 "reply": reply,
                 "intent": "resume-craft",
                 "action": action,
                 "render_ready": render_ready,
+                "next_step_suggestion": next_step_suggestion,
                 "missing_fields": missing_fields,
-                "experience_state": exp_state,
-                    "meta": {
-                        **meta,
-                        "resume_craft_chat_turn_version": "2026-07-07-v5",
-                        "api_runtime_version": meta.get("api_runtime_version", ""),
-                    },
+                "wizard_state": wizard_state,
+                "experience_state": wizard_state["step_states"]["step4"],
+                "meta": {
+                    **meta,
+                    "resume_craft_chat_turn_version": "2026-07-08-v6",
+                    "api_runtime_version": meta.get("api_runtime_version", ""),
+                },
                 "error": "",
             }
         ), 200
@@ -1134,12 +1304,19 @@ def careerforge_resume_craft_render():
     history = data.get("history") or []
     history_text = _history_to_text(history, max_turns=32)
     step1_profile = _normalize_step1_profile(data.get("step1_profile") or {})
+    wizard_state = _normalize_wizard_state(data.get("wizard_state") or {})
     finalized_experiences = data.get("finalized_experiences")
     if finalized_experiences is None and isinstance(data.get("experience_state"), dict):
         finalized_experiences = (data.get("experience_state") or {}).get("finalized_experiences")
+    if finalized_experiences is None:
+        finalized_experiences = wizard_state["collected_by_step"]["experiences"]
     finalized_list = []
     if isinstance(finalized_experiences, list):
         finalized_list = [str(item or "").strip()[:2400] for item in finalized_experiences if str(item or "").strip()]
+
+    if isinstance(data.get("wizard_state"), dict):
+        if not wizard_state["collected_by_step"]["step6_confirmed"]:
+            return jsonify({"error": "not_ready_for_render", "message": "请先完成 Step6 确认后再生成简历。", "meta": meta}), 400
 
     if not history_text.strip() and not finalized_list:
         return jsonify({"error": "missing_history", "message": "请先补充经历信息，再生成简历。"}), 400
@@ -1159,9 +1336,18 @@ def careerforge_resume_craft_render():
 
     step1_context = _build_step1_profile_context(step1_profile, template_code, language, photo_pref)
     experience_context = "\n".join([f"- 经历{i+1}: {item}" for i, item in enumerate(finalized_list)])
+    education_context = "\n".join([f"- 教育{i+1}: {item}" for i, item in enumerate(wizard_state["collected_by_step"]["education"])])
+    skills_context = "\n".join([f"- 技能证书{i+1}: {item}" for i, item in enumerate(wizard_state["collected_by_step"]["skills_and_certs"])])
+    final_pref = str(wizard_state["collected_by_step"]["final_preferences"] or "").strip()
     combined_history_text = history_text
+    if education_context:
+        combined_history_text = (combined_history_text + "\n\n【Step3 教育背景补充】\n" + education_context).strip()
     if experience_context:
-        combined_history_text = (history_text + "\n\n【Step2 已定稿经历】\n" + experience_context).strip()
+        combined_history_text = (combined_history_text + "\n\n【Step4 已定稿经历】\n" + experience_context).strip()
+    if skills_context:
+        combined_history_text = (combined_history_text + "\n\n【Step5 技能与证书】\n" + skills_context).strip()
+    if final_pref:
+        combined_history_text = (combined_history_text + "\n\n【Step6 最终偏好】\n" + final_pref).strip()
 
     html_payload = {
         "template_code": template_code,

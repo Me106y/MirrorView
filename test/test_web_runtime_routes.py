@@ -219,10 +219,10 @@ def test_resume_craft_chat_turn_step1_profile_experience_only(monkeypatch):
     )
     assert resp.status_code == 200
     body = resp.get_json()
-    assert body["action"] in {"grill_followup", "experience_done", "finalize"}
+    assert body["action"] in {"grill_experience", "experience_done", "confirm_finalize"}
     assert "experience_state" in body
     assert "教育背景" not in body["reply"]
-    assert body["meta"]["resume_craft_chat_turn_version"] == "2026-07-07-v5"
+    assert body["meta"]["resume_craft_chat_turn_version"] == "2026-07-08-v6"
 
 
 def test_resume_craft_chat_turn_step1_profile_auto_finalize_after_max_grill(monkeypatch):
@@ -262,9 +262,95 @@ def test_resume_craft_chat_turn_step1_profile_auto_finalize_after_max_grill(monk
     )
     assert resp.status_code == 200
     body = resp.get_json()
-    assert body["render_ready"] is True
-    assert body["action"] == "finalize"
+    assert body["render_ready"] is False
+    assert body["action"] == "experience_done"
     assert body["experience_state"]["finalized_experiences"]
+
+
+def test_resume_craft_chat_turn_step3_only_education(monkeypatch):
+    Config.TURNSTILE_ENFORCE = False
+    Config.RATE_LIMIT_ENFORCE = False
+
+    monkeypatch.setattr(
+        routes.ai_service,
+        "run_resume_craft_dialog",
+        lambda payload, runtime=None: "请继续补充教育背景中的专业和学位。",
+    )
+
+    client = _client()
+    resp = client.post(
+        "/api/careerforge/resume-craft/chat-turn",
+        json={
+            "message": "本科是计算机科学，硕士是软件工程。",
+            "current_step": 3,
+            "step1_profile": {
+                "template_code": "02",
+                "language": "zh",
+                "photo_pref": "no_photo",
+                "target_role": "AI应用开发",
+                "personal_info": {"name": "A", "phone": "1", "email": "a@b.com", "city": "上海", "links": []},
+                "education": [],
+                "skills": [],
+                "certificates": [],
+                "expected_experience_count": 1,
+            },
+            "wizard_state": {"current_step": 3},
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["action"] == "collect_education"
+    assert "education" in body["missing_fields"] or body["missing_fields"] == []
+    assert "wizard_state" in body
+
+
+def test_resume_craft_render_requires_step6_confirmation_with_wizard_state(monkeypatch):
+    Config.TURNSTILE_ENFORCE = False
+    Config.RATE_LIMIT_ENFORCE = False
+
+    monkeypatch.setattr(
+        routes.ai_service,
+        "run_resume_craft_html",
+        lambda payload, runtime=None: "<!DOCTYPE html><html><body><h1>Resume</h1></body></html>",
+    )
+
+    client = _client()
+    resp = client.post(
+        "/api/careerforge/resume-craft/render",
+        json={
+            "step1_profile": {
+                "template_code": "02",
+                "language": "zh",
+                "photo_pref": "no_photo",
+                "target_role": "AI应用开发",
+                "personal_info": {"name": "A", "phone": "1", "email": "a@b.com", "city": "上海", "links": []},
+                "education": [],
+                "skills": [],
+                "certificates": [],
+                "expected_experience_count": 1,
+            },
+            "wizard_state": {
+                "current_step": 6,
+                "collected_by_step": {
+                    "education": ["X大学 计算机 硕士 2020-2023"],
+                    "experiences": ["负责RAG平台建设，时延降低35%"],
+                    "skills_and_certs": ["Python, LangChain"],
+                    "final_preferences": "",
+                    "step6_confirmed": False,
+                },
+                "chat_history_by_step": {"step3": [], "step4": [], "step5": [], "step6": []},
+                "step_states": {
+                    "step3": {"turn_count": 2, "confirmed": True},
+                    "step4": {"current_index": 2, "followup_count": 0, "drafts": [], "finalized_experiences": ["负责RAG平台建设，时延降低35%"]},
+                    "step5": {"turn_count": 2, "confirmed": True},
+                    "step6": {"turn_count": 1, "confirmed": False},
+                },
+            },
+        },
+    )
+    assert resp.status_code == 400
+    body = resp.get_json()
+    assert body["error"] == "not_ready_for_render"
 
 
 def test_resume_craft_render_works_with_step1_profile_and_finalized_experiences(monkeypatch):

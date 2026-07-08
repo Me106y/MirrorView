@@ -51,3 +51,33 @@ export interface ExperienceState {
   drafts: string[];
   finalized_experiences: string[];
 }
+
+export interface StepChatState {
+  turn_count: number;
+  confirmed: boolean;
+}
+
+export interface StepCollectedData {
+  education: string[];
+  experiences: string[];
+  skills_and_certs: string[];
+  final_preferences: string;
+  step6_confirmed: boolean;
+}
+
+export interface ResumeCraftWizardState {
+  current_step: 3 | 4 | 5 | 6;
+  collected_by_step: StepCollectedData;
+  chat_history_by_step: {
+    step3: string[];
+    step4: string[];
+    step5: string[];
+    step6: string[];
+  };
+  step_states: {
+    step3: StepChatState;
+    step4: ExperienceState;
+    step5: StepChatState;
+    step6: StepChatState;
+  };
+}

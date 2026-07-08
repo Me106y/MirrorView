@@ -643,13 +643,13 @@ a {
 
 .resume-craft-wizard-track {
   display: flex;
-  width: 200%;
+  width: 600%;
   transform: translateX(0%);
   align-items: flex-start;
 }
 
 .resume-craft-step-card {
-  width: 50%;
+  width: calc(100% / 6);
   padding: 24px 24px 22px;
   display: flex;
   flex-direction: column;
@@ -929,6 +929,7 @@ a {
 .resume-craft-step-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 10px;
   margin-top: 14px;
 }
 
