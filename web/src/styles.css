@@ -1192,7 +1192,7 @@ a {
 
 .resume-craft-month-popover {
   position: absolute;
-  top: calc(100% + 6px);
+  bottom: calc(100% + 6px);
   left: 0;
   z-index: 25;
   width: 270px;
@@ -1201,6 +1201,11 @@ a {
   background: #fff;
   box-shadow: 0 12px 28px rgba(20, 30, 40, 0.16);
   padding: 10px;
+}
+
+.resume-craft-month-picker-field.end .resume-craft-month-popover {
+  left: auto;
+  right: 0;
 }
 
 .resume-craft-month-popover-head {

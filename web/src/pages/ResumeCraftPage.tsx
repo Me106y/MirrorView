@@ -713,7 +713,7 @@ export function ResumeCraftPage() {
                             onChange={(e) => updateEducationField(index, "degree", e.target.value)}
                           />
                           <div className="resume-craft-edu-time-range">
-                            <div className="resume-craft-month-picker-field" ref={openMonthPicker?.index === index && openMonthPicker?.part === "start" ? monthPickerWrapRef : null}>
+                            <div className="resume-craft-month-picker-field start" ref={openMonthPicker?.index === index && openMonthPicker?.part === "start" ? monthPickerWrapRef : null}>
                               <button
                                 type="button"
                                 className="resume-craft-month-display"
@@ -760,7 +760,7 @@ export function ResumeCraftPage() {
                               ) : null}
                             </div>
                             <span aria-hidden="true">至</span>
-                            <div className="resume-craft-month-picker-field" ref={openMonthPicker?.index === index && openMonthPicker?.part === "end" ? monthPickerWrapRef : null}>
+                            <div className="resume-craft-month-picker-field end" ref={openMonthPicker?.index === index && openMonthPicker?.part === "end" ? monthPickerWrapRef : null}>
                               <button
                                 type="button"
                                 className="resume-craft-month-display"
