@@ -1351,10 +1351,11 @@ a {
 }
 
 .resume-craft-head-actions {
-  display: flex;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 120px;
   align-items: stretch;
   justify-content: flex-end;
-  flex-wrap: nowrap;
   gap: 8px;
 }
 
@@ -1368,7 +1369,6 @@ a {
   height: 42px;
   min-width: 120px;
   min-height: 42px;
-  flex: 0 0 120px;
   margin-top: 0;
   padding: 0;
   display: inline-flex;
@@ -1376,6 +1376,9 @@ a {
   justify-content: center;
   line-height: 1;
   box-sizing: border-box;
+  vertical-align: middle;
+  transform: none;
+  box-shadow: none;
 }
 
 .resume-craft-back-btn.resume-craft-chat-nav-btn {
@@ -1388,6 +1391,7 @@ a {
   min-width: 120px;
   min-height: 42px;
   box-shadow: none;
+  margin-top: 0;
 }
 
 .resume-craft-restart-btn.resume-craft-chat-nav-btn {
