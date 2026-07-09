@@ -1180,12 +1180,13 @@ a {
 
 .resume-craft-edu-highlight-row {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr 1fr 0.95fr 1.45fr;
   gap: 8px;
   align-items: start;
 }
 
 .resume-craft-edu-highlight-row textarea {
+  grid-column: 1 / 4;
   min-height: 82px;
   resize: vertical;
 }
@@ -1213,7 +1214,8 @@ a {
 }
 
 .resume-craft-edu-remove-btn {
-  min-width: 64px;
+  grid-column: 4 / 5;
+  width: 100%;
   height: 40px;
   margin-top: 0;
   padding: 0 10px;
@@ -2117,6 +2119,11 @@ textarea {
 
   .resume-craft-edu-highlight-row {
     grid-template-columns: 1fr;
+  }
+
+  .resume-craft-edu-highlight-row textarea,
+  .resume-craft-edu-remove-btn {
+    grid-column: auto;
   }
 
   .resume-craft-next-btn {
