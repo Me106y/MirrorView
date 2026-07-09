@@ -34,11 +34,6 @@ const LANGUAGE_OPTIONS = [
   { value: "both", label: "中英文双版" },
 ];
 
-const PHOTO_OPTIONS = [
-  { value: "no_photo", label: "不放照片" },
-  { value: "with_photo", label: "放照片" },
-];
-
 const STEP_PROMPTS: Record<ChatStep, string> = {
   3: "我们进入 Step3（教育背景）。请先提供第一段教育信息：学校、专业、学位、时间。",
   4: "我们进入 Step4（工作/项目经历）。请描述第一段经历的场景、职责、行动和结果。",
@@ -178,9 +173,8 @@ export function ResumeCraftPage() {
     const hasLanguage = LANGUAGE_OPTIONS.some((item) => item.value === profile.language);
     const hasRole = profile.target_role.trim().length > 0;
     if (!hasTemplate || !hasLanguage || !hasRole || photoLoading) return false;
-    if (profile.photo_pref === "with_photo") return Boolean(photoDataUrl) && !photoHint;
     return true;
-  }, [profile.template_code, profile.language, profile.target_role, profile.photo_pref, photoLoading, photoDataUrl, photoHint]);
+  }, [profile.template_code, profile.language, profile.target_role, photoLoading]);
 
   const canStep2Next = useMemo(() => {
     const hasName = profile.personal_info.name.trim().length > 0;
@@ -225,7 +219,8 @@ export function ResumeCraftPage() {
     if (!file) {
       setPhotoFile(null);
       setPhotoDataUrl("");
-      setPhotoHint(profile.photo_pref === "with_photo" ? "请选择 PNG/JPG 照片。" : "");
+      setProfile((prev) => ({ ...prev, photo_pref: "no_photo" }));
+      setPhotoHint("可选：未上传照片时将按“不放照片”处理。");
       if (photoInputRef.current) photoInputRef.current.value = "";
       return;
     }
@@ -242,9 +237,12 @@ export function ResumeCraftPage() {
     try {
       const dataUrl = await fileToDataUrl(file);
       setPhotoDataUrl(dataUrl);
+      setProfile((prev) => ({ ...prev, photo_pref: "with_photo" }));
+      setPhotoHint("");
     } catch (err) {
       setPhotoFile(null);
       setPhotoDataUrl("");
+      setProfile((prev) => ({ ...prev, photo_pref: "no_photo" }));
       setPhotoHint((err as Error).message || "读取图片失败，请重试。");
     } finally {
       setPhotoLoading(false);
@@ -253,6 +251,7 @@ export function ResumeCraftPage() {
 
   const buildProfilePayload = (): Step1Profile => ({
     ...profile,
+    photo_pref: photoDataUrl ? "with_photo" : "no_photo",
     personal_info: {
       ...profile.personal_info,
       links: splitTags(linksInput),
@@ -425,7 +424,7 @@ export function ResumeCraftPage() {
                     <span className="resume-craft-step-progress-note">基础信息填写</span>
                   </div>
                   <h2>{STEP_TITLES[1]}</h2>
-                  <p>设置模板、语言、照片偏好、目标岗位与 JD 摘要。</p>
+                  <p>设置模板、语言、可选照片、目标岗位与 JD 摘要。</p>
                   <div className="resume-craft-head-divider" />
                 </header>
                 <div className="resume-craft-soft-separator" aria-hidden="true" />
@@ -454,43 +453,29 @@ export function ResumeCraftPage() {
                       </select>
                     </div>
                   </label>
-
-                  <label className="resume-craft-control">
-                    <span className="resume-craft-control-label">照片偏好</span>
-                    <div className="resume-craft-select-shell">
-                      <span className="resume-craft-select-icon" aria-hidden="true">PH</span>
-                      <select
-                        value={profile.photo_pref}
-                        onChange={(e) => {
-                          const next = e.target.value;
-                          setProfile((prev) => ({ ...prev, photo_pref: next }));
-                          if (next === "with_photo" && !photoDataUrl) setPhotoHint("选择“放照片”后，必须上传 PNG/JPG 照片。");
-                          if (next === "no_photo") setPhotoHint("");
-                        }}
-                      >
-                        {PHOTO_OPTIONS.map((item) => (
-                          <option key={item.value} value={item.value}>{item.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </label>
                 </div>
 
-                {profile.photo_pref === "with_photo" ? (
-                  <div className="resume-craft-photo-box">
-                    <label className="resume-craft-photo-label">上传照片（仅支持 PNG/JPG）</label>
-                    <input
-                      ref={photoInputRef}
-                      type="file"
-                      accept=".png,.jpg,.jpeg,image/png,image/jpeg"
-                      className="resume-craft-photo-input"
-                      onChange={(e) => savePhotoFile(e.target.files?.[0] ?? null)}
-                    />
-                    <p className="resume-craft-photo-name">{photoLoading ? "读取照片中..." : photoFile ? `已选择：${photoFile.name}` : "尚未上传照片"}</p>
-                    {photoHint ? <p className="resume-craft-photo-hint error">{photoHint}</p> : null}
-                    {!photoHint && photoDataUrl ? <p className="resume-craft-photo-hint ok">✓ 照片已就绪</p> : null}
-                  </div>
-                ) : null}
+                <div className="resume-craft-photo-box">
+                  <label className="resume-craft-photo-label">上传照片（可选，仅支持 PNG/JPG）</label>
+                  <input
+                    ref={photoInputRef}
+                    type="file"
+                    accept=".png,.jpg,.jpeg,image/png,image/jpeg"
+                    className="resume-craft-photo-input"
+                    onChange={(e) => savePhotoFile(e.target.files?.[0] ?? null)}
+                  />
+                  <p className="resume-craft-photo-name">{photoLoading ? "读取照片中..." : photoFile ? `已选择：${photoFile.name}` : "未上传（默认按不放照片处理）"}</p>
+                  {photoHint ? (
+                    <p
+                      className={`resume-craft-photo-hint ${
+                        /仅支持|失败|重试/.test(photoHint) ? "error" : photoDataUrl ? "ok" : "note"
+                      }`}
+                    >
+                      {photoHint}
+                    </p>
+                  ) : null}
+                  {!photoHint && photoDataUrl ? <p className="resume-craft-photo-hint ok">✓ 照片已就绪，将按“放照片”生成。</p> : null}
+                </div>
                 <div className="resume-craft-soft-separator" aria-hidden="true" />
 
                 <div className="resume-craft-form-grid resume-craft-step1-form-section">
@@ -498,6 +483,9 @@ export function ResumeCraftPage() {
                     <span className="resume-craft-control-label">目标岗位 <em>*</em></span>
                     <input value={profile.target_role} placeholder="例如：AI 应用开发工程师" onChange={(e) => setProfile((prev) => ({ ...prev, target_role: e.target.value }))} />
                   </label>
+                </div>
+
+                <div className="resume-craft-form-grid resume-craft-step1-form-section">
                   <label className="resume-craft-control">
                     <span className="resume-craft-control-label">目标 JD 摘要</span>
                     <textarea value={profile.jd_summary} placeholder="可粘贴核心职责、技术要求、业务场景关键词" onChange={(e) => setProfile((prev) => ({ ...prev, jd_summary: e.target.value }))} />
@@ -587,7 +575,7 @@ export function ResumeCraftPage() {
                   <div className="resume-craft-param-brief">
                     <span className="resume-craft-pill template">模板 {profile.template_code}</span>
                     <span className="resume-craft-pill language">{profile.language === "zh" ? "中文" : profile.language === "en" ? "英文" : "中英文双版"}</span>
-                    <span className="resume-craft-pill photo">{profile.photo_pref === "with_photo" ? "放照片" : "不放照片"}</span>
+                    <span className="resume-craft-pill photo">{photoDataUrl ? "放照片" : "不放照片"}</span>
                     <span className="resume-craft-pill">岗位 {profile.target_role || "未填写"}</span>
                     {chatStep === 4 ? <span className="resume-craft-pill">经历进度 {wizardState.step_states.step4.finalized_experiences.length}/{profile.expected_experience_count}</span> : null}
                   </div>
@@ -638,20 +626,10 @@ export function ResumeCraftPage() {
           </div>
         </div>
 
-        <section className="surface resume-craft-output" style={{ marginTop: 14 }}>
-          {result.kind === "idle" ? (
-            <div className="resume-craft-preview-placeholder">
-              <div className="resume-craft-preview-wire" aria-hidden="true">
-                <span className="head" />
-                <span className="line" />
-                <span className="line short" />
-                <span className="line" />
-              </div>
-              <p>完成六步后，在 Step6 点击“生成简历”，这里会展示 HTML 预览。</p>
-            </div>
-          ) : null}
-          {result.kind === "error" ? <p className="resume-result-error">{result.message}</p> : null}
-          {result.kind === "report" ? (
+        {result.kind !== "idle" ? (
+          <section className="surface resume-craft-output" style={{ marginTop: 14 }}>
+            {result.kind === "error" ? <p className="resume-result-error">{result.message}</p> : null}
+            {result.kind === "report" ? (
             <>
               <header className="resume-craft-preview-head">
                 <h3>简历预览</h3>
@@ -670,8 +648,9 @@ export function ResumeCraftPage() {
                 <button type="button" className="ghost-btn" onClick={exportPdf}>导出 PDF</button>
               </div>
             </>
-          ) : null}
-        </section>
+            ) : null}
+          </section>
+        ) : null}
       </div>
     </section>
   );

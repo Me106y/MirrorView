@@ -763,6 +763,10 @@ a {
   margin-bottom: 28px;
 }
 
+.resume-craft-step1-select-section {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .resume-craft-control {
   display: flex;
   flex-direction: column;
@@ -1006,6 +1010,10 @@ a {
   color: #0f8a63;
 }
 
+.resume-craft-photo-hint.note {
+  color: #8b837a;
+}
+
 .resume-craft-step-actions {
   display: flex;
   justify-content: flex-end;
@@ -1022,6 +1030,10 @@ a {
 
 .resume-craft-step1-card .resume-craft-form-grid {
   gap: 24px;
+}
+
+.resume-craft-step1-form-section {
+  grid-template-columns: 1fr;
 }
 
 .resume-craft-form-grid .resume-craft-control input,
@@ -1849,7 +1861,7 @@ textarea {
   }
 
   .resume-craft-step1-card .resume-craft-step-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
