@@ -139,6 +139,14 @@ function nowTimeLabel() {
   return new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
+function splitPeriod(period: string) {
+  const raw = String(period || "").trim();
+  if (!raw) return { start: "", end: "" };
+  const parts = raw.split(/[~～]/).map((item) => item.trim());
+  if (parts.length >= 2) return { start: parts[0], end: parts[1] };
+  return { start: raw, end: "" };
+}
+
 export function ResumeCraftPage() {
   const { settings } = useModelSettings();
 
@@ -382,6 +390,18 @@ export function ResumeCraftPage() {
     });
   };
 
+  const updateEducationPeriodDate = (index: number, part: "start" | "end", value: string) => {
+    setProfile((prev) => {
+      const rows = prev.education.length ? [...prev.education] : [{ ...EMPTY_EDUCATION }];
+      const current = rows[index] ?? { ...EMPTY_EDUCATION };
+      const parsed = splitPeriod(current.period);
+      const start = part === "start" ? value : parsed.start;
+      const end = part === "end" ? value : parsed.end;
+      rows[index] = { ...current, period: `${start || ""}~${end || ""}`.trim() };
+      return { ...prev, education: rows };
+    });
+  };
+
   const addEducationRow = () => {
     setProfile((prev) => ({ ...prev, education: [...(prev.education.length ? prev.education : [{ ...EMPTY_EDUCATION }]), { ...EMPTY_EDUCATION }] }));
   };
@@ -616,7 +636,6 @@ export function ResumeCraftPage() {
                   </div>
                   <div className="resume-craft-head-actions">
                     <button type="button" className="ghost-btn resume-craft-back-btn resume-craft-chat-nav-btn" onClick={goPrev}>上一步</button>
-                    <button type="button" className="ghost-btn resume-craft-restart-btn resume-craft-chat-nav-btn" onClick={onRestartCurrentChat}>重新开始</button>
                     <button type="button" className="primary-btn resume-craft-next-btn resume-craft-chat-nav-btn" onClick={goNext} disabled={!canStep3Next}>下一步</button>
                   </div>
                 </header>
@@ -628,46 +647,58 @@ export function ResumeCraftPage() {
                   <span className="resume-craft-pill">岗位 {profile.target_role || "未填写"}</span>
                 </div>
 
-                <section className="resume-craft-education-wrap">
-                  <h3>
-                    <span className="resume-craft-edu-icon" aria-hidden="true">EDU</span>
-                    教育背景
-                  </h3>
-                  {(profile.education.length ? profile.education : [{ ...EMPTY_EDUCATION }]).map((edu, index) => (
-                    <div className="resume-craft-edu-row" key={`edu-${index}`}>
-                      <input
-                        value={edu.school}
-                        placeholder="学校 *"
-                        onChange={(e) => updateEducationField(index, "school", e.target.value)}
-                      />
-                      <input
-                        value={edu.major}
-                        placeholder="专业 *"
-                        onChange={(e) => updateEducationField(index, "major", e.target.value)}
-                      />
-                      <input
-                        value={edu.degree}
-                        placeholder="学位 *"
-                        onChange={(e) => updateEducationField(index, "degree", e.target.value)}
-                      />
-                      <input
-                        value={edu.period}
-                        placeholder="时间 *（如 2020.09-2024.06）"
-                        onChange={(e) => updateEducationField(index, "period", e.target.value)}
-                      />
-                      <div className="resume-craft-edu-highlight-col">
-                        <input
-                          value={edu.highlights}
-                          placeholder="亮点（可选）"
-                          onChange={(e) => updateEducationField(index, "highlights", e.target.value)}
-                        />
-                        {(profile.education.length ? profile.education.length : 1) > 1 ? (
-                          <button type="button" className="ghost-btn resume-craft-edu-remove-btn" onClick={() => removeEducationRow(index)}>
-                            删除
-                          </button>
-                        ) : null}
+                  <section className="resume-craft-education-wrap">
+                    <h3>
+                      <span className="resume-craft-edu-icon" aria-hidden="true">EDU</span>
+                      教育背景
+                    </h3>
+                    {(profile.education.length ? profile.education : [{ ...EMPTY_EDUCATION }]).map((edu, index) => (
+                      <div className="resume-craft-edu-item" key={`edu-${index}`}>
+                        <div className="resume-craft-edu-main-row">
+                          <input
+                            value={edu.school}
+                            placeholder="学校 *"
+                            onChange={(e) => updateEducationField(index, "school", e.target.value)}
+                          />
+                          <input
+                            value={edu.major}
+                            placeholder="专业 *"
+                            onChange={(e) => updateEducationField(index, "major", e.target.value)}
+                          />
+                          <input
+                            value={edu.degree}
+                            placeholder="学位 *"
+                            onChange={(e) => updateEducationField(index, "degree", e.target.value)}
+                          />
+                          <div className="resume-craft-edu-time-range">
+                            <input
+                              type="date"
+                              value={splitPeriod(edu.period).start}
+                              aria-label="开始时间"
+                              onChange={(e) => updateEducationPeriodDate(index, "start", e.target.value)}
+                            />
+                            <span aria-hidden="true">至</span>
+                            <input
+                              type="date"
+                              value={splitPeriod(edu.period).end}
+                              aria-label="结束时间"
+                              onChange={(e) => updateEducationPeriodDate(index, "end", e.target.value)}
+                            />
+                          </div>
+                        </div>
+                        <div className="resume-craft-edu-highlight-row">
+                          <textarea
+                            value={edu.highlights}
+                            placeholder="亮点（可选）：如 GPA、奖学金、核心课程、研究方向、项目成果"
+                            onChange={(e) => updateEducationField(index, "highlights", e.target.value)}
+                          />
+                          {(profile.education.length ? profile.education.length : 1) > 1 ? (
+                            <button type="button" className="ghost-btn resume-craft-edu-remove-btn" onClick={() => removeEducationRow(index)}>
+                              删除
+                            </button>
+                          ) : null}
+                        </div>
                       </div>
-                    </div>
                   ))}
                   <button type="button" className="ghost-btn" onClick={addEducationRow}>+ 新增教育经历</button>
                 </section>
