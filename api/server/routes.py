@@ -864,6 +864,32 @@ def _compose_experience_followup(
             "并补充你在该经历里承担的核心职责。"
         )
     if not has_challenge:
+        focus_terms = [
+            token
+            for token in [
+                "LangChain",
+                "Agentic RAG",
+                "Few-shot",
+                "Prompt",
+                "Temperature",
+                "SQLite",
+                "PostgreSQL",
+                "SQLAlchemy",
+                "Flask",
+                "WebSocket",
+                "JWT",
+                "P95",
+                "会话恢复",
+                "历史查询",
+            ]
+            if token.lower() in combined
+        ]
+        if followup >= 2:
+            focus_text = "、".join(focus_terms[:3]) if focus_terms else "你提到的关键模块"
+            return (
+                f"你刚提到 {focus_text}。请聚焦其中一个模块说明最棘手挑战："
+                "当时为什么难、你做了哪些技术取舍、最终如何验证方案有效？"
+            )
         return (
             f"这段经历很关键。请补充你遇到的挑战/难点，"
             f"并说明它与“{target_role}”岗位能力的关系。"
@@ -894,6 +920,36 @@ def _enforce_experience_only_reply(reply: str, fallback_question: str) -> str:
     if not any(token in text for token in RESUME_CRAFT_ALLOWED_STEP2_ASK_TOKENS):
         return fallback_question
     return text
+
+
+def _normalize_compare_text(text: str) -> str:
+    return re.sub(r"[^0-9a-zA-Z\u4e00-\u9fff]+", "", str(text or "").lower())
+
+
+def _latest_assistant_reply(history: Any, max_turns: int = 8) -> str:
+    if not isinstance(history, list):
+        return ""
+    for item in reversed(history[-max_turns:]):
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("role") or "").strip().lower() != "assistant":
+            continue
+        content = str(item.get("content") or "").strip()
+        if content:
+            return content
+    return ""
+
+
+def _is_repetitive_step4_reply(reply: str, history: Any) -> bool:
+    current = _normalize_compare_text(reply)
+    prev = _normalize_compare_text(_latest_assistant_reply(history))
+    if not current or not prev:
+        return False
+    if current == prev:
+        return True
+    if len(current) > 12 and (current in prev or prev in current):
+        return True
+    return False
 
 
 def _assistant_recently_asked_more_experience(history: Any, max_turns: int = 6) -> bool:
@@ -1311,6 +1367,8 @@ def careerforge_resume_craft_chat_turn():
         }
         model_reply = (ai_service.run_resume_craft_dialog(dialog_payload, runtime=runtime) or "").strip()
         reply = _enforce_step_reply(model_reply, fallback_question, step_num)
+        if step_num == 4 and _is_repetitive_step4_reply(reply, history):
+            reply = fallback_question
         if step_num == 4 and action == "experience_done":
             if next_step_suggestion == "next":
                 reply = "已收到，你目前没有更多项目/经历。系统将进入下一阶段。"
@@ -1331,7 +1389,7 @@ def careerforge_resume_craft_chat_turn():
                 "experience_state": wizard_state["step_states"]["step4"],
                 "meta": {
                     **meta,
-                    "resume_craft_chat_turn_version": "2026-07-09-v7",
+                    "resume_craft_chat_turn_version": "2026-07-09-v8",
                     "api_runtime_version": meta.get("api_runtime_version", ""),
                 },
                 "error": "",

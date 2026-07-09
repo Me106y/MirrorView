@@ -222,7 +222,7 @@ def test_resume_craft_chat_turn_step1_profile_experience_only(monkeypatch):
     assert body["action"] in {"grill_experience", "experience_done", "confirm_finalize"}
     assert "experience_state" in body
     assert "教育背景" not in body["reply"]
-    assert body["meta"]["resume_craft_chat_turn_version"] == "2026-07-09-v7"
+    assert body["meta"]["resume_craft_chat_turn_version"] == "2026-07-09-v8"
 
 
 def test_resume_craft_chat_turn_step1_profile_auto_finalize_after_max_grill(monkeypatch):
@@ -353,6 +353,71 @@ def test_resume_craft_chat_turn_step4_fallback_focuses_on_missing_metric(monkeyp
     body = resp.get_json()
     assert body["action"] == "grill_experience"
     assert ("量化" in body["reply"]) or ("数字" in body["reply"])
+
+
+def test_resume_craft_chat_turn_step4_avoids_repeating_generic_challenge_prompt(monkeypatch):
+    Config.TURNSTILE_ENFORCE = False
+    Config.RATE_LIMIT_ENFORCE = False
+
+    generic = "我已收到你的信息。这段经历很关键。请补充你遇到的挑战/难点，并说明它与“AI应用开发”岗位能力的关系。"
+    monkeypatch.setattr(routes.ai_service, "run_resume_craft_dialog", lambda payload, runtime=None: generic)
+
+    client = _client()
+    first = client.post(
+        "/api/careerforge/resume-craft/chat-turn",
+        json={
+            "message": "基于 LangChain 与 Agentic RAG 架构，构建具备思维链能力的 AI 面试官，P95 响应时间降低 42%。",
+            "current_step": 4,
+            "history": [{"role": "assistant", "content": "我们进入 Step4（工作/项目经历）。请描述第一段经历的场景、职责、行动和结果。"}],
+            "step1_profile": {
+                "template_code": "02",
+                "language": "zh",
+                "photo_pref": "no_photo",
+                "target_role": "AI应用开发",
+                "personal_info": {"name": "A", "phone": "1", "email": "a@b.com", "city": "上海", "links": []},
+                "education": [{"school": "X", "major": "CS", "degree": "硕士", "period": "2020-2023", "highlights": ""}],
+                "skills": ["Python", "LangChain"],
+                "certificates": [],
+                "expected_experience_count": 1,
+            },
+            "experience_state": {"current_index": 1, "followup_count": 0, "drafts": [], "finalized_experiences": []},
+        },
+    )
+    assert first.status_code == 200
+    first_body = first.get_json()
+    exp_state = first_body["experience_state"]
+
+    second_history = [
+        {"role": "assistant", "content": "我们进入 Step4（工作/项目经历）。请描述第一段经历的场景、职责、行动和结果。"},
+        {"role": "user", "content": "基于 LangChain 与 Agentic RAG 架构，构建具备思维链能力的 AI 面试官，P95 响应时间降低 42%。"},
+        {"role": "assistant", "content": generic},
+    ]
+    second = client.post(
+        "/api/careerforge/resume-craft/chat-turn",
+        json={
+            "message": "我主要负责 Few-shot Prompt、Temperature 调优、SQLAlchemy 会话恢复和 JWT 权限控制，系统已在30余场真实面试试运行。",
+            "current_step": 4,
+            "history": second_history,
+            "step1_profile": {
+                "template_code": "02",
+                "language": "zh",
+                "photo_pref": "no_photo",
+                "target_role": "AI应用开发",
+                "personal_info": {"name": "A", "phone": "1", "email": "a@b.com", "city": "上海", "links": []},
+                "education": [{"school": "X", "major": "CS", "degree": "硕士", "period": "2020-2023", "highlights": ""}],
+                "skills": ["Python", "LangChain"],
+                "certificates": [],
+                "expected_experience_count": 1,
+            },
+            "experience_state": exp_state,
+        },
+    )
+    assert second.status_code == 200
+    body = second.get_json()
+    assert body["action"] == "grill_experience"
+    assert body["reply"] != generic
+    assert "挑战" in body["reply"]
+    assert ("LangChain" in body["reply"]) or ("Prompt" in body["reply"]) or ("会话恢复" in body["reply"])
 
 
 def test_resume_craft_chat_turn_step3_only_education(monkeypatch):
