@@ -672,14 +672,14 @@ export function ResumeCraftPage() {
                           />
                           <div className="resume-craft-edu-time-range">
                             <input
-                              type="month"
+                              type="date"
                               value={splitPeriod(edu.period).start}
                               aria-label="开始时间"
                               onChange={(e) => updateEducationPeriodDate(index, "start", e.target.value)}
                             />
                             <span aria-hidden="true">至</span>
                             <input
-                              type="month"
+                              type="date"
                               value={splitPeriod(edu.period).end}
                               aria-label="结束时间"
                               onChange={(e) => updateEducationPeriodDate(index, "end", e.target.value)}
