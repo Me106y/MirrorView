@@ -1174,6 +1174,20 @@ a {
   border-color: rgba(158, 149, 132, 0.55);
 }
 
+.resume-craft-edu-highlight-col {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.resume-craft-edu-remove-btn {
+  min-width: 64px;
+  height: 40px;
+  margin-top: 0;
+  padding: 0 10px;
+}
+
 .resume-craft-next-btn {
   margin-top: 0;
   min-width: 156px;
@@ -1307,7 +1321,7 @@ a {
 
 .resume-craft-head-actions {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 8px;
 }
 
@@ -1317,10 +1331,10 @@ a {
 }
 
 .resume-craft-chat-nav-btn {
-  width: 116px;
-  height: 40px;
-  min-width: 116px;
-  min-height: 40px;
+  width: 120px;
+  height: 42px;
+  min-width: 120px;
+  min-height: 42px;
   margin-top: 0;
   padding: 0;
   display: inline-flex;
@@ -1334,6 +1348,12 @@ a {
   background: linear-gradient(165deg, #f6f6f6, #ececec);
   color: #2f2f2f;
   border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.resume-craft-next-btn.resume-craft-chat-nav-btn {
+  min-width: 120px;
+  min-height: 42px;
+  box-shadow: none;
 }
 
 .resume-craft-restart-btn.resume-craft-chat-nav-btn {
