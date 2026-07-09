@@ -667,11 +667,11 @@ a {
     0 2px 6px rgba(0, 0, 0, 0.03),
     inset 0 0 24px rgba(255, 255, 255, 0.26);
   padding: 32px 36px;
-  gap: 16px;
+  gap: 12px;
 }
 
 .resume-craft-step1-card .resume-craft-step-head {
-  padding-bottom: 24px;
+  padding-bottom: 18px;
 }
 
 .resume-craft-step1-card .resume-craft-head-divider {
@@ -740,7 +740,7 @@ a {
 }
 
 .resume-craft-soft-separator {
-  height: 8px;
+  height: 6px;
   border-radius: 999px;
   background: linear-gradient(180deg, rgba(236, 227, 214, 0.35), rgba(255, 255, 255, 0));
 }
@@ -760,7 +760,7 @@ a {
 
 .resume-craft-step1-card .resume-craft-step-grid {
   gap: 20px;
-  margin-bottom: 28px;
+  margin-bottom: 20px;
 }
 
 .resume-craft-step1-select-section {
@@ -770,7 +770,7 @@ a {
 .resume-craft-control {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .resume-craft-control-label {
@@ -783,7 +783,7 @@ a {
   font-size: 13px;
   font-weight: 500;
   color: #5d564d;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .resume-craft-control-label em {
@@ -971,13 +971,13 @@ a {
 .resume-craft-photo-box {
   border: 1px dashed rgba(153, 166, 178, 0.45);
   border-radius: 14px;
-  padding: 16px;
+  padding: 13px 14px;
   background: linear-gradient(180deg, rgba(252, 250, 245, 0.9), rgba(255, 255, 255, 0.97));
   transition: border-color 220ms ease-out, box-shadow 220ms ease-out, background-color 220ms ease-out;
 }
 
 .resume-craft-photo-label {
-  margin: 0 0 10px;
+  margin: 0 0 8px;
   font-size: 0.88rem;
   color: #3b3b3b;
   font-weight: 600;
@@ -992,13 +992,13 @@ a {
 }
 
 .resume-craft-photo-name {
-  margin: 8px 0 0;
+  margin: 6px 0 0;
   color: #666666;
   font-size: 0.86rem;
 }
 
 .resume-craft-photo-hint {
-  margin: 6px 0 0;
+  margin: 4px 0 0;
   font-size: 0.84rem;
 }
 
@@ -1022,14 +1022,14 @@ a {
 }
 
 .resume-craft-form-grid {
-  margin-top: 6px;
+  margin-top: 4px;
   display: grid;
   gap: 16px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .resume-craft-step1-card .resume-craft-form-grid {
-  gap: 24px;
+  gap: 18px;
 }
 
 .resume-craft-step1-form-section {
@@ -1099,7 +1099,7 @@ a {
 }
 
 .resume-craft-step1-card .resume-craft-form-grid .resume-craft-control textarea {
-  min-height: 120px;
+  min-height: 108px;
   padding: 12px;
   resize: vertical;
 }
@@ -1186,7 +1186,7 @@ a {
 }
 
 .resume-craft-step1-card .resume-craft-step-actions {
-  margin-top: 24px;
+  margin-top: 16px;
   padding-right: 4px;
 }
 
