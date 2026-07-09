@@ -428,8 +428,9 @@ export function ResumeCraftPage() {
                   <p>设置模板、语言、照片偏好、目标岗位与 JD 摘要。</p>
                   <div className="resume-craft-head-divider" />
                 </header>
+                <div className="resume-craft-soft-separator" aria-hidden="true" />
 
-                <div className="resume-craft-step-grid">
+                <div className="resume-craft-step-grid resume-craft-step1-select-section">
                   <label className="resume-craft-control">
                     <span className="resume-craft-control-label">模板</span>
                     <div className="resume-craft-select-shell">
@@ -490,8 +491,9 @@ export function ResumeCraftPage() {
                     {!photoHint && photoDataUrl ? <p className="resume-craft-photo-hint ok">✓ 照片已就绪</p> : null}
                   </div>
                 ) : null}
+                <div className="resume-craft-soft-separator" aria-hidden="true" />
 
-                <div className="resume-craft-form-grid">
+                <div className="resume-craft-form-grid resume-craft-step1-form-section">
                   <label className="resume-craft-control">
                     <span className="resume-craft-control-label">目标岗位 <em>*</em></span>
                     <input value={profile.target_role} placeholder="例如：AI 应用开发工程师" onChange={(e) => setProfile((prev) => ({ ...prev, target_role: e.target.value }))} />
