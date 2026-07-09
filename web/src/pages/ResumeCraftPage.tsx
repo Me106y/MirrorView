@@ -178,8 +178,9 @@ export function ResumeCraftPage() {
 
   const canStep2Next = useMemo(() => {
     const hasName = profile.personal_info.name.trim().length > 0;
-    const hasContact = profile.personal_info.email.trim().length > 0 || profile.personal_info.phone.trim().length > 0;
-    return hasName && hasContact;
+    const hasPhone = profile.personal_info.phone.trim().length > 0;
+    const hasEmail = profile.personal_info.email.trim().length > 0;
+    return hasName && hasPhone && hasEmail;
   }, [profile.personal_info]);
 
   const activeChatStep = step >= 3 ? (step as ChatStep) : null;
@@ -517,11 +518,11 @@ export function ResumeCraftPage() {
                     <input value={profile.personal_info.name} onChange={(e) => setProfile((prev) => ({ ...prev, personal_info: { ...prev.personal_info, name: e.target.value } }))} />
                   </label>
                   <label className="resume-craft-control">
-                    <span className="resume-craft-control-label">手机</span>
+                    <span className="resume-craft-control-label">手机 <em>*</em></span>
                     <input value={profile.personal_info.phone} onChange={(e) => setProfile((prev) => ({ ...prev, personal_info: { ...prev.personal_info, phone: e.target.value } }))} />
                   </label>
                   <label className="resume-craft-control">
-                    <span className="resume-craft-control-label">邮箱</span>
+                    <span className="resume-craft-control-label">邮箱 <em>*</em></span>
                     <input value={profile.personal_info.email} onChange={(e) => setProfile((prev) => ({ ...prev, personal_info: { ...prev.personal_info, email: e.target.value } }))} />
                   </label>
                   <label className="resume-craft-control">
@@ -532,22 +533,11 @@ export function ResumeCraftPage() {
                     <span className="resume-craft-control-label">链接（逗号分隔）</span>
                     <input value={linksInput} placeholder="GitHub, LinkedIn" onChange={(e) => setLinksInput(e.target.value)} />
                   </label>
-                  <label className="resume-craft-control">
-                    <span className="resume-craft-control-label">计划收集几段经历</span>
-                    <div className="resume-craft-select-shell">
-                      <span className="resume-craft-select-icon count" aria-hidden="true">CT</span>
-                      <select value={String(profile.expected_experience_count)} onChange={(e) => setProfile((prev) => ({ ...prev, expected_experience_count: Number(e.target.value || 1) }))}>
-                        {[1, 2, 3, 4, 5].map((item) => (
-                          <option key={item} value={String(item)}>{item} 段</option>
-                        ))}
-                      </select>
-                    </div>
-                  </label>
                 </div>
 
                 <div className="resume-craft-step-actions">
-                  <button type="button" className="ghost-btn resume-craft-back-btn" onClick={goPrev}>上一步</button>
-                  <button type="button" className="primary-btn resume-craft-next-btn" disabled={!canStep2Next} onClick={goNext}>下一步  -&gt;</button>
+                  <button type="button" className="ghost-btn resume-craft-back-btn resume-craft-step2-nav-btn" onClick={goPrev}>上一步</button>
+                  <button type="button" className="primary-btn resume-craft-next-btn resume-craft-step2-nav-btn" disabled={!canStep2Next} onClick={goNext}>下一步  -&gt;</button>
                 </div>
               </>
             )}

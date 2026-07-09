@@ -797,6 +797,10 @@ a {
   color: #cf9768;
 }
 
+.resume-craft-step-card:not(.resume-craft-step1-card) .resume-craft-control-label em {
+  color: #cf9768;
+}
+
 .resume-craft-select-shell {
   display: flex;
   align-items: center;
@@ -1287,6 +1291,11 @@ a {
 .resume-craft-back-btn {
   margin-top: 0;
   min-width: 96px;
+}
+
+.resume-craft-step2-nav-btn {
+  min-width: 128px;
+  min-height: 44px;
 }
 
 .resume-craft-head-actions {
