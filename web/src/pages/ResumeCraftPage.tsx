@@ -535,7 +535,7 @@ export function ResumeCraftPage() {
                   </label>
                 </div>
 
-                <div className="resume-craft-step-actions">
+                <div className="resume-craft-step-actions resume-craft-step2-actions">
                   <button type="button" className="ghost-btn resume-craft-back-btn resume-craft-step2-nav-btn" onClick={goPrev}>上一步</button>
                   <button type="button" className="primary-btn resume-craft-next-btn resume-craft-step2-nav-btn" disabled={!canStep2Next} onClick={goNext}>下一步  -&gt;</button>
                 </div>

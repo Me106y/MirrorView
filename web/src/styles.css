@@ -1650,6 +1650,44 @@ textarea {
   box-shadow: none;
 }
 
+/* Force Step2 prev/next to share the same box model and baseline after global button rules */
+.resume-craft-step-actions .resume-craft-step2-nav-btn {
+  width: 128px;
+  height: 44px;
+  min-width: 128px;
+  min-height: 44px;
+  margin-top: 0;
+  padding: 0;
+  line-height: 1;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+}
+
+.resume-craft-step2-actions {
+  display: grid;
+  grid-template-columns: 128px 128px;
+  justify-content: end;
+  align-items: stretch;
+  column-gap: 10px;
+}
+
+.resume-craft-step2-actions .resume-craft-step2-nav-btn {
+  margin: 0;
+}
+
+.resume-craft-step2-actions .resume-craft-next-btn {
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: none;
+}
+
+.resume-craft-step2-actions .resume-craft-next-btn:hover:not(:disabled),
+.resume-craft-step2-actions .resume-craft-next-btn:active {
+  transform: none;
+}
+
 .output-panel pre {
   margin: 0;
   white-space: pre-wrap;
