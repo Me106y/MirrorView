@@ -536,7 +536,7 @@ def test_resume_craft_render_works_with_step1_profile_and_finalized_experiences(
     )
     assert resp.status_code == 200
     body = resp.get_json()
-    assert "<!DOCTYPE html>" in body["report_html"]
+    assert "<!doctype html>" in body["report_html"].lower()
 
 
 def test_resume_craft_render_returns_html(monkeypatch):
@@ -565,7 +565,7 @@ def test_resume_craft_render_returns_html(monkeypatch):
     assert resp.status_code == 200
     body = resp.get_json()
     assert body["report_name"].endswith(".html")
-    assert "<!DOCTYPE html>" in body["report_html"]
+    assert "<!doctype html>" in body["report_html"].lower()
 
 
 def test_resume_craft_render_returns_400_when_photo_missing(monkeypatch):
@@ -650,3 +650,68 @@ def test_resume_craft_render_retries_when_first_response_is_not_html(monkeypatch
     body = resp.get_json()
     assert "Retry OK" in body["report_html"]
     assert calls["count"] == 2
+
+
+def test_resume_craft_render_extracts_html_from_second_fenced_block(monkeypatch):
+    Config.TURNSTILE_ENFORCE = False
+    Config.RATE_LIMIT_ENFORCE = False
+
+    monkeypatch.setattr(
+        routes.ai_service,
+        "run_resume_craft_html",
+        lambda payload, runtime=None: (
+            "先给出说明\n"
+            "```json\n"
+            '{"note":"preview"}\n'
+            "```\n"
+            "```html\n"
+            "<!DOCTYPE html><html><body><h1>Second Block</h1></body></html>\n"
+            "```"
+        ),
+    )
+
+    client = _client()
+    resp = client.post(
+        "/api/careerforge/resume-craft/render",
+        json={
+            "history": [{"role": "user", "content": "请生成简历"}],
+            "template_code": "02",
+            "language": "zh",
+            "photo_pref": "no_photo",
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert "Second Block" in body["report_html"]
+
+
+def test_resume_craft_render_uses_local_fallback_when_model_returns_empty(monkeypatch):
+    Config.TURNSTILE_ENFORCE = False
+    Config.RATE_LIMIT_ENFORCE = False
+
+    monkeypatch.setattr(routes.ai_service, "run_resume_craft_html", lambda payload, runtime=None: "")
+
+    client = _client()
+    resp = client.post(
+        "/api/careerforge/resume-craft/render",
+        json={
+            "step1_profile": {
+                "template_code": "02",
+                "language": "zh",
+                "photo_pref": "no_photo",
+                "target_role": "AI应用开发",
+                "jd_summary": "负责 AI 应用落地",
+                "personal_info": {"name": "张三", "phone": "13800000000", "email": "a@b.com", "city": "上海", "links": []},
+                "education": [{"school": "X大学", "major": "计算机", "degree": "硕士", "period": "2020-2023", "highlights": ""}],
+                "skills": ["Python", "LangChain"],
+                "certificates": [],
+                "expected_experience_count": 1,
+            },
+            "finalized_experiences": ["负责 RAG 应用开发，降低响应时延 35%。"],
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert "<!doctype html>" in body["report_html"].lower()
+    assert "AI应用开发" in body["report_html"]
+    assert body["meta"]["resume_craft_render_fallback"] == "local"

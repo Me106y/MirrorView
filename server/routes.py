@@ -1,4 +1,5 @@
 from flask import Blueprint, request, jsonify, current_app, Response, stream_with_context
+from client.core.resume_craft_report import build_resume_craft_html_report
 from client.core.resume_match_report import build_resume_match_html_report
 from server.models import db, User, Interview, Message, InviteCode, Listener
 from server.services.ai_service import AIService
@@ -14,6 +15,7 @@ import uuid
 import tempfile
 import os
 import re
+from html import unescape
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -432,25 +434,228 @@ def _extract_preview_snippet(preview_html: str, template_code: str) -> str:
     return (css_part + "\n\n" + card_part).strip()[:5000]
 
 
+def _ensure_doctype_html(doc: str) -> str:
+    text = str(doc or "").strip()
+    if not text:
+        return ""
+    if "<!doctype" in text.lower():
+        return text
+    return "<!DOCTYPE html>\n" + text
+
+
+def _extract_html_document_from_candidate(candidate: str) -> str:
+    text = str(candidate or "").strip()
+    if not text:
+        return ""
+
+    matched = re.search(r"(?is)<!doctype\s+html[\s\S]*?</html\s*>", text)
+    if matched:
+        return matched.group(0).strip()
+
+    matched = re.search(r"(?is)<html\b[^>]*>[\s\S]*?</html\s*>", text)
+    if matched:
+        return _ensure_doctype_html(matched.group(0).strip())
+
+    html_open = re.search(r"(?is)<html\b[^>]*>", text)
+    if html_open:
+        fragment = text[html_open.start():]
+        body_end = re.search(r"(?is)</body\s*>", fragment)
+        if body_end:
+            return _ensure_doctype_html((fragment[: body_end.end()] + "\n</html>").strip())
+
+    body = re.search(r"(?is)<body\b[^>]*>[\s\S]*?</body\s*>", text)
+    if body:
+        head = re.search(r"(?is)<head\b[^>]*>[\s\S]*?</head\s*>", text)
+        head_html = head.group(0).strip() if head else "<head><meta charset=\"UTF-8\"></head>"
+        return _ensure_doctype_html(f"<html>\n{head_html}\n{body.group(0).strip()}\n</html>")
+
+    return ""
+
+
 def _extract_html_document(text: str) -> str:
     raw = (text or "").strip()
     if not raw:
         return ""
 
-    fenced = re.search(r"```(?:html)?\s*(.*?)```", raw, re.IGNORECASE | re.DOTALL)
-    candidate = fenced.group(1).strip() if fenced else raw
+    candidates: List[str] = []
 
-    matched = re.search(r"(?is)<!doctype\s+html.*?</html>", candidate)
-    if matched:
-        return matched.group(0).strip()
+    def _push_candidate(value: str) -> None:
+        item = str(value or "").strip()
+        if not item:
+            return
+        if item not in candidates:
+            candidates.append(item)
 
-    matched = re.search(r"(?is)<html.*?</html>", candidate)
-    if matched:
-        doc = matched.group(0).strip()
-        if "<!doctype" not in doc.lower():
-            doc = "<!DOCTYPE html>\n" + doc
-        return doc
+    _push_candidate(raw)
+    if "&lt;" in raw and "&gt;" in raw:
+        _push_candidate(unescape(raw))
+
+    fenced_blocks = re.findall(r"```(?:[a-zA-Z0-9_-]+)?\s*([\s\S]*?)```", raw)
+    for block in fenced_blocks:
+        _push_candidate(block)
+        if "&lt;" in block and "&gt;" in block:
+            _push_candidate(unescape(block))
+
+    def _score(candidate: str) -> int:
+        low = candidate.lower()
+        score = 0
+        if "<!doctype html" in low:
+            score += 10
+        if "<html" in low:
+            score += 8
+        if "<body" in low:
+            score += 6
+        if "</html" in low:
+            score += 4
+        if "<head" in low:
+            score += 2
+        return score
+
+    for candidate in sorted(candidates, key=_score, reverse=True):
+        doc = _extract_html_document_from_candidate(candidate)
+        if doc:
+            return doc
     return ""
+
+
+def _build_resume_craft_render_fallback(
+    step1_profile: Dict[str, Any],
+    wizard_state: Dict[str, Any],
+    finalized_list: List[str],
+    template_code: str,
+    language: str,
+) -> Tuple[str, str]:
+    personal = step1_profile.get("personal_info") or {}
+    target_role = str(step1_profile.get("target_role") or "").strip() or "未指定岗位"
+    jd_summary = str(step1_profile.get("jd_summary") or "").strip()
+    name = str(personal.get("name") or "").strip() or "候选人"
+    phone = str(personal.get("phone") or "").strip()
+    email = str(personal.get("email") or "").strip()
+    city = str(personal.get("city") or "").strip()
+    links = [str(item or "").strip() for item in (personal.get("links") or []) if str(item or "").strip()]
+
+    education_rows: List[str] = []
+    for row in step1_profile.get("education") or []:
+        if not isinstance(row, dict):
+            continue
+        parts = [
+            str(row.get("school") or "").strip(),
+            str(row.get("major") or "").strip(),
+            str(row.get("degree") or "").strip(),
+            str(row.get("period") or "").strip(),
+        ]
+        highlights = str(row.get("highlights") or "").strip()
+        text = " | ".join([part for part in parts if part])
+        if highlights:
+            text = (text + f"\n- 亮点：{highlights}").strip()
+        if text:
+            education_rows.append(text)
+    for item in wizard_state.get("collected_by_step", {}).get("education", []):
+        value = str(item or "").strip()
+        if value and value not in education_rows:
+            education_rows.append(value)
+
+    experience_rows: List[str] = []
+    for item in finalized_list or []:
+        value = str(item or "").strip()
+        if value:
+            experience_rows.append(value)
+    if not experience_rows:
+        for item in wizard_state.get("collected_by_step", {}).get("experiences", []):
+            value = str(item or "").strip()
+            if value:
+                experience_rows.append(value)
+
+    skill_rows: List[str] = []
+    for item in (step1_profile.get("skills") or []):
+        value = str(item or "").strip()
+        if value:
+            skill_rows.append(value)
+    for item in (step1_profile.get("certificates") or []):
+        value = str(item or "").strip()
+        if value:
+            skill_rows.append(f"证书：{value}")
+    for item in wizard_state.get("collected_by_step", {}).get("skills_and_certs", []):
+        value = str(item or "").strip()
+        if value:
+            skill_rows.append(value)
+
+    profile_lines = [f"- 目标岗位：{target_role}"]
+    if city:
+        profile_lines.append(f"- 城市：{city}")
+    if phone:
+        profile_lines.append(f"- 手机：{phone}")
+    if email:
+        profile_lines.append(f"- 邮箱：{email}")
+    if links:
+        profile_lines.append(f"- 链接：{'；'.join(links)}")
+    if jd_summary:
+        profile_lines.append(f"- JD 摘要：{jd_summary}")
+
+    final_preferences = str(
+        (wizard_state.get("collected_by_step", {}) or {}).get("final_preferences") or ""
+    ).strip()
+
+    sections = [
+        {"title": "基础信息", "content_markdown": "\n".join(profile_lines) or "- 暂无"},
+        {
+            "title": "教育背景",
+            "content_markdown": "\n".join([f"- {item}" for item in education_rows]) or "- 暂无",
+        },
+        {
+            "title": "工作/项目经历",
+            "content_markdown": "\n".join([f"- {item}" for item in experience_rows]) or "- 暂无",
+        },
+        {
+            "title": "技能与证书",
+            "content_markdown": "\n".join([f"- {item}" for item in skill_rows]) or "- 暂无",
+        },
+    ]
+    if final_preferences:
+        sections.append({"title": "补充偏好", "content_markdown": final_preferences})
+
+    result = {
+        "title": f"{name} - {target_role} 简历",
+        "profile_summary": f"基于 Step1-6 已采集信息生成（模型输出异常时自动启用本地兜底渲染）。",
+        "sections": sections,
+        "style_advice": [],
+        "next_actions": [],
+    }
+    language_code = {"中文": "zh", "英文": "en", "中英文双版": "both"}.get(language, "zh")
+    return build_resume_craft_html_report(
+        result=result,
+        target_role=target_role,
+        language=language_code,
+        template=template_code,
+    )
+
+
+def _inject_fallback_header_photo(report_html: str, photo_data_url: str) -> str:
+    html = str(report_html or "")
+    photo = str(photo_data_url or "").strip()
+    if not html or not photo:
+        return html
+    if photo in html:
+        return html
+
+    style_block = (
+        "<style id=\"fallback-photo-style\">"
+        ".hero{position:relative;}"
+        ".fallback-header-photo{position:absolute;top:18px;right:18px;width:88px;height:88px;"
+        "object-fit:cover;border-radius:12px;border:1px solid #e5e7eb;box-shadow:0 2px 10px rgba(15,23,42,.08);}"
+        "@media print{.fallback-header-photo{box-shadow:none;}}"
+        "</style>"
+    )
+    photo_tag = f'<img class="fallback-header-photo" src="{photo}" alt="候选人照片" />'
+    if "<div class=\"hero\">" in html:
+        html = html.replace("<div class=\"hero\">", "<div class=\"hero\">" + photo_tag, 1)
+    elif "<body>" in html:
+        html = html.replace("<body>", "<body>" + photo_tag, 1)
+    if "</head>" in html:
+        html = html.replace("</head>", style_block + "</head>", 1)
+    else:
+        html = style_block + html
+    return html
 
 
 def _resume_craft_user_turns(history: Any, latest_user_input: str = "", max_turns: int = 32) -> List[str]:
@@ -1532,6 +1737,8 @@ def careerforge_resume_craft_render():
         "photo_token": RESUME_CRAFT_PHOTO_TOKEN,
     }
 
+    fallback_used = False
+
     raw_html = ai_service.run_resume_craft_html(html_payload, runtime=runtime)
     report_html = _extract_html_document(raw_html)
     if report_html and photo_pref == "放照片":
@@ -1555,11 +1762,28 @@ def careerforge_resume_craft_render():
         report_html = retry_html
 
     if not report_html:
+        try:
+            _, fallback_html = _build_resume_craft_render_fallback(
+                step1_profile=step1_profile,
+                wizard_state=wizard_state,
+                finalized_list=finalized_list,
+                template_code=template_code,
+                language=language,
+            )
+            if photo_pref == "放照片":
+                fallback_html = _inject_fallback_header_photo(fallback_html, photo_data_url)
+            report_html = _extract_html_document(fallback_html)
+            fallback_used = bool(report_html)
+        except Exception as e:
+            logger.warning("resume-craft render fallback failed: %s", e)
+            report_html = ""
+
+    if not report_html:
         return jsonify(
             {
                 "error": "render_failed",
                 "message": "模型未返回有效 HTML，请继续补充信息后重试。",
-                "meta": meta,
+                "meta": {**meta, "resume_craft_render_fallback": "none"},
             }
         ), 500
 
@@ -1568,7 +1792,7 @@ def careerforge_resume_craft_render():
         {
             "report_name": report_name,
             "report_html": report_html,
-            "meta": meta,
+            "meta": {**meta, "resume_craft_render_fallback": "local" if fallback_used else "none"},
             "error": "",
         }
     ), 200

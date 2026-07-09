@@ -342,7 +342,21 @@ class AIService:
 
     def run_resume_craft_html(self, payload, runtime: Optional[Dict[str, Any]] = None):
         try:
-            return self._build_runtime_agent(runtime).run_resume_craft_html(payload)
+            result = self._build_runtime_agent(runtime).run_resume_craft_html(payload)
+            if str(result or "").strip():
+                return result
+            if isinstance(runtime, dict):
+                mode = str(runtime.get("mode") or "").strip().lower()
+                runtime_key = str(runtime.get("api_key") or "").strip()
+                if mode == "byok" and runtime_key:
+                    try:
+                        fallback_runtime = {"mode": "platform", "provider": "deepseek", "model": Config.DEEPSEEK_MODEL}
+                        retry_result = self._build_runtime_agent(fallback_runtime).run_resume_craft_html(payload)
+                        if str(retry_result or "").strip():
+                            return retry_result
+                    except Exception as retry_error:
+                        logger.warning("run_resume_craft_html byok fallback failed: %s", retry_error)
+            return ""
         except Exception as e:
             logger.error("run_resume_craft_html runtime error: %s", e)
             return ""
