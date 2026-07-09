@@ -394,6 +394,8 @@ export function ResumeCraftPage() {
       const safeReply = getStepReplyGuard(activeChatStep, serverReply) ? serverReply : STEP_PROMPTS[activeChatStep];
       const nextWizard = (resp.wizard_state as ResumeCraftWizardState | undefined) || wizardState;
       const missingFields = Array.isArray(resp.missing_fields) ? (resp.missing_fields as string[]) : [];
+      const nextStepSuggestion = String(resp.next_step_suggestion || "stay");
+      const action = String(resp.action || "");
 
       setWizardState(nextWizard);
       setMissingByStep((prev) => ({ ...prev, [activeChatStep]: missingFields }));
@@ -401,6 +403,9 @@ export function ResumeCraftPage() {
         ...prev,
         [activeChatStep]: [...nextMessages, { role: "assistant", content: safeReply || STEP_PROMPTS[activeChatStep], timestamp: nowTimeLabel() }],
       }));
+      if (activeChatStep === 4 && action === "experience_done" && nextStepSuggestion === "next") {
+        setStep(5);
+      }
     } catch (err) {
       setMessagesByStep((prev) => ({
         ...prev,

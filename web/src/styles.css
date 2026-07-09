@@ -1577,6 +1577,7 @@ a {
   background: transparent;
   box-shadow: none;
   transition: none;
+  align-items: stretch;
 }
 
 .resume-craft-chat-input:hover,
@@ -1585,18 +1586,24 @@ a {
   box-shadow: none;
 }
 
-.resume-craft-send-btn {
+.resume-craft-chat-input input {
+  margin: 0;
+  height: 44px;
+  min-height: 44px;
+  border-radius: 12px;
+  box-sizing: border-box;
+}
+
+.resume-craft-chat-input .resume-craft-send-btn {
   margin-top: 0;
   height: 44px;
   min-height: 44px;
   padding: 0 16px;
   border-radius: 12px;
-}
-
-.resume-craft-chat-input input {
-  height: 44px;
-  min-height: 44px;
-  border-radius: 12px;
+  align-self: stretch;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .resume-craft-send-btn:hover:not(:disabled) {

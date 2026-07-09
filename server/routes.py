@@ -59,6 +59,28 @@ RESUME_CRAFT_ALLOWED_STEP2_ASK_TOKENS = [
 RESUME_CRAFT_ALLOWED_STEP3_ASK_TOKENS = ["教育", "学校", "专业", "学位", "在读", "毕业", "奖学金", "荣誉"]
 RESUME_CRAFT_ALLOWED_STEP5_ASK_TOKENS = ["技能", "工具", "证书", "语言能力", "熟练度", "技术栈"]
 RESUME_CRAFT_ALLOWED_STEP6_ASK_TOKENS = ["确认", "偏好", "突出", "语气", "排版", "风格", "生成"]
+RESUME_CRAFT_NO_MORE_EXPERIENCE_KEYWORDS = [
+    "没有更多项目",
+    "没有更多经历",
+    "无更多项目",
+    "无更多经历",
+    "没有其他项目",
+    "没有其他经历",
+    "不补充项目",
+    "不补充经历",
+    "不再补充项目",
+    "不再补充经历",
+    "项目就这些",
+    "经历就这些",
+    "项目就到这里",
+    "经历就到这里",
+    "no more project",
+    "no more projects",
+    "no more experience",
+    "no more experiences",
+    "that's all",
+]
+RESUME_CRAFT_NO_MORE_EXPERIENCE_EXACT = {"没有", "没了", "没有了", "无", "none", "no", "nope"}
 RESUME_CRAFT_ROLE_HINTS = [
     "开发",
     "工程师",
@@ -828,17 +850,35 @@ def _compose_experience_followup(
     idx = int(experience_state.get("current_index", 1))
     target_role = str(step1_profile.get("target_role") or "目标岗位").strip() or "目标岗位"
     latest = str(latest_input or "").strip()
+    drafts = experience_state.get("drafts") if isinstance(experience_state.get("drafts"), list) else []
+    combined = "\n".join([*(str(item or "").strip() for item in drafts), latest]).lower()
+
+    has_challenge = any(token in combined for token in ["挑战", "难点", "问题", "瓶颈", "阻碍", "风险"])
+    has_action = any(token in combined for token in ["采取", "行动", "优化", "改造", "设计", "实现", "搭建", "重构", "推进"])
+    has_result = any(token in combined for token in ["结果", "效果", "提升", "降低", "增长", "减少", "达成", "上线", "稳定", "交付"])
+    has_metric = bool(re.search(r"\d+(\.\d+)?\s*(%|ms|毫秒|秒|分钟|小时|天|倍|x|万|千)?", combined))
 
     if followup <= 0:
         return (
             f"我们进入第 {idx} 段经历的深挖。请按“场景-职责-行动-结果”描述，"
             "并补充你在该经历里承担的核心职责。"
         )
-    if followup == 1:
+    if not has_challenge:
         return (
-            f"这段经历很关键。请补充你遇到的挑战，以及你采取的关键行动。"
-            f"尽量贴近“{target_role}”的相关能力。"
+            f"这段经历很关键。请补充你遇到的挑战/难点，"
+            f"并说明它与“{target_role}”岗位能力的关系。"
         )
+    if not has_action:
+        return "请补充你采取的关键动作（技术方案、权衡、落地过程），突出你的个人贡献。"
+    if not has_result:
+        return "请补充这段经历带来的结果或业务影响（例如效率、质量、稳定性、交付速度）。"
+    if not has_metric:
+        return (
+            "请补充可量化结果（如效率提升、成本下降、交付时长、影响范围等）。"
+            "如果没有绝对数字，也请给出相对变化或可验证结果。"
+        )
+    if followup >= RESUME_CRAFT_GRILL_MIN_FOLLOWUPS:
+        return "这段经历信息已经较完整。请再补充一句你最想突出给面试官的价值点。"
     return (
         "最后请补充可量化结果（如效率提升、成本下降、交付时长、影响范围等）。"
         "如果没有绝对数字，也请给出相对变化或可验证结果。"
@@ -854,6 +894,61 @@ def _enforce_experience_only_reply(reply: str, fallback_question: str) -> str:
     if not any(token in text for token in RESUME_CRAFT_ALLOWED_STEP2_ASK_TOKENS):
         return fallback_question
     return text
+
+
+def _assistant_recently_asked_more_experience(history: Any, max_turns: int = 6) -> bool:
+    if not isinstance(history, list):
+        return False
+    prompts = [
+        "还有要补充的项目",
+        "还有要补充的经历",
+        "继续补充下一段",
+        "继续补充项目",
+        "继续补充经历",
+        "下一段经历",
+        "更多项目",
+        "更多经历",
+    ]
+    for item in reversed(history[-max_turns:]):
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("role") or "").strip().lower() != "assistant":
+            continue
+        content = str(item.get("content") or "").strip().lower()
+        if not content:
+            continue
+        if any(token in content for token in prompts):
+            return True
+    return False
+
+
+def _is_no_more_experience_message(message: str, history: Any) -> bool:
+    text = str(message or "").strip().lower()
+    if not text:
+        return False
+    if any(token in text for token in RESUME_CRAFT_NO_MORE_EXPERIENCE_KEYWORDS):
+        return True
+    if text in RESUME_CRAFT_NO_MORE_EXPERIENCE_EXACT and _assistant_recently_asked_more_experience(history):
+        return True
+    if (
+        _assistant_recently_asked_more_experience(history)
+        and any(token in text for token in ["没有", "无", "不用", "不再", "先不了", "暂时不"])
+        and any(token in text for token in ["项目", "经历", "补充", "更多"])
+    ):
+        return True
+    return False
+
+
+def _finalize_current_experience_draft(exp_state: Dict[str, Any]) -> bool:
+    merged = "\\n".join(exp_state.get("drafts") or []).strip()[:3000]
+    appended = False
+    if merged:
+        exp_state["finalized_experiences"].append(merged)
+        appended = True
+    exp_state["drafts"] = []
+    exp_state["followup_count"] = 0
+    exp_state["current_index"] = int(exp_state.get("current_index", 1)) + 1
+    return appended
 
 
 def _validate_photo_data_url(photo_data_url: str) -> Tuple[bool, str]:
@@ -1157,25 +1252,39 @@ def careerforge_resume_craft_chat_turn():
             fallback_question = "请继续补充教育背景：学校、专业、学位、时间，以及最想强调的亮点。"
         elif step_num == 4:
             exp_state = _normalize_experience_state(experience_state_raw or wizard_state["step_states"]["step4"])
-            exp_state["drafts"].append(message[:2400])
-            exp_state["followup_count"] = int(exp_state["followup_count"]) + 1
             expected_count = int(step1_profile.get("expected_experience_count") or 1)
             expected_count = max(1, min(expected_count, 5))
             action = "grill_experience"
-            fallback_question = _compose_experience_followup(step1_profile, exp_state, message)
-            if exp_state["followup_count"] >= RESUME_CRAFT_GRILL_MAX_FOLLOWUPS:
-                merged = "\\n".join(exp_state["drafts"]).strip()[:3000]
-                if merged:
-                    exp_state["finalized_experiences"].append(merged)
-                exp_state["drafts"] = []
-                exp_state["followup_count"] = 0
-                exp_state["current_index"] = int(exp_state["current_index"]) + 1
+            no_more_experience = _is_no_more_experience_message(message, history)
+
+            if no_more_experience:
+                _finalize_current_experience_draft(exp_state)
                 action = "experience_done"
+                fallback_question = "已收到。你目前没有更多项目/经历需要补充，我将进入下一阶段。"
                 wizard_state["collected_by_step"]["experiences"] = list(exp_state["finalized_experiences"])
+            else:
+                exp_state["drafts"].append(message[:2400])
+                exp_state["followup_count"] = int(exp_state["followup_count"]) + 1
+                fallback_question = _compose_experience_followup(step1_profile, exp_state, message)
+                if exp_state["followup_count"] >= RESUME_CRAFT_GRILL_MAX_FOLLOWUPS:
+                    _finalize_current_experience_draft(exp_state)
+                    action = "experience_done"
+                    fallback_question = "这一段经历已完成深挖。请问还有要补充的项目/经历吗？如果没有，请回复“没有更多项目”。"
+                    wizard_state["collected_by_step"]["experiences"] = list(exp_state["finalized_experiences"])
+
             wizard_state["step_states"]["step4"] = exp_state
-            if len(exp_state["finalized_experiences"]) >= expected_count:
-                next_step_suggestion = "next"
-            missing_fields = [] if len(exp_state["finalized_experiences"]) >= expected_count else ["experience"]
+            finalized_count = len(exp_state["finalized_experiences"])
+            has_any_experience = finalized_count > 0
+            if no_more_experience:
+                next_step_suggestion = "next" if has_any_experience else "stay"
+                missing_fields = [] if has_any_experience else ["experience"]
+            elif action == "experience_done":
+                next_step_suggestion = "stay"
+                missing_fields = [] if has_any_experience else ["experience"]
+            else:
+                if finalized_count >= expected_count:
+                    next_step_suggestion = "next"
+                missing_fields = [] if finalized_count >= expected_count else ["experience"]
         elif step_num == 5:
             wizard_state["collected_by_step"]["skills_and_certs"].append(message[:1800])
             action = "collect_skills"
@@ -1203,7 +1312,10 @@ def careerforge_resume_craft_chat_turn():
         model_reply = (ai_service.run_resume_craft_dialog(dialog_payload, runtime=runtime) or "").strip()
         reply = _enforce_step_reply(model_reply, fallback_question, step_num)
         if step_num == 4 and action == "experience_done":
-            reply = "这一段经历已完成深挖。请继续补充下一段经历。"
+            if next_step_suggestion == "next":
+                reply = "已收到，你目前没有更多项目/经历。系统将进入下一阶段。"
+            else:
+                reply = "这一段经历已完成深挖。请问还有要补充的项目/经历吗？如果没有，请回复“没有更多项目”。"
         if step_num == 6 and render_ready:
             reply = "已完成最终确认。请点击“生成简历”开始渲染。"
 
@@ -1219,7 +1331,7 @@ def careerforge_resume_craft_chat_turn():
                 "experience_state": wizard_state["step_states"]["step4"],
                 "meta": {
                     **meta,
-                    "resume_craft_chat_turn_version": "2026-07-08-v6",
+                    "resume_craft_chat_turn_version": "2026-07-09-v7",
                     "api_runtime_version": meta.get("api_runtime_version", ""),
                 },
                 "error": "",

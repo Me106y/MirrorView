@@ -222,7 +222,7 @@ def test_resume_craft_chat_turn_step1_profile_experience_only(monkeypatch):
     assert body["action"] in {"grill_experience", "experience_done", "confirm_finalize"}
     assert "experience_state" in body
     assert "教育背景" not in body["reply"]
-    assert body["meta"]["resume_craft_chat_turn_version"] == "2026-07-08-v6"
+    assert body["meta"]["resume_craft_chat_turn_version"] == "2026-07-09-v7"
 
 
 def test_resume_craft_chat_turn_step1_profile_auto_finalize_after_max_grill(monkeypatch):
@@ -265,6 +265,94 @@ def test_resume_craft_chat_turn_step1_profile_auto_finalize_after_max_grill(monk
     assert body["render_ready"] is False
     assert body["action"] == "experience_done"
     assert body["experience_state"]["finalized_experiences"]
+    assert "还有要补充的项目" in body["reply"]
+
+
+def test_resume_craft_chat_turn_step4_no_more_experience_goes_next(monkeypatch):
+    Config.TURNSTILE_ENFORCE = False
+    Config.RATE_LIMIT_ENFORCE = False
+
+    monkeypatch.setattr(
+        routes.ai_service,
+        "run_resume_craft_dialog",
+        lambda payload, runtime=None: "好的，我们继续下一阶段。",
+    )
+
+    client = _client()
+    resp = client.post(
+        "/api/careerforge/resume-craft/chat-turn",
+        json={
+            "message": "没有更多项目了",
+            "current_step": 4,
+            "history": [{"role": "assistant", "content": "这一段经历已完成深挖。请问还有要补充的项目/经历吗？"}],
+            "step1_profile": {
+                "template_code": "02",
+                "language": "zh",
+                "photo_pref": "no_photo",
+                "target_role": "AI应用开发",
+                "personal_info": {"name": "A", "phone": "1", "email": "a@b.com", "city": "上海", "links": []},
+                "education": [{"school": "X", "major": "CS", "degree": "硕士", "period": "2020-2023", "highlights": ""}],
+                "skills": ["Python"],
+                "certificates": [],
+                "expected_experience_count": 2,
+            },
+            "experience_state": {
+                "current_index": 2,
+                "followup_count": 0,
+                "drafts": [],
+                "finalized_experiences": ["项目A：负责RAG平台，时延降低35%。"],
+            },
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["action"] == "experience_done"
+    assert body["next_step_suggestion"] == "next"
+    assert body["missing_fields"] == []
+    assert "进入下一阶段" in body["reply"]
+
+
+def test_resume_craft_chat_turn_step4_fallback_focuses_on_missing_metric(monkeypatch):
+    Config.TURNSTILE_ENFORCE = False
+    Config.RATE_LIMIT_ENFORCE = False
+
+    # Return off-topic response so server falls back to its rule-based Grill question.
+    monkeypatch.setattr(
+        routes.ai_service,
+        "run_resume_craft_dialog",
+        lambda payload, runtime=None: "好的，继续。",
+    )
+
+    client = _client()
+    resp = client.post(
+        "/api/careerforge/resume-craft/chat-turn",
+        json={
+            "message": "我负责重构召回链路，挑战是高并发下稳定性差，最终把可用性提升到了更高水平。",
+            "current_step": 4,
+            "history": [{"role": "assistant", "content": "请补充挑战和行动。"}],
+            "step1_profile": {
+                "template_code": "02",
+                "language": "zh",
+                "photo_pref": "no_photo",
+                "target_role": "AI应用开发",
+                "personal_info": {"name": "A", "phone": "1", "email": "a@b.com", "city": "上海", "links": []},
+                "education": [{"school": "X", "major": "CS", "degree": "硕士", "period": "2020-2023", "highlights": ""}],
+                "skills": ["Python"],
+                "certificates": [],
+                "expected_experience_count": 1,
+            },
+            "experience_state": {
+                "current_index": 1,
+                "followup_count": 1,
+                "drafts": ["项目背景：负责构建在线推理服务。"],
+                "finalized_experiences": [],
+            },
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["action"] == "grill_experience"
+    assert ("量化" in body["reply"]) or ("数字" in body["reply"])
 
 
 def test_resume_craft_chat_turn_step3_only_education(monkeypatch):
