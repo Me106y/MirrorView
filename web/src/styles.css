@@ -1021,6 +1021,7 @@ a {
 .resume-craft-step-actions {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   gap: 10px;
   margin-top: 14px;
 }
@@ -1298,6 +1299,7 @@ a {
   height: 44px;
   min-width: 128px;
   min-height: 44px;
+  margin-top: 0;
   padding: 0;
   line-height: 1;
   box-sizing: border-box;
