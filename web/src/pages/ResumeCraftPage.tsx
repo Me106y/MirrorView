@@ -147,16 +147,6 @@ function splitPeriod(period: string) {
   return { start: raw, end: "" };
 }
 
-function shiftMonthValue(value: string, deltaMonths: number) {
-  const raw = String(value || "").trim();
-  const base = /^\d{4}-\d{2}$/.test(raw) ? `${raw}-01` : `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}-01`;
-  const date = new Date(`${base}T00:00:00`);
-  date.setMonth(date.getMonth() + deltaMonths);
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  return `${y}-${m}`;
-}
-
 export function ResumeCraftPage() {
   const { settings } = useModelSettings();
 
@@ -681,55 +671,19 @@ export function ResumeCraftPage() {
                             onChange={(e) => updateEducationField(index, "degree", e.target.value)}
                           />
                           <div className="resume-craft-edu-time-range">
-                            <div className="resume-craft-month-field">
-                              <button
-                                type="button"
-                                className="ghost-btn resume-craft-month-shift-btn"
-                                aria-label="开始时间-上一年"
-                                onClick={() => updateEducationPeriodDate(index, "start", shiftMonthValue(splitPeriod(edu.period).start, -12))}
-                              >
-                                ‹‹
-                              </button>
-                              <input
-                                type="month"
-                                value={splitPeriod(edu.period).start}
-                                aria-label="开始时间"
-                                onChange={(e) => updateEducationPeriodDate(index, "start", e.target.value)}
-                              />
-                              <button
-                                type="button"
-                                className="ghost-btn resume-craft-month-shift-btn"
-                                aria-label="开始时间-下一年"
-                                onClick={() => updateEducationPeriodDate(index, "start", shiftMonthValue(splitPeriod(edu.period).start, 12))}
-                              >
-                                ››
-                              </button>
-                            </div>
+                            <input
+                              type="month"
+                              value={splitPeriod(edu.period).start}
+                              aria-label="开始时间"
+                              onChange={(e) => updateEducationPeriodDate(index, "start", e.target.value)}
+                            />
                             <span aria-hidden="true">至</span>
-                            <div className="resume-craft-month-field">
-                              <button
-                                type="button"
-                                className="ghost-btn resume-craft-month-shift-btn"
-                                aria-label="结束时间-上一年"
-                                onClick={() => updateEducationPeriodDate(index, "end", shiftMonthValue(splitPeriod(edu.period).end, -12))}
-                              >
-                                ‹‹
-                              </button>
-                              <input
-                                type="month"
-                                value={splitPeriod(edu.period).end}
-                                aria-label="结束时间"
-                                onChange={(e) => updateEducationPeriodDate(index, "end", e.target.value)}
-                              />
-                              <button
-                                type="button"
-                                className="ghost-btn resume-craft-month-shift-btn"
-                                aria-label="结束时间-下一年"
-                                onClick={() => updateEducationPeriodDate(index, "end", shiftMonthValue(splitPeriod(edu.period).end, 12))}
-                              >
-                                ››
-                              </button>
-                            </div>
+                            <input
+                              type="month"
+                              value={splitPeriod(edu.period).end}
+                              aria-label="结束时间"
+                              onChange={(e) => updateEducationPeriodDate(index, "end", e.target.value)}
+                            />
                           </div>
                         </div>
                         <div className="resume-craft-edu-highlight-row">
