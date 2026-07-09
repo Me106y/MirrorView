@@ -139,6 +139,22 @@ function nowTimeLabel() {
   return new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
+function parseMonthValue(value: string) {
+  const raw = String(value || "").trim();
+  if (!/^\d{4}-\d{2}$/.test(raw)) return null;
+  const [yearStr, monthStr] = raw.split("-");
+  const year = Number(yearStr);
+  const month = Number(monthStr);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) return null;
+  return { year, month };
+}
+
+function formatMonthDisplay(value: string) {
+  const parsed = parseMonthValue(value);
+  if (!parsed) return "";
+  return `${parsed.year}/${String(parsed.month).padStart(2, "0")}`;
+}
+
 function splitPeriod(period: string) {
   const raw = String(period || "").trim();
   if (!raw) return { start: "", end: "" };
@@ -178,11 +194,14 @@ export function ResumeCraftPage() {
   const [reportName, setReportName] = useState("resume-craft-report.html");
   const [frameHeight, setFrameHeight] = useState(980);
   const [viewportHeight, setViewportHeight] = useState<number | null>(null);
+  const [openMonthPicker, setOpenMonthPicker] = useState<{ index: number; part: "start" | "end" } | null>(null);
+  const [monthPickerYear, setMonthPickerYear] = useState<number>(new Date().getFullYear());
 
   const previewFrameRef = useRef<HTMLIFrameElement | null>(null);
   const photoInputRef = useRef<HTMLInputElement | null>(null);
   const wizardTrackRef = useRef<HTMLDivElement | null>(null);
   const stepRefs = useRef<Record<StepNumber, HTMLElement | null>>({ 1: null, 2: null, 3: null, 4: null, 5: null, 6: null });
+  const monthPickerWrapRef = useRef<HTMLDivElement | null>(null);
 
   const canStep1Next = useMemo(() => {
     const hasTemplate = TEMPLATE_OPTIONS.some((item) => item.value === profile.template_code);
@@ -242,6 +261,17 @@ export function ResumeCraftPage() {
     observer.observe(card);
     return () => observer.disconnect();
   }, [step, profile, photoHint, photoLoading, messagesByStep, wizardState, result.kind, chatLoading, renderLoading]);
+
+  useEffect(() => {
+    const onPointerDown = (event: MouseEvent) => {
+      if (!openMonthPicker) return;
+      const target = event.target as Node | null;
+      if (monthPickerWrapRef.current && target && monthPickerWrapRef.current.contains(target)) return;
+      setOpenMonthPicker(null);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [openMonthPicker]);
 
   const savePhotoFile = async (file: File | null) => {
     if (!file) {
@@ -400,6 +430,18 @@ export function ResumeCraftPage() {
       rows[index] = { ...current, period: `${start || ""}~${end || ""}`.trim() };
       return { ...prev, education: rows };
     });
+  };
+
+  const openMonthCalendar = (index: number, part: "start" | "end", currentValue: string) => {
+    const parsed = parseMonthValue(currentValue);
+    setMonthPickerYear(parsed?.year ?? new Date().getFullYear());
+    setOpenMonthPicker({ index, part });
+  };
+
+  const selectMonthFromPicker = (index: number, part: "start" | "end", year: number, month: number) => {
+    const value = `${year}-${String(month).padStart(2, "0")}`;
+    updateEducationPeriodDate(index, part, value);
+    setOpenMonthPicker(null);
   };
 
   const addEducationRow = () => {
@@ -671,19 +713,99 @@ export function ResumeCraftPage() {
                             onChange={(e) => updateEducationField(index, "degree", e.target.value)}
                           />
                           <div className="resume-craft-edu-time-range">
-                            <input
-                              type="month"
-                              value={splitPeriod(edu.period).start}
-                              aria-label="开始时间"
-                              onChange={(e) => updateEducationPeriodDate(index, "start", e.target.value)}
-                            />
+                            <div className="resume-craft-month-picker-field" ref={openMonthPicker?.index === index && openMonthPicker?.part === "start" ? monthPickerWrapRef : null}>
+                              <button
+                                type="button"
+                                className="resume-craft-month-display"
+                                aria-label="开始时间（月）"
+                                onClick={() => openMonthCalendar(index, "start", splitPeriod(edu.period).start)}
+                              >
+                                {formatMonthDisplay(splitPeriod(edu.period).start) || "开始时间"}
+                              </button>
+                              {openMonthPicker?.index === index && openMonthPicker?.part === "start" ? (
+                                <div className="resume-craft-month-popover" role="dialog" aria-label="开始时间选择">
+                                  <div className="resume-craft-month-popover-head">
+                                    <span>年份</span>
+                                    <select
+                                      className="resume-craft-month-year-select"
+                                      value={monthPickerYear}
+                                      aria-label="选择年份"
+                                      onChange={(e) => setMonthPickerYear(Number(e.target.value))}
+                                    >
+                                      {Array.from({ length: 81 }, (_, i) => monthPickerYear - 40 + i).map((year) => (
+                                        <option key={`start-year-${year}`} value={year}>
+                                          {year} 年
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  <div className="resume-craft-month-grid">
+                                    {Array.from({ length: 12 }, (_, m) => {
+                                      const month = m + 1;
+                                      const picked = parseMonthValue(splitPeriod(edu.period).start);
+                                      const isActive = picked?.year === monthPickerYear && picked?.month === month;
+                                      return (
+                                        <button
+                                          key={`start-${month}`}
+                                          type="button"
+                                          className={`resume-craft-month-cell ${isActive ? "active" : ""}`}
+                                          onClick={() => selectMonthFromPicker(index, "start", monthPickerYear, month)}
+                                        >
+                                          {String(month).padStart(2, "0")} 月
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              ) : null}
+                            </div>
                             <span aria-hidden="true">至</span>
-                            <input
-                              type="month"
-                              value={splitPeriod(edu.period).end}
-                              aria-label="结束时间"
-                              onChange={(e) => updateEducationPeriodDate(index, "end", e.target.value)}
-                            />
+                            <div className="resume-craft-month-picker-field" ref={openMonthPicker?.index === index && openMonthPicker?.part === "end" ? monthPickerWrapRef : null}>
+                              <button
+                                type="button"
+                                className="resume-craft-month-display"
+                                aria-label="结束时间（月）"
+                                onClick={() => openMonthCalendar(index, "end", splitPeriod(edu.period).end)}
+                              >
+                                {formatMonthDisplay(splitPeriod(edu.period).end) || "结束时间"}
+                              </button>
+                              {openMonthPicker?.index === index && openMonthPicker?.part === "end" ? (
+                                <div className="resume-craft-month-popover" role="dialog" aria-label="结束时间选择">
+                                  <div className="resume-craft-month-popover-head">
+                                    <span>年份</span>
+                                    <select
+                                      className="resume-craft-month-year-select"
+                                      value={monthPickerYear}
+                                      aria-label="选择年份"
+                                      onChange={(e) => setMonthPickerYear(Number(e.target.value))}
+                                    >
+                                      {Array.from({ length: 81 }, (_, i) => monthPickerYear - 40 + i).map((year) => (
+                                        <option key={`end-year-${year}`} value={year}>
+                                          {year} 年
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  <div className="resume-craft-month-grid">
+                                    {Array.from({ length: 12 }, (_, m) => {
+                                      const month = m + 1;
+                                      const picked = parseMonthValue(splitPeriod(edu.period).end);
+                                      const isActive = picked?.year === monthPickerYear && picked?.month === month;
+                                      return (
+                                        <button
+                                          key={`end-${month}`}
+                                          type="button"
+                                          className={`resume-craft-month-cell ${isActive ? "active" : ""}`}
+                                          onClick={() => selectMonthFromPicker(index, "end", monthPickerYear, month)}
+                                        >
+                                          {String(month).padStart(2, "0")} 月
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              ) : null}
+                            </div>
                           </div>
                         </div>
                         <div className="resume-craft-edu-highlight-row">
