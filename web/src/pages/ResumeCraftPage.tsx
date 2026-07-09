@@ -4,7 +4,7 @@ import { callCareerforgeSkill } from "../lib/api";
 import { useModelSettings } from "../context/ModelSettingsContext";
 import type { ResumeCraftWizardState, Step1Profile } from "../types";
 
-type Msg = { role: "user" | "assistant"; content: string };
+type Msg = { role: "user" | "assistant"; content: string; timestamp: string };
 type StepNumber = 1 | 2 | 3 | 4 | 5 | 6;
 type ChatStep = 3 | 4 | 5 | 6;
 
@@ -44,7 +44,7 @@ const STEP_PROMPTS: Record<ChatStep, string> = {
 const STEP_TITLES: Record<StepNumber, string> = {
   1: "Step1 基础信息",
   2: "Step2 个人信息",
-  3: "Step3 教育背景（对话）",
+  3: "Step3 教育背景",
   4: "Step4 工作/项目经历（Grill）",
   5: "Step5 技能与证书（对话）",
   6: "Step6 确认与偏好（对话）",
@@ -129,6 +129,10 @@ function getStepReplyGuard(step: ChatStep, text: string) {
   return /确认|偏好|语气|突出|生成/.test(content);
 }
 
+function nowTimeLabel() {
+  return new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
+}
+
 export function ResumeCraftPage() {
   const { settings } = useModelSettings();
 
@@ -143,10 +147,10 @@ export function ResumeCraftPage() {
 
   const [wizardState, setWizardState] = useState<ResumeCraftWizardState>(EMPTY_WIZARD);
   const [messagesByStep, setMessagesByStep] = useState<Record<ChatStep, Msg[]>>({
-    3: [{ role: "assistant", content: STEP_PROMPTS[3] }],
-    4: [{ role: "assistant", content: STEP_PROMPTS[4] }],
-    5: [{ role: "assistant", content: STEP_PROMPTS[5] }],
-    6: [{ role: "assistant", content: STEP_PROMPTS[6] }],
+    3: [{ role: "assistant", content: STEP_PROMPTS[3], timestamp: nowTimeLabel() }],
+    4: [{ role: "assistant", content: STEP_PROMPTS[4], timestamp: nowTimeLabel() }],
+    5: [{ role: "assistant", content: STEP_PROMPTS[5], timestamp: nowTimeLabel() }],
+    6: [{ role: "assistant", content: STEP_PROMPTS[6], timestamp: nowTimeLabel() }],
   });
   const [missingByStep, setMissingByStep] = useState<Record<ChatStep, string[]>>({
     3: ["education"],
@@ -274,7 +278,7 @@ export function ResumeCraftPage() {
 
   const onRestartCurrentChat = () => {
     if (!activeChatStep) return;
-    setMessagesByStep((prev) => ({ ...prev, [activeChatStep]: [{ role: "assistant", content: STEP_PROMPTS[activeChatStep] }] }));
+    setMessagesByStep((prev) => ({ ...prev, [activeChatStep]: [{ role: "assistant", content: STEP_PROMPTS[activeChatStep], timestamp: nowTimeLabel() }] }));
     setMissingByStep((prev) => ({ ...prev, [activeChatStep]: [activeChatStep === 3 ? "education" : activeChatStep === 4 ? "experience" : activeChatStep === 5 ? "skills" : "confirm"] }));
     setWizardState((prev) => {
       const next = JSON.parse(JSON.stringify(prev)) as ResumeCraftWizardState;
@@ -306,7 +310,7 @@ export function ResumeCraftPage() {
     e.preventDefault();
     if (!activeChatStep || !chatInput.trim() || chatLoading) return;
 
-    const userMessage: Msg = { role: "user", content: chatInput.trim() };
+    const userMessage: Msg = { role: "user", content: chatInput.trim(), timestamp: nowTimeLabel() };
     const nextMessages = [...messagesByStep[activeChatStep], userMessage];
     setMessagesByStep((prev) => ({ ...prev, [activeChatStep]: nextMessages }));
     setChatInput("");
@@ -336,12 +340,12 @@ export function ResumeCraftPage() {
       setMissingByStep((prev) => ({ ...prev, [activeChatStep]: missingFields }));
       setMessagesByStep((prev) => ({
         ...prev,
-        [activeChatStep]: [...nextMessages, { role: "assistant", content: safeReply || STEP_PROMPTS[activeChatStep] }],
+        [activeChatStep]: [...nextMessages, { role: "assistant", content: safeReply || STEP_PROMPTS[activeChatStep], timestamp: nowTimeLabel() }],
       }));
     } catch (err) {
       setMessagesByStep((prev) => ({
         ...prev,
-        [activeChatStep]: [...nextMessages, { role: "assistant", content: (err as Error).message || "请求失败，请重试。" }],
+        [activeChatStep]: [...nextMessages, { role: "assistant", content: (err as Error).message || "请求失败，请重试。", timestamp: nowTimeLabel() }],
       }));
     } finally {
       setChatLoading(false);
@@ -494,7 +498,7 @@ export function ResumeCraftPage() {
                 </div>
 
                 <div className="resume-craft-step-actions">
-                  <button type="button" className="primary-btn resume-craft-next-btn" disabled={!canStep1Next} onClick={goNext}>下一步  -&gt;</button>
+                  <button type="button" className="primary-btn resume-craft-next-btn" disabled={!canStep1Next} onClick={goNext}>下一步</button>
                 </div>
               </>
             )}
@@ -537,7 +541,7 @@ export function ResumeCraftPage() {
 
                 <div className="resume-craft-step-actions resume-craft-step2-actions">
                   <button type="button" className="ghost-btn resume-craft-back-btn resume-craft-step2-nav-btn" onClick={goPrev}>上一步</button>
-                  <button type="button" className="primary-btn resume-craft-next-btn resume-craft-step2-nav-btn" disabled={!canStep2Next} onClick={goNext}>下一步  -&gt;</button>
+                  <button type="button" className="primary-btn resume-craft-next-btn resume-craft-step2-nav-btn" disabled={!canStep2Next} onClick={goNext}>下一步</button>
                 </div>
               </>
             )}
@@ -554,10 +558,10 @@ export function ResumeCraftPage() {
                       <div className="resume-craft-head-divider" />
                     </div>
                     <div className="resume-craft-head-actions">
-                      <button type="button" className="ghost-btn resume-craft-back-btn" onClick={goPrev}>上一步</button>
-                      <button type="button" className="ghost-btn resume-craft-restart-btn" onClick={onRestartCurrentChat} disabled={chatLoading || renderLoading || step !== chatStep}>重新开始</button>
+                      <button type="button" className="ghost-btn resume-craft-back-btn resume-craft-chat-nav-btn" onClick={goPrev}>上一步</button>
+                      <button type="button" className="ghost-btn resume-craft-restart-btn resume-craft-chat-nav-btn" onClick={onRestartCurrentChat} disabled={chatLoading || renderLoading || step !== chatStep}>重新开始</button>
                       {chatStep < 6 ? (
-                        <button type="button" className="primary-btn resume-craft-next-btn" onClick={goNext} disabled={step !== chatStep || activeMissing.length > 0}>下一步  -&gt;</button>
+                        <button type="button" className="primary-btn resume-craft-next-btn resume-craft-chat-nav-btn" onClick={goNext} disabled={step !== chatStep || activeMissing.length > 0}>下一步</button>
                       ) : null}
                     </div>
                   </header>
@@ -574,13 +578,18 @@ export function ResumeCraftPage() {
                     {(messagesByStep[chatStep] || []).map((msg, idx) => (
                       <div key={`${chatStep}-${msg.role}-${idx}`} className={`msg ${msg.role}`}>
                         {msg.role === "assistant" ? <span className="msg-ai-avatar" aria-hidden="true">AI</span> : null}
-                        <span>{msg.content}</span>
+                        <div className="resume-craft-bubble-wrap">
+                          <span>{msg.content}</span>
+                          <small className="resume-craft-msg-time">{msg.timestamp}</small>
+                        </div>
                       </div>
                     ))}
                     {chatLoading && step === chatStep ? (
                       <div className="msg assistant">
                         <span className="msg-ai-avatar" aria-hidden="true">AI</span>
-                        <span>思考中...</span>
+                        <div className="resume-craft-bubble-wrap">
+                          <span>思考中...</span>
+                        </div>
                       </div>
                     ) : null}
                   </div>
@@ -597,7 +606,7 @@ export function ResumeCraftPage() {
 
                   <div className="resume-craft-readiness-note">
                     {step === chatStep ? (
-                      activeMissing.length ? <p>继续补充：{activeMissing.join("、")}</p> : <p>当前步骤信息已满足最小完整度，可进入下一步。</p>
+                      activeMissing.length ? <p>请继续补充当前步骤信息。</p> : <p>当前步骤信息已满足最小完整度，可进入下一步。</p>
                     ) : (
                       <p>切换到本步骤后可继续对话。</p>
                     )}

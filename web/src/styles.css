@@ -708,21 +708,18 @@ a {
 .resume-craft-step-tag {
   display: inline-block;
   width: fit-content;
-  border-radius: 999px;
-  padding: 5px 12px;
+  border-radius: 20px;
+  padding: 6px 14px;
   font-size: 0.74rem;
   font-weight: 700;
-  color: #ffffff;
-  background: linear-gradient(145deg, #151515, #050505);
-  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.26);
+  color: #57463b;
+  background: #f0e9df;
+  box-shadow: 0 2px 7px rgba(122, 101, 75, 0.12);
 }
 
 .resume-craft-step1-card .resume-craft-step-tag {
   border-radius: 20px;
   padding: 6px 14px;
-  color: #57463b;
-  background: #f0e9df;
-  box-shadow: 0 2px 7px rgba(122, 101, 75, 0.12);
 }
 
 .resume-craft-step1-card .resume-craft-step-head h2 {
@@ -1319,6 +1316,32 @@ a {
   min-width: 96px;
 }
 
+.resume-craft-chat-nav-btn {
+  width: 116px;
+  height: 40px;
+  min-width: 116px;
+  min-height: 40px;
+  margin-top: 0;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  box-sizing: border-box;
+}
+
+.resume-craft-back-btn.resume-craft-chat-nav-btn {
+  background: linear-gradient(165deg, #f6f6f6, #ececec);
+  color: #2f2f2f;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.resume-craft-restart-btn.resume-craft-chat-nav-btn {
+  background: linear-gradient(165deg, #f6f0e7, #ece3d7);
+  color: #5b4b3d;
+  border: 1px solid rgba(132, 108, 84, 0.18);
+}
+
 .resume-craft-param-brief {
   display: flex;
   flex-wrap: wrap;
@@ -1362,11 +1385,16 @@ a {
 
 .resume-craft-chat-log .msg {
   margin: 10px 0;
-  align-items: flex-start;
+  align-items: flex-end;
+  padding: 0 4px;
 }
 
 .resume-craft-chat-log .msg span {
-  border-radius: 12px;
+  border-radius: 18px;
+  padding: 10px 14px;
+  max-width: min(78ch, 82%);
+  line-height: 1.45;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.05);
 }
 
 .resume-craft-chat-log .msg-ai-avatar {
@@ -1389,33 +1417,46 @@ a {
 }
 
 .resume-craft-chat-log .msg.assistant span {
-  background: linear-gradient(160deg, rgba(235, 250, 245, 0.86), rgba(224, 243, 237, 0.88));
-  color: #2b3f39;
-  border: 1px solid rgba(153, 190, 178, 0.34);
+  background: #e9e9eb;
+  color: #111111;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-bottom-left-radius: 8px;
 }
 
 .resume-craft-chat-log .msg.user span {
-  background: rgba(255, 255, 255, 0.96);
-  border: 1px solid rgba(155, 168, 180, 0.37);
-  color: #222222;
+  background: #0a84ff;
+  border: 1px solid rgba(10, 132, 255, 0.75);
+  color: #ffffff;
+  border-bottom-right-radius: 8px;
 }
 
 .resume-craft-chat-input {
-  border-radius: 14px;
-  padding: 10px;
-  background: rgba(249, 249, 246, 0.82);
-  border: 1px solid rgba(163, 174, 185, 0.32);
-  transition: border-color 180ms ease, box-shadow 180ms ease;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  transition: none;
 }
 
 .resume-craft-chat-input:hover,
 .resume-craft-chat-input:focus-within {
-  border-color: rgba(111, 141, 168, 0.57);
-  box-shadow: 0 0 0 3px rgba(111, 141, 168, 0.14);
+  border: none;
+  box-shadow: none;
 }
 
 .resume-craft-send-btn {
   margin-top: 0;
+  height: 44px;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 12px;
+}
+
+.resume-craft-chat-input input {
+  height: 44px;
+  min-height: 44px;
+  border-radius: 12px;
 }
 
 .resume-craft-send-btn:hover:not(:disabled) {
@@ -1438,6 +1479,29 @@ a {
   margin: 4px 0 0;
   color: #5b6c7b;
   font-size: 0.86rem;
+}
+
+.resume-craft-chat-log .msg-ai-avatar {
+  display: none;
+}
+
+.resume-craft-bubble-wrap {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.resume-craft-chat-log .msg.user .resume-craft-bubble-wrap {
+  align-items: flex-end;
+}
+
+.resume-craft-msg-time {
+  font-size: 11px;
+  line-height: 1;
+  color: #8e8e93;
+  margin: 0 6px;
+  user-select: none;
 }
 
 .resume-craft-build-mark {
