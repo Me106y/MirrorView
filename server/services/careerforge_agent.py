@@ -986,6 +986,123 @@ You MUST follow the provided Skill specification when answering.
             },
         }
 
+    def _build_step6_heuristic_revision(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        current = payload.get("current_draft_json") if isinstance(payload.get("current_draft_json"), dict) else {}
+        instruction = str(payload.get("user_edit_instruction") or "").strip()
+        updated = json.loads(json.dumps(current or {}, ensure_ascii=False))
+        applied_changes: List[str] = []
+
+        if instruction:
+            lowered = instruction.lower()
+            no_change_markers = ["没有补充", "没有偏好", "先看草稿", "preview", "草稿", "先这样"]
+            if not any(marker in lowered for marker in no_change_markers):
+                old_pref = str(updated.get("final_preferences") or "").strip()
+                merged = instruction if not old_pref else f"{old_pref}；{instruction}"
+                updated["final_preferences"] = merged[:2400]
+                applied_changes.append("更新了最终偏好说明")
+
+        preview_markdown = ""
+        if isinstance(updated, dict):
+            target_role = str(updated.get("target_role") or "").strip() or "待补充"
+            experiences = updated.get("experiences") if isinstance(updated.get("experiences"), list) else []
+            skills = updated.get("skills_and_certs") if isinstance(updated.get("skills_and_certs"), list) else []
+            preview_markdown = (
+                "### 待生成内容预览（请确认）\n\n"
+                f"- 目标岗位：{target_role}\n"
+                f"- 项目经历条目：{len(experiences)}\n"
+                f"- 技能证书条目：{len(skills)}\n"
+            )
+
+        return {
+            "updated_draft_json": updated,
+            "updated_preview_markdown": preview_markdown,
+            "applied_changes": applied_changes,
+            "needs_clarification": False,
+            "clarification_question": "",
+        }
+
+    def run_resume_craft_step6_revise(self, payload: dict) -> dict:
+        fallback = self._build_step6_heuristic_revision(payload if isinstance(payload, dict) else {})
+        if self.llm is None:
+            return fallback
+
+        skill_spec = self.load_skill("resume-craft")
+        schema = {
+            "updated_draft_json": {
+                "target_role": "string",
+                "personal_info": {
+                    "name": "string",
+                    "phone": "string",
+                    "email": "string",
+                    "city": "string",
+                    "links": ["string"],
+                },
+                "education": ["string"],
+                "experiences": ["string"],
+                "skills_and_certs": ["string"],
+                "final_preferences": "string",
+            },
+            "updated_preview_markdown": "string",
+            "applied_changes": ["string"],
+            "needs_clarification": False,
+            "clarification_question": "string",
+        }
+        prompt = ChatPromptTemplate.from_template(
+            """
+你正在运行 CareerForge 的 resume-craft Step6 修订器。
+输出严格 JSON（不要代码块）。
+
+[Skill Specification]
+{skill_spec}
+
+[当前草稿 JSON]
+{current_draft_json}
+
+[用户本轮修改指令]
+{user_edit_instruction}
+
+[事实白名单（只能使用）]
+{confirmed_facts_context}
+
+[JD方向上下文（仅用于强调方向，不能新增事实）]
+{jd_direction_context}
+
+[硬性约束]
+1) 只能在“当前草稿 + 用户本轮明确补充”范围内修改。
+2) 不得从 JD 上下文补充用户未提及的事实。
+3) 若用户信息不足，needs_clarification=true 并给出一个澄清问题。
+4) 输出必须匹配 schema。
+
+[Schema]
+{schema_json}
+"""
+        )
+        chain = prompt | self.llm | StrOutputParser()
+        try:
+            raw = chain.invoke(
+                {
+                    "skill_spec": skill_spec[:14000],
+                    "current_draft_json": json.dumps(payload.get("current_draft_json") or {}, ensure_ascii=False)[:16000],
+                    "user_edit_instruction": str(payload.get("user_edit_instruction") or "").strip()[:3000],
+                    "confirmed_facts_context": str(payload.get("confirmed_facts_context") or "（无）")[:18000],
+                    "jd_direction_context": str(payload.get("jd_direction_context") or "（无）")[:6000],
+                    "schema_json": json.dumps(schema, ensure_ascii=False, indent=2),
+                }
+            )
+            parsed = self._safe_json_loads(raw)
+            if not isinstance(parsed, dict):
+                return fallback
+            return {
+                "updated_draft_json": parsed.get("updated_draft_json") if isinstance(parsed.get("updated_draft_json"), dict) else fallback.get("updated_draft_json"),
+                "updated_preview_markdown": str(parsed.get("updated_preview_markdown") or "").strip()[:12000],
+                "applied_changes": [str(item or "").strip()[:160] for item in (parsed.get("applied_changes") or []) if str(item or "").strip()][:10],
+                "needs_clarification": bool(parsed.get("needs_clarification", False)),
+                "clarification_question": str(parsed.get("clarification_question") or "").strip()[:600],
+            }
+        except Exception as e:
+            logger.error("resume-craft step6 revise invoke failed: %s", e)
+            return fallback
+
     def _build_resume_craft_html_prompt(self, payload: dict) -> str:
         skill_spec = self.load_skill("resume-craft")
         template_code = (payload.get("template_code") or "02").strip()[:8]
@@ -998,6 +1115,8 @@ You MUST follow the provided Skill specification when answering.
         preview_snippet = payload.get("preview_snippet") or ""
         profile_context = payload.get("profile_context") or "（无）"
         history_text = payload.get("history_text") or ""
+        confirmed_facts_context = payload.get("confirmed_facts_context") or history_text or "（无）"
+        jd_direction_context = payload.get("jd_direction_context") or "（无）"
         extra_instruction = (payload.get("extra_instruction") or "").strip()
         photo_rule = (
             f'8) 本次要求放照片：必须输出 <img class="header-photo" src="{photo_token}" ...>，'
@@ -1017,6 +1136,7 @@ You MUST follow the provided Skill specification when answering.
 5) 必须包含导出按钮（window.print）、@page A4、@media print、分页控制。
 6) 内容结构与视觉风格遵循 SKILL.md，且不编造事实。
 7) 若用户已在早期选定模板，禁止再次确认模板。
+8) 只能使用“事实白名单”中已经确认的信息；不得从 JD 摘要中新增任何未被用户确认的事实。
 {photo_rule}
 
 [SKILL.md 规范全文节选]
@@ -1031,8 +1151,14 @@ You MUST follow the provided Skill specification when answering.
 [已保存目标信息（若用户后续已更新，请以后续最新输入为准）]
 {str(profile_context)[:9000]}
 
-[已确认对话事实]
-{str(history_text)[:14000]}
+[事实白名单（可写入简历）]
+{str(confirmed_facts_context)[:18000]}
+
+[JD 方向上下文（仅用于排序/强调，不可当作事实）]
+{str(jd_direction_context)[:6000]}
+
+[对话摘要（仅供参考）]
+{str(history_text)[:5000]}
 
 [附加约束]
 {extra_instruction[:1200] if extra_instruction else "（无）"}

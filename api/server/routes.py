@@ -105,6 +105,70 @@ RESUME_CRAFT_NO_MORE_SKILLS_KEYWORDS = [
     "no more certificates",
 ]
 RESUME_CRAFT_NO_MORE_SKILLS_EXACT = {"没有", "没了", "没有了", "无", "none", "no", "nope"}
+RESUME_CRAFT_STEP6_CONFIRM_KEYWORDS = [
+    "确认生成",
+    "可以生成",
+    "开始生成",
+    "确认没问题",
+    "确认无误",
+    "就这样生成",
+    "没问题生成",
+    "现在生成",
+    "开始吧",
+    "可以了",
+    "确认",
+    "ok generate",
+    "looks good generate",
+    "approve and generate",
+]
+RESUME_CRAFT_STEP6_PREVIEW_KEYWORDS = [
+    "先看草稿",
+    "先看预览",
+    "先看一下",
+    "没有补充",
+    "没有偏好",
+    "没补充",
+    "先这样",
+    "先按这个",
+    "先出草稿",
+    "preview",
+    "show draft",
+]
+RESUME_CRAFT_FACT_AUDIT_STOPWORDS = {
+    "负责",
+    "参与",
+    "岗位",
+    "职位",
+    "要求",
+    "经验",
+    "能力",
+    "熟悉",
+    "了解",
+    "使用",
+    "工作",
+    "项目",
+    "相关",
+    "以上",
+    "以下",
+    "职责",
+    "沟通",
+    "团队",
+    "平台",
+    "系统",
+    "开发",
+    "优化",
+    "技术",
+    "业务",
+    "产品",
+    "solution",
+    "ability",
+    "experience",
+    "requirements",
+    "responsibility",
+    "team",
+    "project",
+    "role",
+}
 RESUME_CRAFT_ROLE_HINTS = [
     "开发",
     "工程师",
@@ -633,7 +697,7 @@ def _build_resume_craft_render_fallback(
         for item in contact_values
     )
 
-    summary_text = jd_summary or final_preferences or f"聚焦 {target_role} 岗位，结合已确认经历输出。"
+    summary_text = final_preferences or f"聚焦 {target_role} 岗位，结合已确认经历输出。"
     summary_html = "<br>".join(html.escape(line) for line in _split_points(summary_text, limit=3))
     photo_element = (
         f'<img class="header-photo" src="{RESUME_CRAFT_PHOTO_TOKEN}" alt="{html.escape(name)}">'
@@ -1147,6 +1211,25 @@ def _normalize_step_chat_state(raw: Any) -> Dict[str, Any]:
     }
 
 
+def _normalize_step6_state(raw: Any) -> Dict[str, Any]:
+    value = raw if isinstance(raw, dict) else {}
+    base = _normalize_step_chat_state(value)
+    try:
+        revision_count = int(value.get("revision_count", 0))
+    except Exception:
+        revision_count = 0
+    draft_json = value.get("draft_json") if isinstance(value.get("draft_json"), dict) else {}
+    preview_markdown = str(value.get("preview_markdown") or value.get("step6_preview_markdown") or "").strip()[:12000]
+    return {
+        **base,
+        "preview_ready": bool(value.get("preview_ready", False)),
+        "awaiting_confirm": bool(value.get("awaiting_confirm", False)),
+        "preview_markdown": preview_markdown,
+        "draft_json": draft_json,
+        "revision_count": max(0, min(revision_count, 30)),
+    }
+
+
 def _normalize_wizard_state(raw: Any) -> Dict[str, Any]:
     data = raw if isinstance(raw, dict) else {}
     collected_raw = data.get("collected_by_step") if isinstance(data.get("collected_by_step"), dict) else {}
@@ -1189,7 +1272,7 @@ def _normalize_wizard_state(raw: Any) -> Dict[str, Any]:
             "step3": _normalize_step_chat_state(step_states_raw.get("step3")),
             "step4": _normalize_experience_state(step_states_raw.get("step4")),
             "step5": _normalize_step_chat_state(step_states_raw.get("step5")),
-            "step6": _normalize_step_chat_state(step_states_raw.get("step6")),
+            "step6": _normalize_step6_state(step_states_raw.get("step6")),
         },
     }
 
@@ -1279,6 +1362,253 @@ def _build_step1_profile_context(profile: Dict[str, Any], template_code: str, la
     ]
     return "\n".join(lines)
 
+
+def _is_step6_confirm_message(message: str) -> bool:
+    text = str(message or "").strip().lower()
+    if not text:
+        return False
+    if any(token in text for token in RESUME_CRAFT_STEP6_CONFIRM_KEYWORDS):
+        return True
+    return bool(
+        re.search(
+            r"(确认|可以|开始|现在|就这样).{0,8}(生成|出简历|开始吧)|"
+            r"(looks good|approved?|ready).{0,8}(generate|build)",
+            text,
+        )
+    )
+
+
+def _is_step6_preview_request(message: str) -> bool:
+    text = str(message or "").strip().lower()
+    if not text:
+        return False
+    if any(token in text for token in RESUME_CRAFT_STEP6_PREVIEW_KEYWORDS):
+        return True
+    return bool(
+        re.search(
+            r"(没有|暂无|暂时无|先不).{0,8}(偏好|补充)|"
+            r"(show|preview|draft).{0,8}(resume|content)",
+            text,
+        )
+    )
+
+
+def _normalize_step6_draft_items(values: Any, limit: int = 20, item_limit: int = 2400) -> List[str]:
+    if not isinstance(values, list):
+        return []
+    out: List[str] = []
+    for item in values[:limit]:
+        text = str(item or "").strip()
+        if text:
+            out.append(text[:item_limit])
+    return out
+
+
+def _extract_confirmed_experiences_from_wizard(wizard_state: Dict[str, Any]) -> List[str]:
+    step4_state = (((wizard_state or {}).get("step_states") or {}).get("step4") or {})
+    finalized = _normalize_step6_draft_items(step4_state.get("finalized_experiences"), limit=20)
+    if finalized:
+        return finalized
+    collected = (((wizard_state or {}).get("collected_by_step") or {}).get("experiences") or [])
+    return _normalize_step6_draft_items(collected, limit=20)
+
+
+def _sanitize_step6_draft_json(raw: Any) -> Dict[str, Any]:
+    value = raw if isinstance(raw, dict) else {}
+    personal_raw = value.get("personal_info") if isinstance(value.get("personal_info"), dict) else {}
+    personal_info = {
+        "name": str(personal_raw.get("name") or "").strip()[:80],
+        "phone": str(personal_raw.get("phone") or "").strip()[:80],
+        "email": str(personal_raw.get("email") or "").strip()[:120],
+        "city": str(personal_raw.get("city") or "").strip()[:80],
+        "links": _normalize_step6_draft_items(personal_raw.get("links"), limit=8, item_limit=240),
+    }
+    return {
+        "target_role": str(value.get("target_role") or "").strip()[:160],
+        "personal_info": personal_info,
+        "education": _normalize_step6_draft_items(value.get("education"), limit=20),
+        "experiences": _normalize_step6_draft_items(value.get("experiences"), limit=20),
+        "skills_and_certs": _normalize_step6_draft_items(value.get("skills_and_certs"), limit=30),
+        "final_preferences": str(value.get("final_preferences") or "").strip()[:2400],
+    }
+
+
+def _build_step6_draft_json(step1_profile: Dict[str, Any], wizard_state: Dict[str, Any]) -> Dict[str, Any]:
+    collected = (wizard_state.get("collected_by_step") or {}) if isinstance(wizard_state, dict) else {}
+    personal = (step1_profile.get("personal_info") or {}) if isinstance(step1_profile, dict) else {}
+    education = _normalize_step6_draft_items(collected.get("education"), limit=20)
+    if not education:
+        for row in step1_profile.get("education") or []:
+            if not isinstance(row, dict):
+                continue
+            line = " | ".join(
+                part
+                for part in [
+                    str(row.get("school") or "").strip(),
+                    str(row.get("major") or "").strip(),
+                    str(row.get("degree") or "").strip(),
+                    str(row.get("period") or "").strip(),
+                ]
+                if part
+            )
+            if str(row.get("highlights") or "").strip():
+                line = (line + f" | 亮点: {str(row.get('highlights') or '').strip()}").strip()
+            if line:
+                education.append(line[:2400])
+
+    experiences = _extract_confirmed_experiences_from_wizard(wizard_state)
+    skills = _normalize_step6_draft_items(collected.get("skills_and_certs"), limit=30)
+    if not skills:
+        skills = _normalize_step6_draft_items(step1_profile.get("skills"), limit=20)
+        certs = _normalize_step6_draft_items(step1_profile.get("certificates"), limit=12)
+        skills.extend([f"证书：{cert}" for cert in certs if cert])
+
+    draft = {
+        "target_role": str(step1_profile.get("target_role") or "").strip()[:160],
+        "personal_info": {
+            "name": str(personal.get("name") or "").strip()[:80],
+            "phone": str(personal.get("phone") or "").strip()[:80],
+            "email": str(personal.get("email") or "").strip()[:120],
+            "city": str(personal.get("city") or "").strip()[:80],
+            "links": _normalize_step6_draft_items(personal.get("links"), limit=8, item_limit=240),
+        },
+        "education": education,
+        "experiences": experiences,
+        "skills_and_certs": skills,
+        "final_preferences": str(collected.get("final_preferences") or "").strip()[:2400],
+    }
+    return _sanitize_step6_draft_json(draft)
+
+
+def _build_step6_preview_markdown(draft_json: Dict[str, Any]) -> str:
+    draft = _sanitize_step6_draft_json(draft_json)
+    personal = draft.get("personal_info") or {}
+    links = personal.get("links") or []
+    contact_bits = [
+        str(personal.get("phone") or "").strip(),
+        str(personal.get("email") or "").strip(),
+        str(personal.get("city") or "").strip(),
+    ] + [str(item or "").strip() for item in links]
+    contact_line = " / ".join([bit for bit in contact_bits if bit]) or "待补充"
+
+    lines: List[str] = [
+        "### 待生成内容预览（请确认）",
+        "",
+        f"- 目标岗位：{draft.get('target_role') or '待补充'}",
+        f"- 联系方式：{contact_line}",
+        "",
+        "#### 教育背景",
+    ]
+    education = draft.get("education") or []
+    if education:
+        lines.extend([f"- {item}" for item in education[:6]])
+    else:
+        lines.append("- （待补充）")
+
+    lines.extend(["", "#### 工作/项目经历"])
+    experiences = draft.get("experiences") or []
+    if experiences:
+        lines.extend([f"- {item}" for item in experiences[:6]])
+    else:
+        lines.append("- （待补充）")
+
+    lines.extend(["", "#### 技能与证书"])
+    skills = draft.get("skills_and_certs") or []
+    if skills:
+        lines.extend([f"- {item}" for item in skills[:10]])
+    else:
+        lines.append("- （待补充）")
+
+    lines.extend(["", "#### 生成偏好"])
+    preference = str(draft.get("final_preferences") or "").strip()
+    lines.append(f"- {preference or '无额外偏好'}")
+    return "\n".join(lines).strip()
+
+
+def _build_confirmed_facts_context(step1_profile: Dict[str, Any], draft_json: Dict[str, Any]) -> str:
+    draft = _sanitize_step6_draft_json(draft_json)
+    personal = draft.get("personal_info") or {}
+    lines: List[str] = [
+        "【事实白名单（只能使用以下信息）】",
+        f"- 目标岗位: {draft.get('target_role') or step1_profile.get('target_role') or '未填写'}",
+        f"- 姓名: {personal.get('name') or '未填写'}",
+        f"- 手机: {personal.get('phone') or '未填写'}",
+        f"- 邮箱: {personal.get('email') or '未填写'}",
+        f"- 城市: {personal.get('city') or '未填写'}",
+        f"- 链接: {', '.join(personal.get('links') or []) or '无'}",
+        "- 教育背景:",
+    ]
+    for idx, item in enumerate(draft.get("education") or [], start=1):
+        lines.append(f"  - 教育{idx}: {item}")
+    if not draft.get("education"):
+        lines.append("  - （无）")
+    lines.append("- 工作/项目经历:")
+    for idx, item in enumerate(draft.get("experiences") or [], start=1):
+        lines.append(f"  - 经历{idx}: {item}")
+    if not draft.get("experiences"):
+        lines.append("  - （无）")
+    lines.append("- 技能与证书:")
+    for idx, item in enumerate(draft.get("skills_and_certs") or [], start=1):
+        lines.append(f"  - 技能{idx}: {item}")
+    if not draft.get("skills_and_certs"):
+        lines.append("  - （无）")
+    lines.append(f"- 生成偏好: {draft.get('final_preferences') or '无'}")
+    return "\n".join(lines)
+
+
+def _build_jd_direction_context(step1_profile: Dict[str, Any]) -> str:
+    jd_summary = str(step1_profile.get("jd_summary") or "").strip()
+    if not jd_summary:
+        return "（无）"
+    return (
+        "JD 仅用于排序和强调方向，不能当作事实写入简历：\n"
+        f"- 方向摘要: {jd_summary[:1600]}"
+    )
+
+
+def _strip_html_text(value: str) -> str:
+    text = str(value or "")
+    text = re.sub(r"(?is)<script[\s\S]*?</script>", " ", text)
+    text = re.sub(r"(?is)<style[\s\S]*?</style>", " ", text)
+    text = re.sub(r"(?is)<[^>]+>", " ", text)
+    return re.sub(r"\s+", " ", unescape(text)).strip()
+
+
+def _extract_fact_audit_tokens(text: str) -> List[str]:
+    source = str(text or "")
+    zh_tokens = re.findall(r"[\u4e00-\u9fff]{2,10}", source)
+    en_tokens = re.findall(r"[A-Za-z][A-Za-z0-9+._-]{2,}", source)
+    out: List[str] = []
+    for token in zh_tokens + en_tokens:
+        item = token.strip().lower()
+        if len(item) < 3:
+            continue
+        if item in RESUME_CRAFT_FACT_AUDIT_STOPWORDS:
+            continue
+        if item not in out:
+            out.append(item)
+    return out[:120]
+
+
+def _audit_resume_fact_integrity(
+    report_html: str,
+    confirmed_facts_context: str,
+    jd_direction_context: str,
+) -> Dict[str, Any]:
+    html_text = _strip_html_text(report_html).lower()
+    facts_text = str(confirmed_facts_context or "").lower()
+    jd_tokens = _extract_fact_audit_tokens(jd_direction_context)
+    unsupported = []
+    for token in jd_tokens:
+        if token in facts_text:
+            continue
+        if token in html_text:
+            unsupported.append(token)
+    unsupported = unsupported[:8]
+    return {
+        "passed": len(unsupported) == 0,
+        "unsupported_tokens": unsupported,
+    }
 
 def _normalize_step4_missing_points(raw_points: Any) -> List[str]:
     points: List[str] = []
@@ -1799,6 +2129,9 @@ def careerforge_resume_craft_chat_turn():
         step4_probe_round = 0
         no_more_experience = False
         no_more_skills = False
+        step6_preview_markdown = ""
+        step6_waiting_confirm = False
+        step6_applied_changes: List[str] = []
 
         if step_num == 3:
             wizard_state["collected_by_step"]["education"].append(message[:1800])
@@ -1901,16 +2234,144 @@ def careerforge_resume_craft_chat_turn():
                 missing_fields = ["skills"]
                 fallback_question = "已记录这项技能/证书。是否还有要补充的技能或证书？如果没有请回复“没有更多技能”。"
         else:
-            wizard_state["collected_by_step"]["final_preferences"] = message[:1600]
-            wizard_state["collected_by_step"]["step6_confirmed"] = True
-            wizard_state["step_states"]["step6"]["confirmed"] = True
-            action = "confirm_finalize"
-            render_ready = True
-            missing_fields = []
-            next_step_suggestion = "stay"
-            fallback_question = "如果确认信息无误，我将按当前内容生成简历。你也可以补充排版或语气偏好。"
+            step6_state = _normalize_step6_state(wizard_state["step_states"].get("step6"))
+            incoming_draft = step6_state.get("draft_json") if isinstance(step6_state.get("draft_json"), dict) else {}
+            draft_json = _sanitize_step6_draft_json(incoming_draft) if incoming_draft else _build_step6_draft_json(step1_profile, wizard_state)
+            message_text = message[:1600]
+            is_confirm = _is_step6_confirm_message(message_text)
+            preview_requested = _is_step6_preview_request(message_text)
 
-        if step_num == 4:
+            if is_confirm and not step6_state.get("preview_ready"):
+                step6_preview_markdown = _build_step6_preview_markdown(draft_json)
+                step6_state["preview_ready"] = True
+                step6_state["awaiting_confirm"] = True
+                step6_state["draft_json"] = draft_json
+                step6_state["preview_markdown"] = step6_preview_markdown
+                action = "step6_preview"
+                render_ready = False
+                missing_fields = ["confirm"]
+                next_step_suggestion = "stay"
+                step6_waiting_confirm = True
+                fallback_question = (
+                    "请先查看待生成内容并确认。以下是当前草稿：\n\n"
+                    f"{step6_preview_markdown}\n\n"
+                    "如果无误，请回复“确认生成”；如需改动，请直接输入修改意见。"
+                )
+            elif is_confirm and step6_state.get("preview_ready"):
+                step6_preview_markdown = str(step6_state.get("preview_markdown") or _build_step6_preview_markdown(draft_json)).strip()
+                step6_state["preview_markdown"] = step6_preview_markdown
+                step6_state["draft_json"] = draft_json
+                step6_state["awaiting_confirm"] = False
+                step6_state["confirmed"] = True
+                wizard_state["collected_by_step"]["step6_confirmed"] = True
+                wizard_state["step_states"]["step6"]["confirmed"] = True
+                action = "step6_confirm"
+                render_ready = True
+                missing_fields = []
+                next_step_suggestion = "stay"
+                step6_waiting_confirm = False
+                fallback_question = "已完成最终确认。请点击“生成简历”开始渲染。"
+            else:
+                if message_text and not preview_requested:
+                    revise_payload = {
+                        "current_draft_json": draft_json,
+                        "user_edit_instruction": message_text,
+                        "confirmed_facts_context": _build_confirmed_facts_context(step1_profile, draft_json),
+                        "jd_direction_context": _build_jd_direction_context(step1_profile),
+                    }
+                    revision = ai_service.run_resume_craft_step6_revise(revise_payload, runtime=runtime)
+                    revised_draft = _sanitize_step6_draft_json(revision.get("updated_draft_json") if isinstance(revision, dict) else {})
+                    if revised_draft:
+                        draft_json = revised_draft
+                    if isinstance(revision, dict):
+                        changes = revision.get("applied_changes")
+                        if isinstance(changes, list):
+                            step6_applied_changes = [str(item or "").strip()[:180] for item in changes if str(item or "").strip()][:8]
+                        needs_clarification = bool(revision.get("needs_clarification", False))
+                        clarification_question = str(revision.get("clarification_question") or "").strip()
+                        if needs_clarification and clarification_question:
+                            step6_preview_markdown = _build_step6_preview_markdown(draft_json)
+                            step6_state["preview_ready"] = True
+                            step6_state["awaiting_confirm"] = True
+                            step6_state["draft_json"] = draft_json
+                            step6_state["preview_markdown"] = step6_preview_markdown
+                            step6_state["revision_count"] = int(step6_state.get("revision_count", 0)) + 1
+                            wizard_state["collected_by_step"]["final_preferences"] = draft_json.get("final_preferences", "")
+                            wizard_state["step_states"]["step6"] = step6_state
+                            action = "step6_revise"
+                            render_ready = False
+                            missing_fields = ["confirm"]
+                            next_step_suggestion = "stay"
+                            step6_waiting_confirm = True
+                            fallback_question = (
+                                f"{clarification_question}\n\n"
+                                "当前草稿如下：\n\n"
+                                f"{step6_preview_markdown}\n\n"
+                                "你可以继续修改，或回复“确认生成”。"
+                            )
+                            if step_num == 6:
+                                reply = fallback_question
+                            else:
+                                reply = ""
+                            # Early return to avoid duplicate footer assembly.
+                            return jsonify(
+                                {
+                                    "reply": reply or fallback_question,
+                                    "intent": "resume-craft",
+                                    "action": action,
+                                    "render_ready": render_ready,
+                                    "next_step_suggestion": next_step_suggestion,
+                                    "missing_fields": missing_fields,
+                                    "wizard_state": wizard_state,
+                                    "experience_state": wizard_state["step_states"]["step4"],
+                                    "step6_preview_markdown": step6_preview_markdown,
+                                    "step6_waiting_confirm": step6_waiting_confirm,
+                                    "step6_applied_changes": step6_applied_changes,
+                                    "meta": {
+                                        **meta,
+                                        "resume_craft_chat_turn_version": "2026-07-10-v10",
+                                        "step4_mode": "",
+                                        "step4_missing_points": [],
+                                        "step4_raw_missing_points": [],
+                                        "step4_reasoning_focus": [],
+                                        "step4_focus_topic": "",
+                                        "step4_focus_stage": "",
+                                        "step4_evidence_coverage": {},
+                                        "step4_probe_round": 0,
+                                        "step6_mode": "preview_confirm_gate",
+                                        "api_runtime_version": meta.get("api_runtime_version", ""),
+                                    },
+                                    "error": "",
+                                }
+                            ), 200
+
+                step6_preview_markdown = _build_step6_preview_markdown(draft_json)
+                step6_state["preview_ready"] = True
+                step6_state["awaiting_confirm"] = True
+                step6_state["draft_json"] = draft_json
+                step6_state["preview_markdown"] = step6_preview_markdown
+                step6_state["revision_count"] = int(step6_state.get("revision_count", 0)) + (0 if preview_requested else 1)
+                wizard_state["collected_by_step"]["final_preferences"] = draft_json.get("final_preferences", "")
+                wizard_state["collected_by_step"]["step6_confirmed"] = False
+                wizard_state["step_states"]["step6"]["confirmed"] = False
+                action = "step6_preview" if not message_text or preview_requested else "step6_revise"
+                render_ready = False
+                missing_fields = ["confirm"]
+                next_step_suggestion = "stay"
+                step6_waiting_confirm = True
+                applied_text = ""
+                if step6_applied_changes:
+                    applied_text = "已应用修改：\n" + "\n".join(f"- {item}" for item in step6_applied_changes) + "\n\n"
+                fallback_question = (
+                    f"{applied_text}"
+                    "以下是准备生成的内容，请先确认：\n\n"
+                    f"{step6_preview_markdown}\n\n"
+                    "如需继续修改，请直接输入；如确认无误，请回复“确认生成”。"
+                )
+
+            wizard_state["step_states"]["step6"] = step6_state
+
+        if step_num in {4, 6}:
             reply = fallback_question
         else:
             dialog_payload = {
@@ -1938,9 +2399,12 @@ def careerforge_resume_craft_chat_turn():
                 "missing_fields": missing_fields,
                 "wizard_state": wizard_state,
                 "experience_state": wizard_state["step_states"]["step4"],
+                "step6_preview_markdown": step6_preview_markdown,
+                "step6_waiting_confirm": step6_waiting_confirm,
+                "step6_applied_changes": step6_applied_changes,
                 "meta": {
                     **meta,
-                    "resume_craft_chat_turn_version": "2026-07-10-v9",
+                    "resume_craft_chat_turn_version": "2026-07-10-v10",
                     "step4_mode": "agent_led" if step_num == 4 else "",
                     "step4_missing_points": step4_missing_points if step_num == 4 else [],
                     "step4_raw_missing_points": step4_raw_missing_points if step_num == 4 else [],
@@ -1961,6 +2425,7 @@ def careerforge_resume_craft_chat_turn():
                         else {}
                     ),
                     "step4_probe_round": step4_probe_round if step_num == 4 else 0,
+                    "step6_mode": "preview_confirm_gate" if step_num == 6 else "",
                     "api_runtime_version": meta.get("api_runtime_version", ""),
                 },
                 "error": "",
@@ -2059,6 +2524,12 @@ def careerforge_resume_craft_render():
         if not wizard_state["collected_by_step"]["step6_confirmed"]:
             return jsonify({"error": "not_ready_for_render", "message": "请先完成 Step6 确认后再生成简历。", "meta": meta}), 400
 
+    step6_state = _normalize_step6_state((wizard_state.get("step_states") or {}).get("step6"))
+    input_draft_json = data.get("draft_json") if isinstance(data.get("draft_json"), dict) else step6_state.get("draft_json")
+    step6_draft_json = _sanitize_step6_draft_json(input_draft_json) if input_draft_json else _build_step6_draft_json(step1_profile, wizard_state)
+    if not finalized_list:
+        finalized_list = _normalize_step6_draft_items(step6_draft_json.get("experiences"), limit=20)
+
     if not history_text.strip() and not finalized_list:
         return jsonify({"error": "missing_history", "message": "请先补充经历信息，再生成简历。"}), 400
 
@@ -2079,19 +2550,13 @@ def careerforge_resume_craft_render():
     preview_snippet = _extract_preview_snippet(templates.get("preview_template", ""), template_code)
 
     step1_context = _build_step1_profile_context(step1_profile, template_code, language, photo_pref)
-    experience_context = "\n".join([f"- 经历{i+1}: {item}" for i, item in enumerate(finalized_list)])
-    education_context = "\n".join([f"- 教育{i+1}: {item}" for i, item in enumerate(wizard_state["collected_by_step"]["education"])])
-    skills_context = "\n".join([f"- 技能证书{i+1}: {item}" for i, item in enumerate(wizard_state["collected_by_step"]["skills_and_certs"])])
-    final_pref = str(wizard_state["collected_by_step"]["final_preferences"] or "").strip()
-    combined_history_text = history_text
-    if education_context:
-        combined_history_text = (combined_history_text + "\n\n【Step3 教育背景补充】\n" + education_context).strip()
-    if experience_context:
-        combined_history_text = (combined_history_text + "\n\n【Step4 已定稿经历】\n" + experience_context).strip()
-    if skills_context:
-        combined_history_text = (combined_history_text + "\n\n【Step5 技能与证书】\n" + skills_context).strip()
-    if final_pref:
-        combined_history_text = (combined_history_text + "\n\n【Step6 最终偏好】\n" + final_pref).strip()
+    confirmed_facts_context = _build_confirmed_facts_context(step1_profile, step6_draft_json)
+    jd_direction_context = _build_jd_direction_context(step1_profile)
+    combined_history_text = (
+        "【已确认内容（可写入简历）】\n"
+        f"{confirmed_facts_context}\n\n"
+        "【备注】JD 仅作为强调方向，不可作为事实来源。"
+    ).strip()
 
     html_payload = {
         "template_code": template_code,
@@ -2103,15 +2568,20 @@ def careerforge_resume_craft_render():
         "preview_snippet": preview_snippet,
         "profile_context": step1_context,
         "history_text": combined_history_text,
+        "confirmed_facts_context": confirmed_facts_context,
+        "jd_direction_context": jd_direction_context,
         "photo_token": RESUME_CRAFT_PHOTO_TOKEN,
     }
 
     fallback_used = False
+    fact_audit = {"passed": True, "unsupported_tokens": []}
 
     raw_html = ai_service.run_resume_craft_html(html_payload, runtime=runtime)
     report_html = _extract_html_document(raw_html)
     if report_html and photo_pref == "放照片":
         report_html = _inject_photo_data_url_into_html(report_html, processed_photo_data_url, RESUME_CRAFT_PHOTO_TOKEN)
+    if report_html:
+        fact_audit = _audit_resume_fact_integrity(report_html, confirmed_facts_context, jd_direction_context)
     if not report_html:
         strict_payload = dict(html_payload)
         if photo_pref == "放照片":
@@ -2129,6 +2599,23 @@ def careerforge_resume_craft_render():
         if retry_html and photo_pref == "放照片":
             retry_html = _inject_photo_data_url_into_html(retry_html, processed_photo_data_url, RESUME_CRAFT_PHOTO_TOKEN)
         report_html = retry_html
+        if report_html:
+            fact_audit = _audit_resume_fact_integrity(report_html, confirmed_facts_context, jd_direction_context)
+
+    if report_html and not fact_audit["passed"]:
+        strict_payload = dict(html_payload)
+        strict_payload["extra_instruction"] = (
+            "事实审计未通过：检测到疑似非白名单事实词 "
+            f"{', '.join(fact_audit['unsupported_tokens'])}。"
+            "请重写HTML：只能使用事实白名单中的信息，"
+            "JD只可用于排序与强调，不可写成已做过的经历。"
+        )
+        retry_html = _extract_html_document(ai_service.run_resume_craft_html(strict_payload, runtime=runtime))
+        if retry_html and photo_pref == "放照片":
+            retry_html = _inject_photo_data_url_into_html(retry_html, processed_photo_data_url, RESUME_CRAFT_PHOTO_TOKEN)
+        if retry_html:
+            report_html = retry_html
+            fact_audit = _audit_resume_fact_integrity(report_html, confirmed_facts_context, jd_direction_context)
 
     if not report_html:
         try:
@@ -2147,6 +2634,8 @@ def careerforge_resume_craft_render():
                     RESUME_CRAFT_PHOTO_TOKEN,
                 )
             report_html = _extract_html_document(fallback_html)
+            if report_html:
+                fact_audit = _audit_resume_fact_integrity(report_html, confirmed_facts_context, jd_direction_context)
             fallback_used = bool(report_html)
         except Exception as e:
             logger.warning("resume-craft render fallback failed: %s", e)
@@ -2160,6 +2649,16 @@ def careerforge_resume_craft_render():
                 "meta": {**meta, "resume_craft_render_fallback": "none"},
             }
         ), 500
+
+    if not fact_audit["passed"]:
+        return jsonify(
+            {
+                "error": "unsupported_fact_detected",
+                "message": "检测到疑似超出已确认事实的内容，请在 Step6 继续修订并再次确认后生成。",
+                "unsupported_tokens": fact_audit.get("unsupported_tokens", []),
+                "meta": {**meta, "resume_craft_render_fallback": "local" if fallback_used else "none"},
+            }
+        ), 400
 
     report_name = f"{_build_resume_artifact_stem(step1_profile)}.html"
     pdf_name, pdf_base64, pdf_error = _generate_resume_craft_pdf_artifact(report_html, report_name)

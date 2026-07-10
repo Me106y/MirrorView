@@ -104,7 +104,15 @@ const EMPTY_WIZARD: ResumeCraftWizardState = {
       },
     },
     step5: { turn_count: 0, confirmed: false },
-    step6: { turn_count: 0, confirmed: false },
+    step6: {
+      turn_count: 0,
+      confirmed: false,
+      preview_ready: false,
+      awaiting_confirm: false,
+      preview_markdown: "",
+      draft_json: {},
+      revision_count: 0,
+    },
   },
 };
 
@@ -141,6 +149,19 @@ function fileToDataUrl(file: File) {
 
 function stepKey(step: ChatStep) {
   return `step${step}` as "step3" | "step4" | "step5" | "step6";
+}
+
+function normalizeTemplateCodeForUI(value: string) {
+  const match = String(value || "").match(/[1-7]/);
+  if (!match) return "02";
+  return `0${match[0]}`;
+}
+
+function normalizeLanguageForUI(value: string) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (["en", "english", "英文"].includes(raw)) return "en";
+  if (["both", "zh-en", "zh_en", "双语", "中英文", "中英文双版"].includes(raw)) return "both";
+  return "zh";
 }
 
 function getStepReplyGuard(step: ChatStep, text: string) {
@@ -391,7 +412,15 @@ export function ResumeCraftPage() {
       if (activeChatStep === 6) {
         next.collected_by_step.final_preferences = "";
         next.collected_by_step.step6_confirmed = false;
-        next.step_states.step6 = { turn_count: 0, confirmed: false };
+        next.step_states.step6 = {
+          turn_count: 0,
+          confirmed: false,
+          preview_ready: false,
+          awaiting_confirm: false,
+          preview_markdown: "",
+          draft_json: {},
+          revision_count: 0,
+        };
       }
       return next;
     });
@@ -424,7 +453,30 @@ export function ResumeCraftPage() {
       })) as Record<string, unknown>;
 
       const serverReply = String(resp.reply || "").trim();
-      const safeReply = activeChatStep === 4 ? (serverReply || STEP_PROMPTS[activeChatStep]) : (getStepReplyGuard(activeChatStep, serverReply) ? serverReply : STEP_PROMPTS[activeChatStep]);
+      const step6PreviewMarkdown = String(resp.step6_preview_markdown || "").trim();
+      const step6AppliedChanges = Array.isArray(resp.step6_applied_changes)
+        ? (resp.step6_applied_changes as unknown[])
+            .map((item) => String(item || "").trim())
+            .filter(Boolean)
+        : [];
+      let safeReply = serverReply || STEP_PROMPTS[activeChatStep];
+      if (activeChatStep === 4) {
+        safeReply = serverReply || STEP_PROMPTS[activeChatStep];
+      } else if (activeChatStep === 6) {
+        if (!safeReply && step6PreviewMarkdown) {
+          safeReply = `以下是准备生成的内容，请先确认：\n\n${step6PreviewMarkdown}`;
+        }
+      } else {
+        safeReply = getStepReplyGuard(activeChatStep, serverReply) ? serverReply : STEP_PROMPTS[activeChatStep];
+      }
+
+      if (activeChatStep === 6 && step6PreviewMarkdown && !safeReply.includes(step6PreviewMarkdown)) {
+        const changeText = step6AppliedChanges.length
+          ? `已应用修改：\n${step6AppliedChanges.map((item) => `- ${item}`).join("\n")}\n\n`
+          : "";
+        safeReply = `${changeText}以下是准备生成的内容，请先确认：\n\n${step6PreviewMarkdown}\n\n如无误请回复“确认生成”，或继续提出修改意见。`;
+      }
+
       const nextWizard = (resp.wizard_state as ResumeCraftWizardState | undefined) || wizardState;
       const missingFields = Array.isArray(resp.missing_fields) ? (resp.missing_fields as string[]) : [];
       const nextStepSuggestion = String(resp.next_step_suggestion || "stay");
@@ -440,6 +492,10 @@ export function ResumeCraftPage() {
         setStep(5);
       }
       if (activeChatStep === 5 && nextStepSuggestion === "next") {
+        setStep(6);
+      }
+      if (activeChatStep === 6 && action === "step6_confirm") {
+        // Keep user in Step6 and enable render button only after explicit confirmation.
         setStep(6);
       }
     } catch (err) {
@@ -513,12 +569,17 @@ export function ResumeCraftPage() {
     }));
   }, [profile.education]);
 
-  const renderResume = async () => {
+  const renderResume = async (overrides?: { template_code?: string; language?: string }) => {
     if (!canGenerate) return;
     setRenderLoading(true);
     try {
       const history = CHAT_STEPS.flatMap((s) => messagesByStep[s]);
-      const step1Profile = buildProfilePayload();
+      const baseProfile = buildProfilePayload();
+      const step1Profile = {
+        ...baseProfile,
+        template_code: normalizeTemplateCodeForUI(overrides?.template_code || baseProfile.template_code),
+        language: normalizeLanguageForUI(overrides?.language || baseProfile.language),
+      };
       const payload: Record<string, unknown> = {
         history,
         step1_profile: step1Profile,
@@ -528,6 +589,7 @@ export function ResumeCraftPage() {
         template_code: step1Profile.template_code,
         language: step1Profile.language,
         photo_pref: step1Profile.photo_pref,
+        draft_json: (wizardState.step_states.step6?.draft_json || {}) as Record<string, unknown>,
       };
       if (step1Profile.photo_pref === "with_photo") payload.photo_data_url = photoDataUrl;
 
@@ -599,7 +661,13 @@ export function ResumeCraftPage() {
 
   const backToWizardFromPreview = () => {
     setShowFinalPreview(false);
-    setStep(6);
+    setPhotoLoading(false);
+    setProfile((prev) => ({
+      ...prev,
+      template_code: normalizeTemplateCodeForUI(prev.template_code),
+      language: normalizeLanguageForUI(prev.language),
+    }));
+    setStep(1);
   };
 
   const stepCard = (stepNo: StepNumber, content: ReactNode) => (
@@ -619,6 +687,44 @@ export function ResumeCraftPage() {
                 <p>已生成 HTML 简历，你可以直接预览或导出。</p>
               </div>
               <div className="resume-craft-final-head-actions">
+                <label className="resume-craft-result-control">
+                  <span>模板</span>
+                  <select
+                    value={normalizeTemplateCodeForUI(profile.template_code)}
+                    onChange={(e) =>
+                      setProfile((prev) => ({ ...prev, template_code: normalizeTemplateCodeForUI(e.target.value) }))
+                    }
+                  >
+                    {TEMPLATE_OPTIONS.map((item) => (
+                      <option key={`result-template-${item.value}`} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="resume-craft-result-control">
+                  <span>语言</span>
+                  <select
+                    value={normalizeLanguageForUI(profile.language)}
+                    onChange={(e) =>
+                      setProfile((prev) => ({ ...prev, language: normalizeLanguageForUI(e.target.value) }))
+                    }
+                  >
+                    {LANGUAGE_OPTIONS.map((item) => (
+                      <option key={`result-language-${item.value}`} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  className="primary-btn resume-craft-regenerate-btn"
+                  onClick={() => renderResume({ template_code: profile.template_code, language: profile.language })}
+                  disabled={renderLoading}
+                >
+                  {renderLoading ? "重新生成中..." : "按当前模板/语言重新生成"}
+                </button>
                 <button type="button" className="ghost-btn" onClick={backToWizardFromPreview}>返回继续编辑</button>
                 <button type="button" className="ghost-btn" onClick={exportHtml}>导出 HTML</button>
                 <button type="button" className="ghost-btn" onClick={exportPdf}>导出 PDF</button>
@@ -998,7 +1104,7 @@ export function ResumeCraftPage() {
 
                   {chatStep === 6 ? (
                     <div className="resume-craft-step-actions">
-                      <button type="button" className="primary-btn resume-craft-next-btn" disabled={!canGenerate} onClick={renderResume}>
+                      <button type="button" className="primary-btn resume-craft-next-btn" disabled={!canGenerate} onClick={() => void renderResume()}>
                         {renderLoading ? "生成中..." : "生成简历"}
                       </button>
                     </div>

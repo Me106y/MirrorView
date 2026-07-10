@@ -229,7 +229,7 @@ def test_resume_craft_chat_turn_step1_profile_experience_only(monkeypatch):
     assert body["action"] in {"grill_experience", "experience_done", "confirm_finalize"}
     assert "experience_state" in body
     assert "教育背景" not in body["reply"]
-    assert body["meta"]["resume_craft_chat_turn_version"] == "2026-07-10-v9"
+    assert body["meta"]["resume_craft_chat_turn_version"] == "2026-07-10-v10"
     assert body["meta"]["step4_mode"] == "agent_led"
     assert body["meta"]["step4_missing_points"]
     assert body["meta"]["step4_raw_missing_points"]
@@ -762,6 +762,180 @@ def test_resume_craft_chat_turn_step5_no_more_skills_goes_next(monkeypatch):
     assert "没有更多技能或证书" in body["reply"]
 
 
+def test_resume_craft_chat_turn_step6_requires_preview_before_confirm(monkeypatch):
+    Config.TURNSTILE_ENFORCE = False
+    Config.RATE_LIMIT_ENFORCE = False
+
+    client = _client()
+    resp = client.post(
+        "/api/careerforge/resume-craft/chat-turn",
+        json={
+            "message": "确认生成",
+            "current_step": 6,
+            "step1_profile": {
+                "template_code": "02",
+                "language": "zh",
+                "photo_pref": "no_photo",
+                "target_role": "AI应用开发",
+                "jd_summary": "熟悉 Kubernetes 与 LangChain",
+                "personal_info": {"name": "A", "phone": "1", "email": "a@b.com", "city": "上海", "links": []},
+                "education": [],
+                "skills": ["Python", "LangChain"],
+                "certificates": [],
+                "expected_experience_count": 1,
+            },
+            "wizard_state": {
+                "current_step": 6,
+                "collected_by_step": {
+                    "education": ["X大学 计算机 硕士 2020-2023"],
+                    "experiences": ["负责RAG平台建设，时延降低35%"],
+                    "skills_and_certs": ["Python", "LangChain"],
+                    "final_preferences": "",
+                    "step6_confirmed": False,
+                },
+                "step_states": {
+                    "step3": {"turn_count": 2, "confirmed": True},
+                    "step4": {"current_index": 2, "followup_count": 0, "drafts": [], "finalized_experiences": ["负责RAG平台建设，时延降低35%"]},
+                    "step5": {"turn_count": 2, "confirmed": True},
+                    "step6": {"turn_count": 0, "confirmed": False, "preview_ready": False, "awaiting_confirm": False},
+                },
+            },
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["action"] == "step6_preview"
+    assert body["render_ready"] is False
+    assert body["step6_waiting_confirm"] is True
+    assert "请先查看待生成内容并确认" in body["reply"]
+    assert "待生成内容预览" in body["step6_preview_markdown"]
+
+
+def test_resume_craft_chat_turn_step6_confirm_after_preview_sets_render_ready(monkeypatch):
+    Config.TURNSTILE_ENFORCE = False
+    Config.RATE_LIMIT_ENFORCE = False
+
+    client = _client()
+    resp = client.post(
+        "/api/careerforge/resume-craft/chat-turn",
+        json={
+            "message": "确认生成",
+            "current_step": 6,
+            "step1_profile": {
+                "template_code": "02",
+                "language": "zh",
+                "photo_pref": "no_photo",
+                "target_role": "AI应用开发",
+                "jd_summary": "熟悉 Kubernetes 与 LangChain",
+                "personal_info": {"name": "A", "phone": "1", "email": "a@b.com", "city": "上海", "links": []},
+                "education": [],
+                "skills": ["Python", "LangChain"],
+                "certificates": [],
+                "expected_experience_count": 1,
+            },
+            "wizard_state": {
+                "current_step": 6,
+                "collected_by_step": {
+                    "education": ["X大学 计算机 硕士 2020-2023"],
+                    "experiences": ["负责RAG平台建设，时延降低35%"],
+                    "skills_and_certs": ["Python", "LangChain"],
+                    "final_preferences": "",
+                    "step6_confirmed": False,
+                },
+                "step_states": {
+                    "step3": {"turn_count": 2, "confirmed": True},
+                    "step4": {"current_index": 2, "followup_count": 0, "drafts": [], "finalized_experiences": ["负责RAG平台建设，时延降低35%"]},
+                    "step5": {"turn_count": 2, "confirmed": True},
+                    "step6": {
+                        "turn_count": 1,
+                        "confirmed": False,
+                        "preview_ready": True,
+                        "awaiting_confirm": True,
+                        "preview_markdown": "### 待生成内容预览（请确认）",
+                        "draft_json": {
+                            "target_role": "AI应用开发",
+                            "education": ["X大学 计算机 硕士 2020-2023"],
+                            "experiences": ["负责RAG平台建设，时延降低35%"],
+                            "skills_and_certs": ["Python", "LangChain"],
+                            "final_preferences": "",
+                        },
+                    },
+                },
+            },
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["action"] == "step6_confirm"
+    assert body["render_ready"] is True
+    assert body["wizard_state"]["collected_by_step"]["step6_confirmed"] is True
+    assert body["step6_waiting_confirm"] is False
+
+
+def test_resume_craft_chat_turn_step6_revise_keeps_waiting_confirm(monkeypatch):
+    Config.TURNSTILE_ENFORCE = False
+    Config.RATE_LIMIT_ENFORCE = False
+
+    monkeypatch.setattr(
+        routes.ai_service,
+        "run_resume_craft_step6_revise",
+        lambda payload, runtime=None: {
+            "updated_draft_json": {
+                **(payload.get("current_draft_json") or {}),
+                "final_preferences": "突出 Agentic RAG 架构落地",
+            },
+            "updated_preview_markdown": "### 待生成内容预览（请确认）\n\n- 生成偏好：突出 Agentic RAG 架构落地",
+            "applied_changes": ["更新了最终偏好说明"],
+            "needs_clarification": False,
+            "clarification_question": "",
+        },
+    )
+
+    client = _client()
+    resp = client.post(
+        "/api/careerforge/resume-craft/chat-turn",
+        json={
+            "message": "把重点改成 Agentic RAG 架构落地",
+            "current_step": 6,
+            "step1_profile": {
+                "template_code": "02",
+                "language": "zh",
+                "photo_pref": "no_photo",
+                "target_role": "AI应用开发",
+                "jd_summary": "熟悉 Kubernetes 与 LangChain",
+                "personal_info": {"name": "A", "phone": "1", "email": "a@b.com", "city": "上海", "links": []},
+                "education": [],
+                "skills": ["Python", "LangChain"],
+                "certificates": [],
+                "expected_experience_count": 1,
+            },
+            "wizard_state": {
+                "current_step": 6,
+                "collected_by_step": {
+                    "education": ["X大学 计算机 硕士 2020-2023"],
+                    "experiences": ["负责RAG平台建设，时延降低35%"],
+                    "skills_and_certs": ["Python", "LangChain"],
+                    "final_preferences": "",
+                    "step6_confirmed": False,
+                },
+                "step_states": {
+                    "step3": {"turn_count": 2, "confirmed": True},
+                    "step4": {"current_index": 2, "followup_count": 0, "drafts": [], "finalized_experiences": ["负责RAG平台建设，时延降低35%"]},
+                    "step5": {"turn_count": 2, "confirmed": True},
+                    "step6": {"turn_count": 1, "confirmed": False, "preview_ready": True, "awaiting_confirm": True, "draft_json": {}},
+                },
+            },
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["action"] == "step6_revise"
+    assert body["render_ready"] is False
+    assert body["step6_waiting_confirm"] is True
+    assert "更新了最终偏好说明" in body["step6_applied_changes"]
+    assert "待生成内容预览" in body["step6_preview_markdown"]
+
+
 def test_resume_craft_render_requires_step6_confirmation_with_wizard_state(monkeypatch):
     Config.TURNSTILE_ENFORCE = False
     Config.RATE_LIMIT_ENFORCE = False
@@ -1061,3 +1235,63 @@ def test_resume_craft_render_returns_pdf_payload_when_pdf_generation_succeeds(mo
     assert body["report_pdf_name"].endswith(".pdf")
     assert body["report_pdf_base64"] == "UERG"
     assert body["meta"]["resume_craft_pdf_generated"] is True
+
+
+def test_resume_craft_render_rejects_jd_only_facts(monkeypatch):
+    Config.TURNSTILE_ENFORCE = False
+    Config.RATE_LIMIT_ENFORCE = False
+
+    monkeypatch.setattr(
+        routes.ai_service,
+        "run_resume_craft_html",
+        lambda payload, runtime=None: (
+            "<!DOCTYPE html><html><body>"
+            "<h1>简历</h1><p>熟练 Kubernetes Operator 开发。</p>"
+            "</body></html>"
+        ),
+    )
+
+    client = _client()
+    resp = client.post(
+        "/api/careerforge/resume-craft/render",
+        json={
+            "step1_profile": {
+                "template_code": "02",
+                "language": "zh",
+                "photo_pref": "no_photo",
+                "target_role": "AI应用开发",
+                "jd_summary": "熟练 Kubernetes Operator 开发",
+                "personal_info": {"name": "候选人", "phone": "1", "email": "a@b.com", "city": "杭州", "links": []},
+                "education": [],
+                "skills": ["Python"],
+                "certificates": [],
+                "expected_experience_count": 1,
+            },
+            "wizard_state": {
+                "current_step": 6,
+                "collected_by_step": {
+                    "education": [],
+                    "experiences": ["负责 RAG 平台建设，时延降低35%"],
+                    "skills_and_certs": ["Python", "LangChain"],
+                    "final_preferences": "",
+                    "step6_confirmed": True,
+                },
+                "step_states": {
+                    "step3": {"turn_count": 2, "confirmed": True},
+                    "step4": {"current_index": 2, "followup_count": 0, "drafts": [], "finalized_experiences": ["负责 RAG 平台建设，时延降低35%"]},
+                    "step5": {"turn_count": 2, "confirmed": True},
+                    "step6": {"turn_count": 2, "confirmed": True, "preview_ready": True, "awaiting_confirm": False, "draft_json": {
+                        "target_role": "AI应用开发",
+                        "personal_info": {"name": "候选人", "phone": "1", "email": "a@b.com", "city": "杭州", "links": []},
+                        "education": [],
+                        "experiences": ["负责 RAG 平台建设，时延降低35%"],
+                        "skills_and_certs": ["Python", "LangChain"],
+                        "final_preferences": "",
+                    }},
+                },
+            },
+        },
+    )
+    assert resp.status_code == 400
+    body = resp.get_json()
+    assert body["error"] == "unsupported_fact_detected"

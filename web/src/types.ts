@@ -65,6 +65,11 @@ export interface ExperienceState {
 export interface StepChatState {
   turn_count: number;
   confirmed: boolean;
+  preview_ready?: boolean;
+  awaiting_confirm?: boolean;
+  preview_markdown?: string;
+  draft_json?: Record<string, unknown>;
+  revision_count?: number;
 }
 
 export interface StepCollectedData {

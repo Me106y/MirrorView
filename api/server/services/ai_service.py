@@ -672,6 +672,25 @@ class AIService:
                 "model_connection_error": str(e),
             }
 
+    def run_resume_craft_step6_revise(self, payload, runtime: Optional[Dict[str, Any]] = None):
+        try:
+            return self._build_runtime_agent(runtime).run_resume_craft_step6_revise(payload)
+        except Exception as e:
+            logger.error("run_resume_craft_step6_revise runtime error: %s", e)
+            fallback_builder = getattr(self.careerforge_agent, "_build_step6_heuristic_revision", None)
+            if callable(fallback_builder):
+                try:
+                    return fallback_builder(payload if isinstance(payload, dict) else {})
+                except Exception as fallback_error:
+                    logger.warning("run_resume_craft_step6_revise heuristic fallback failed: %s", fallback_error)
+            return {
+                "updated_draft_json": (payload or {}).get("current_draft_json") or {},
+                "updated_preview_markdown": "",
+                "applied_changes": [],
+                "needs_clarification": False,
+                "clarification_question": "",
+            }
+
     def run_resume_craft_html(self, payload, runtime: Optional[Dict[str, Any]] = None):
         try:
             result = self._build_runtime_agent(runtime).run_resume_craft_html(payload)

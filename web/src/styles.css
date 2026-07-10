@@ -1650,10 +1650,44 @@ a {
 
 .resume-craft-final-head-actions {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 8px;
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.resume-craft-result-control {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 140px;
+}
+
+.resume-craft-result-control span {
+  font-size: 12px;
+  color: #7a766f;
+  line-height: 1;
+}
+
+.resume-craft-result-control select {
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid rgba(199, 192, 181, 0.75);
+  padding: 0 10px;
+  background: #fffdfa;
+  color: #2c2b28;
+}
+
+.resume-craft-result-control select:focus {
+  outline: none;
+  border-color: rgba(122, 144, 164, 0.9);
+  box-shadow: 0 0 0 3px rgba(122, 144, 164, 0.16);
+}
+
+.resume-craft-regenerate-btn {
+  height: 36px;
+  padding: 0 14px;
+  white-space: nowrap;
 }
 
 .resume-craft-final-frame {
