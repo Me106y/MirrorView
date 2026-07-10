@@ -145,7 +145,7 @@ function stepKey(step: ChatStep) {
 
 function getStepReplyGuard(step: ChatStep, text: string) {
   const content = String(text || "");
-  if (step === 4) return /经历|项目|职责|挑战|行动|结果|量化/.test(content);
+  if (step === 4) return content.trim().length > 0;
   if (step === 5) return /技能|证书|工具|语言能力|熟练度/.test(content);
   return /确认|偏好|语气|突出|生成/.test(content);
 }
@@ -422,7 +422,7 @@ export function ResumeCraftPage() {
       })) as Record<string, unknown>;
 
       const serverReply = String(resp.reply || "").trim();
-      const safeReply = getStepReplyGuard(activeChatStep, serverReply) ? serverReply : STEP_PROMPTS[activeChatStep];
+      const safeReply = activeChatStep === 4 ? (serverReply || STEP_PROMPTS[activeChatStep]) : (getStepReplyGuard(activeChatStep, serverReply) ? serverReply : STEP_PROMPTS[activeChatStep]);
       const nextWizard = (resp.wizard_state as ResumeCraftWizardState | undefined) || wizardState;
       const missingFields = Array.isArray(resp.missing_fields) ? (resp.missing_fields as string[]) : [];
       const nextStepSuggestion = String(resp.next_step_suggestion || "stay");

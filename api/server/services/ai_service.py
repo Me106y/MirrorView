@@ -651,10 +651,20 @@ class AIService:
             return decision
         except Exception as e:
             logger.error("run_resume_craft_step4_decision runtime error: %s", e)
+            fallback_builder = getattr(self.careerforge_agent, "_build_step4_heuristic_decision", None)
+            if callable(fallback_builder):
+                try:
+                    decision = fallback_builder(payload if isinstance(payload, dict) else {})
+                    if isinstance(decision, dict):
+                        decision["model_connection_ok"] = False
+                        decision["model_connection_error"] = str(e)
+                        return decision
+                except Exception as fallback_error:
+                    logger.warning("run_resume_craft_step4_decision heuristic fallback failed: %s", fallback_error)
             return {
-                "reply": str(payload.get("fallback_reply") or "请继续补充这一段项目的关键信息。"),
+                "reply": str((payload or {}).get("fallback_reply") or "请继续补充这一段项目的关键信息。"),
                 "resume_ready_draft": {"title": "项目经历", "role": "核心开发", "period": "时间待补", "bullets": []},
-                "missing_points": ["核心功能是如何拆解并实现的（关键模块/调用链）", "效果如何验证（压测口径/线上指标）", "是否还有要补充的经历"],
+                "missing_points": ["请继续补充该项目里一个最关键的技术实现或功能细节。"],
                 "current_experience_completed": False,
                 "ask_more_experience": True,
                 "reasoning_focus": [],
