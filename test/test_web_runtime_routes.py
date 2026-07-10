@@ -257,7 +257,10 @@ def test_resume_craft_chat_turn_step1_profile_auto_finalize_after_max_grill(monk
         "/api/careerforge/resume-craft/chat-turn",
         json={
             "message": "结果是响应时延降低 35%。",
-            "history": [{"role": "assistant", "content": "请补充挑战和行动。"}],
+            "history": [
+                {"role": "assistant", "content": "请补充挑战和行动。"},
+                {"role": "user", "content": "挑战是并发抖动明显。"},
+            ],
             "step1_profile": {
                 "template_code": "02",
                 "language": "zh",
@@ -711,6 +714,54 @@ def test_resume_craft_chat_turn_step3_only_education(monkeypatch):
     assert "wizard_state" in body
 
 
+def test_resume_craft_chat_turn_step5_no_more_skills_goes_next(monkeypatch):
+    Config.TURNSTILE_ENFORCE = False
+    Config.RATE_LIMIT_ENFORCE = False
+
+    monkeypatch.setattr(
+        routes.ai_service,
+        "run_resume_craft_dialog",
+        lambda payload, runtime=None: "好的，我们进入下一阶段。",
+    )
+
+    client = _client()
+    resp = client.post(
+        "/api/careerforge/resume-craft/chat-turn",
+        json={
+            "message": "没有更多技能了",
+            "current_step": 5,
+            "history": [{"role": "assistant", "content": "是否还有要补充的技能或证书？"}],
+            "step1_profile": {
+                "template_code": "02",
+                "language": "zh",
+                "photo_pref": "no_photo",
+                "target_role": "AI应用开发",
+                "personal_info": {"name": "A", "phone": "1", "email": "a@b.com", "city": "上海", "links": []},
+                "education": [],
+                "skills": [],
+                "certificates": [],
+                "expected_experience_count": 1,
+            },
+            "wizard_state": {
+                "current_step": 5,
+                "collected_by_step": {
+                    "education": [],
+                    "experiences": ["负责 RAG 项目落地"],
+                    "skills_and_certs": ["Python", "LangChain"],
+                    "final_preferences": "",
+                    "step6_confirmed": False,
+                },
+            },
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["action"] == "skills_done"
+    assert body["next_step_suggestion"] == "next"
+    assert body["missing_fields"] == []
+    assert "没有更多技能或证书" in body["reply"]
+
+
 def test_resume_craft_render_requires_step6_confirmation_with_wizard_state(monkeypatch):
     Config.TURNSTILE_ENFORCE = False
     Config.RATE_LIMIT_ENFORCE = False
@@ -969,3 +1020,44 @@ def test_resume_craft_render_uses_local_fallback_when_model_returns_empty(monkey
     assert "<!doctype html>" in body["report_html"].lower()
     assert "AI应用开发" in body["report_html"]
     assert body["meta"]["resume_craft_render_fallback"] == "local"
+
+
+def test_resume_craft_render_returns_pdf_payload_when_pdf_generation_succeeds(monkeypatch):
+    Config.TURNSTILE_ENFORCE = False
+    Config.RATE_LIMIT_ENFORCE = False
+
+    monkeypatch.setattr(
+        routes.ai_service,
+        "run_resume_craft_html",
+        lambda payload, runtime=None: "<!DOCTYPE html><html><body><h1>Resume</h1></body></html>",
+    )
+    monkeypatch.setattr(
+        routes,
+        "_generate_resume_craft_pdf_artifact",
+        lambda report_html, report_name: ("候选人-AI应用开发简历.pdf", "UERG", ""),
+    )
+
+    client = _client()
+    resp = client.post(
+        "/api/careerforge/resume-craft/render",
+        json={
+            "history": [{"role": "user", "content": "请生成简历"}],
+            "step1_profile": {
+                "template_code": "02",
+                "language": "zh",
+                "photo_pref": "no_photo",
+                "target_role": "AI应用开发",
+                "personal_info": {"name": "候选人", "phone": "1", "email": "a@b.com", "city": "杭州", "links": []},
+                "education": [],
+                "skills": [],
+                "certificates": [],
+                "expected_experience_count": 1,
+            },
+            "finalized_experiences": ["负责 RAG 落地并降低时延。"],
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["report_pdf_name"].endswith(".pdf")
+    assert body["report_pdf_base64"] == "UERG"
+    assert body["meta"]["resume_craft_pdf_generated"] is True

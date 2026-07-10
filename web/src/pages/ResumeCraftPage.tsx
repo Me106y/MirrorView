@@ -208,6 +208,8 @@ export function ResumeCraftPage() {
   const [result, setResult] = useState<ResultState>({ kind: "idle", reportHtml: "", message: "" });
   const [showFinalPreview, setShowFinalPreview] = useState(false);
   const [reportName, setReportName] = useState("resume-craft-report.html");
+  const [reportPdfName, setReportPdfName] = useState("resume-craft-report.pdf");
+  const [reportPdfBase64, setReportPdfBase64] = useState("");
   const [frameHeight, setFrameHeight] = useState(980);
   const [viewportHeight, setViewportHeight] = useState<number | null>(null);
   const [openMonthPicker, setOpenMonthPicker] = useState<{ index: number; part: "start" | "end" } | null>(null);
@@ -437,6 +439,9 @@ export function ResumeCraftPage() {
       if (activeChatStep === 4 && action === "experience_done" && nextStepSuggestion === "next") {
         setStep(5);
       }
+      if (activeChatStep === 5 && nextStepSuggestion === "next") {
+        setStep(6);
+      }
     } catch (err) {
       setMessagesByStep((prev) => ({
         ...prev,
@@ -531,9 +536,15 @@ export function ResumeCraftPage() {
       if (!reportHtml) throw new Error(String(resp.message || "未返回有效简历 HTML"));
       setResult({ kind: "report", reportHtml, message: "" });
       setReportName(String(resp.report_name || "resume-craft-report.html"));
+      const nextPdfName = String(resp.report_pdf_name || "resume-craft-report.pdf").trim();
+      const nextPdfBase64 = String(resp.report_pdf_base64 || "").trim();
+      setReportPdfName(nextPdfName || "resume-craft-report.pdf");
+      setReportPdfBase64(nextPdfBase64);
       setShowFinalPreview(true);
     } catch (err) {
       setResult({ kind: "error", reportHtml: "", message: (err as Error).message || "生成失败" });
+      setReportPdfName("resume-craft-report.pdf");
+      setReportPdfBase64("");
       setShowFinalPreview(false);
     } finally {
       setRenderLoading(false);
@@ -560,6 +571,25 @@ export function ResumeCraftPage() {
 
   const exportPdf = () => {
     if (result.kind !== "report") return;
+    if (reportPdfBase64) {
+      try {
+        const binary = window.atob(reportPdfBase64.replace(/\s+/g, ""));
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i += 1) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        const blob = new Blob([bytes], { type: "application/pdf" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = reportPdfName || "resume-craft-report.pdf";
+        link.click();
+        URL.revokeObjectURL(url);
+        return;
+      } catch {
+        // fallback to browser print below
+      }
+    }
     const frame = previewFrameRef.current;
     const win = frame?.contentWindow;
     if (!win) return;

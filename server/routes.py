@@ -1,5 +1,4 @@
 from flask import Blueprint, request, jsonify, current_app, Response, stream_with_context
-from client.core.resume_craft_report import build_resume_craft_html_report
 from client.core.resume_match_report import build_resume_match_html_report
 from server.models import db, User, Interview, Message, InviteCode, Listener
 from server.services.ai_service import AIService
@@ -11,10 +10,15 @@ from server.security import enforce_high_cost_guard
 from server.config import Config
 from utils.logger_handler import logger
 from datetime import datetime
+import base64
+import binascii
 import uuid
 import tempfile
 import os
 import re
+import subprocess
+import sys
+import html
 from html import unescape
 from functools import lru_cache
 from pathlib import Path
@@ -83,6 +87,24 @@ RESUME_CRAFT_NO_MORE_EXPERIENCE_KEYWORDS = [
     "that's all",
 ]
 RESUME_CRAFT_NO_MORE_EXPERIENCE_EXACT = {"没有", "没了", "没有了", "无", "none", "no", "nope"}
+RESUME_CRAFT_NO_MORE_SKILLS_KEYWORDS = [
+    "没有更多技能",
+    "没有更多证书",
+    "无更多技能",
+    "无更多证书",
+    "不补充技能",
+    "不补充证书",
+    "不再补充技能",
+    "不再补充证书",
+    "技能就这些",
+    "证书就这些",
+    "技能到这里",
+    "证书到这里",
+    "no more skills",
+    "no more certifications",
+    "no more certificates",
+]
+RESUME_CRAFT_NO_MORE_SKILLS_EXACT = {"没有", "没了", "没有了", "无", "none", "no", "nope"}
 RESUME_CRAFT_ROLE_HINTS = [
     "开发",
     "工程师",
@@ -345,6 +367,8 @@ REPO_ROOT = _resolve_repo_root()
 RESUME_CRAFT_DIR = REPO_ROOT / "skills" / "CareerForge" / "skills" / "resume-craft"
 RESUME_CRAFT_BASE_TEMPLATE_FILE = RESUME_CRAFT_DIR / "templates" / "resume-template.html"
 RESUME_CRAFT_PREVIEW_TEMPLATE_FILE = RESUME_CRAFT_DIR / "templates" / "CareerForge-模板预览.html"
+RESUME_CRAFT_GENERATE_PDF_SCRIPT_FILE = RESUME_CRAFT_DIR / "scripts" / "generate_pdf.py"
+RESUME_CRAFT_PROCESS_PHOTO_SCRIPT_FILE = RESUME_CRAFT_DIR / "scripts" / "process_photo.py"
 
 
 @lru_cache(maxsize=1)
@@ -524,11 +548,17 @@ def _build_resume_craft_render_fallback(
     finalized_list: List[str],
     template_code: str,
     language: str,
+    photo_pref: str,
 ) -> Tuple[str, str]:
+    templates = _load_resume_craft_templates()
+    base_template = str(templates.get("base_template") or "")
     personal = step1_profile.get("personal_info") or {}
     target_role = str(step1_profile.get("target_role") or "").strip() or "未指定岗位"
     jd_summary = str(step1_profile.get("jd_summary") or "").strip()
     name = str(personal.get("name") or "").strip() or "候选人"
+    name_en = re.sub(r"[^A-Za-z ]+", "", name).strip().upper()
+    if not name_en:
+        name_en = "CANDIDATE"
     phone = str(personal.get("phone") or "").strip()
     email = str(personal.get("email") or "").strip()
     city = str(personal.get("city") or "").strip()
@@ -580,82 +610,262 @@ def _build_resume_craft_render_fallback(
         if value:
             skill_rows.append(value)
 
-    profile_lines = [f"- 目标岗位：{target_role}"]
-    if city:
-        profile_lines.append(f"- 城市：{city}")
-    if phone:
-        profile_lines.append(f"- 手机：{phone}")
-    if email:
-        profile_lines.append(f"- 邮箱：{email}")
-    if links:
-        profile_lines.append(f"- 链接：{'；'.join(links)}")
-    if jd_summary:
-        profile_lines.append(f"- JD 摘要：{jd_summary}")
-
     final_preferences = str(
         (wizard_state.get("collected_by_step", {}) or {}).get("final_preferences") or ""
     ).strip()
+    def _split_points(value: str, limit: int = 5) -> List[str]:
+        points: List[str] = []
+        for block in re.split(r"[\n\r]+", str(value or "").strip()):
+            for piece in re.split(r"[。；;]", block):
+                text = piece.strip(" -\t")
+                if not text:
+                    continue
+                points.append(text[:180])
+                if len(points) >= limit:
+                    return points
+        return points
 
-    sections = [
-        {"title": "基础信息", "content_markdown": "\n".join(profile_lines) or "- 暂无"},
-        {
-            "title": "教育背景",
-            "content_markdown": "\n".join([f"- {item}" for item in education_rows]) or "- 暂无",
-        },
-        {
-            "title": "工作/项目经历",
-            "content_markdown": "\n".join([f"- {item}" for item in experience_rows]) or "- 暂无",
-        },
-        {
-            "title": "技能与证书",
-            "content_markdown": "\n".join([f"- {item}" for item in skill_rows]) or "- 暂无",
-        },
-    ]
+    contact_values = [value for value in [phone, email, city, *links[:2]] if value]
+    if not contact_values:
+        contact_values = ["联系方式待补充"]
+    contact_items_html = "".join(
+        f'<span class="contact-item"><span class="contact-dot"></span>{html.escape(item)}</span>'
+        for item in contact_values
+    )
+
+    summary_text = jd_summary or final_preferences or f"聚焦 {target_role} 岗位，结合已确认经历输出。"
+    summary_html = "<br>".join(html.escape(line) for line in _split_points(summary_text, limit=3))
+    photo_element = (
+        f'<img class="header-photo" src="{RESUME_CRAFT_PHOTO_TOKEN}" alt="{html.escape(name)}">'
+        if photo_pref == "放照片"
+        else ""
+    )
+
+    section_parts: List[str] = []
+    if experience_rows:
+        jobs: List[str] = []
+        for idx, item in enumerate(experience_rows[:4], start=1):
+            points = _split_points(item, limit=5) or [item[:180]]
+            bullets = "".join(f"<li>{html.escape(point)}</li>" for point in points)
+            jobs.append(
+                "<div class=\"job\">"
+                "<div class=\"job-header\"><div>"
+                f"<span class=\"job-title\">项目经历 {idx}</span>"
+                "</div></div>"
+                f"<ul class=\"job-bullets\">{bullets}</ul>"
+                "</div>"
+            )
+        section_parts.append(
+            "<div class=\"section\">"
+            "<div class=\"section-title\">工作/项目经历</div>"
+            + "".join(jobs)
+            + "</div>"
+        )
+
+    if education_rows:
+        edu_items: List[str] = []
+        for item in education_rows[:4]:
+            points = _split_points(item, limit=4)
+            head = points[0] if points else item[:160]
+            details = "".join(f"<li>{html.escape(point)}</li>" for point in points[1:])
+            detail_html = f"<ul class=\"edu-details\">{details}</ul>" if details else ""
+            edu_items.append(
+                "<div class=\"edu-item\">"
+                "<div class=\"edu-header\"><div>"
+                f"<span class=\"edu-degree\">{html.escape(head)}</span>"
+                "</div></div>"
+                f"{detail_html}"
+                "</div>"
+            )
+        section_parts.append(
+            "<div class=\"section\">"
+            "<div class=\"section-title\">教育背景</div>"
+            + "".join(edu_items)
+            + "</div>"
+        )
+
+    if skill_rows:
+        skill_chunks = [skill_rows[i:i + 3] for i in range(0, min(len(skill_rows), 12), 3)]
+        skill_rows_html = "".join(
+            "<div class=\"skill-row\">"
+            f"<span class=\"skill-label\">技能组 {idx}</span>"
+            f"<span class=\"skill-content\">{html.escape(' / '.join(chunk))}</span>"
+            "</div>"
+            for idx, chunk in enumerate(skill_chunks, start=1)
+        )
+        section_parts.append(
+            "<div class=\"section\">"
+            "<div class=\"section-title\">技能与证书</div>"
+            f"<div class=\"skills-grid\">{skill_rows_html}</div>"
+            "</div>"
+        )
+
     if final_preferences:
-        sections.append({"title": "补充偏好", "content_markdown": final_preferences})
+        section_parts.append(
+            "<div class=\"section\">"
+            "<div class=\"section-title\">补充偏好</div>"
+            f"<p>{html.escape(final_preferences[:300])}</p>"
+            "</div>"
+        )
 
-    result = {
-        "title": f"{name} - {target_role} 简历",
-        "profile_summary": f"基于 Step1-6 已采集信息生成（模型输出异常时自动启用本地兜底渲染）。",
-        "sections": sections,
-        "style_advice": [],
-        "next_actions": [],
-    }
-    language_code = {"中文": "zh", "英文": "en", "中英文双版": "both"}.get(language, "zh")
-    return build_resume_craft_html_report(
-        result=result,
-        target_role=target_role,
-        language=language_code,
-        template=template_code,
-    )
+    sections_html = "\n".join(section_parts).strip()
+    if not sections_html:
+        sections_html = (
+            "<div class=\"section\">"
+            "<div class=\"section-title\">内容补充</div>"
+            "<p>当前内容较少，请继续补充工作/项目经历与技能后再次生成。</p>"
+            "</div>"
+        )
+
+    language_code = {"中文": "zh", "英文": "en", "中英文双版": "zh"}.get(language, "zh")
+    fallback_stem = _build_resume_artifact_stem(step1_profile)
+
+    if base_template:
+        doc = base_template
+        replacement_map = {
+            "{{LANG}}": language_code,
+            "{{NAME}}": html.escape(name),
+            "{{TARGET_TITLE}}": html.escape(target_role),
+            "{{EXPORT_BUTTON_TEXT}}": "导出 PDF",
+            "{{EXPORT_HINT_TEXT}}": "另存为 PDF → A4 → 边距“无” → 勾选“背景图形”",
+            "{{NAME_ZH}}": html.escape(name),
+            "{{NAME_EN}}": html.escape(name_en),
+            "{{CONTACT_ITEMS}}": contact_items_html,
+            "{{PHOTO_ELEMENT}}": photo_element,
+            "{{SUMMARY_TITLE}}": "个人简介",
+            "{{SUMMARY_CONTENT}}": summary_html or html.escape(summary_text[:220]),
+        }
+        for marker, value in replacement_map.items():
+            doc = doc.replace(marker, value)
+        anchor = "\n</div>\n\n<script>\nfunction exportPDF() {"
+        if anchor in doc:
+            doc = doc.replace(anchor, "\n" + sections_html + "\n\n</div>\n\n<script>\nfunction exportPDF() {", 1)
+        else:
+            doc = doc.replace("</div>\n\n<script>", sections_html + "\n</div>\n\n<script>", 1)
+        doc = re.sub(r"\{\{[A-Z_]+\}\}", "", doc)
+        return f"{fallback_stem}.html", _extract_html_document(doc) or _ensure_doctype_html(doc)
+
+    simple_html = f"""<!DOCTYPE html>
+<html lang="{language_code}">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{html.escape(name)} - {html.escape(target_role)} 简历</title>
+  <style>
+    body {{ margin: 0; font-family: "Source Sans 3","PingFang SC","Microsoft YaHei",sans-serif; background: #f4f1eb; color: #1a1f2e; }}
+    .export-bar {{ position: fixed; top: 0; left: 0; right: 0; z-index: 10; background: rgba(26,31,46,.95); color: #fff; padding: 10px 16px; display: flex; justify-content: center; gap: 14px; align-items: center; }}
+    .export-btn {{ border: 0; border-radius: 6px; padding: 9px 18px; background: #2d6b5f; color: #fff; cursor: pointer; font-weight: 600; }}
+    .resume {{ max-width: 820px; margin: 70px auto 32px; background: #faf9f7; box-shadow: 0 2px 24px rgba(26,31,46,.09); padding: 28px 34px; }}
+    .section {{ margin-top: 18px; }}
+    .section-title {{ color: #2d6b5f; font-weight: 700; letter-spacing: 1px; margin-bottom: 10px; }}
+    @page {{ size: A4; margin: 0; }}
+    @media print {{
+      html, body {{ -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; background: #fff !important; }}
+      .export-bar {{ display: none !important; }}
+      .resume {{ margin: 0; box-shadow: none; max-width: 100%; }}
+      .section, .job, .edu-item {{ break-inside: avoid; page-break-inside: avoid; }}
+    }}
+  </style>
+</head>
+<body>
+  <div class="export-bar">
+    <button class="export-btn" onclick="window.print()">导出 PDF</button>
+    <span>另存为 PDF → A4 → 边距“无” → 勾选“背景图形”</span>
+  </div>
+  <main class="resume">
+    <h1>{html.escape(name)} - {html.escape(target_role)}</h1>
+    <div class="section"><div class="section-title">个人简介</div><p>{summary_html}</p></div>
+    {sections_html}
+  </main>
+</body>
+</html>"""
+    return f"{fallback_stem}.html", simple_html
 
 
-def _inject_fallback_header_photo(report_html: str, photo_data_url: str) -> str:
-    html = str(report_html or "")
-    photo = str(photo_data_url or "").strip()
-    if not html or not photo:
-        return html
-    if photo in html:
-        return html
+def _sanitize_resume_filename_component(value: str, fallback: str) -> str:
+    text = re.sub(r'[\\/:*?"<>|]+', "", str(value or "").strip())
+    text = re.sub(r"\s+", "", text)
+    return (text[:40] or fallback).strip() or fallback
 
-    style_block = (
-        "<style id=\"fallback-photo-style\">"
-        ".hero{position:relative;}"
-        ".fallback-header-photo{position:absolute;top:18px;right:18px;width:88px;height:88px;"
-        "object-fit:cover;border-radius:12px;border:1px solid #e5e7eb;box-shadow:0 2px 10px rgba(15,23,42,.08);}"
-        "@media print{.fallback-header-photo{box-shadow:none;}}"
-        "</style>"
-    )
-    photo_tag = f'<img class="fallback-header-photo" src="{photo}" alt="候选人照片" />'
-    if "<div class=\"hero\">" in html:
-        html = html.replace("<div class=\"hero\">", "<div class=\"hero\">" + photo_tag, 1)
-    elif "<body>" in html:
-        html = html.replace("<body>", "<body>" + photo_tag, 1)
-    if "</head>" in html:
-        html = html.replace("</head>", style_block + "</head>", 1)
-    else:
-        html = style_block + html
-    return html
+
+def _build_resume_artifact_stem(step1_profile: Dict[str, Any]) -> str:
+    personal = step1_profile.get("personal_info") or {}
+    name = _sanitize_resume_filename_component(str(personal.get("name") or ""), "候选人")
+    role = _sanitize_resume_filename_component(str(step1_profile.get("target_role") or ""), "目标岗位")
+    return f"{name}-{role}简历"
+
+
+def _generate_resume_craft_pdf_artifact(report_html: str, report_name: str) -> Tuple[str, str, str]:
+    if not str(report_html or "").strip():
+        return "", "", "empty_html"
+    if not RESUME_CRAFT_GENERATE_PDF_SCRIPT_FILE.exists():
+        return "", "", "pdf_script_missing"
+
+    try:
+        with tempfile.TemporaryDirectory(prefix="resume-craft-pdf-") as tmpdir:
+            temp_dir = Path(tmpdir)
+            html_file = temp_dir / (Path(report_name).name or "resume.html")
+            html_file.write_text(report_html, encoding="utf-8")
+            pdf_name = html_file.with_suffix(".pdf").name
+            pdf_file = temp_dir / pdf_name
+            completed = subprocess.run(
+                [sys.executable, str(RESUME_CRAFT_GENERATE_PDF_SCRIPT_FILE), str(html_file), str(pdf_file)],
+                capture_output=True,
+                text=True,
+                timeout=120,
+                check=False,
+            )
+            if completed.returncode != 0:
+                details = (completed.stderr or completed.stdout or "").strip().replace("\n", " ")
+                return "", "", f"pdf_script_failed:{details[:220]}"
+            if not pdf_file.exists():
+                return "", "", "pdf_not_created"
+            pdf_base64 = base64.b64encode(pdf_file.read_bytes()).decode("ascii")
+            return pdf_name, pdf_base64, ""
+    except Exception as e:
+        return "", "", f"pdf_generation_exception:{str(e)[:220]}"
+
+
+def _process_photo_data_url_with_skill(photo_data_url: str) -> Tuple[str, str]:
+    value = str(photo_data_url or "").strip()
+    if not value:
+        return "", "missing_photo"
+    if not RESUME_CRAFT_PROCESS_PHOTO_SCRIPT_FILE.exists():
+        return value, "photo_script_missing"
+
+    match = re.match(r"^data:image/(png|jpe?g);base64,([a-z0-9+/=\r\n]+)$", value, re.IGNORECASE)
+    if not match:
+        return value, "invalid_photo_format"
+
+    image_type = match.group(1).lower()
+    raw_base64 = re.sub(r"\s+", "", match.group(2))
+    try:
+        raw_bytes = base64.b64decode(raw_base64, validate=True)
+    except (binascii.Error, ValueError):
+        return value, "invalid_photo_base64"
+
+    suffix = ".png" if image_type == "png" else ".jpg"
+    try:
+        with tempfile.TemporaryDirectory(prefix="resume-craft-photo-") as tmpdir:
+            temp_dir = Path(tmpdir)
+            input_file = temp_dir / f"upload{suffix}"
+            input_file.write_bytes(raw_bytes)
+            completed = subprocess.run(
+                [sys.executable, str(RESUME_CRAFT_PROCESS_PHOTO_SCRIPT_FILE), str(input_file), "160"],
+                capture_output=True,
+                text=True,
+                timeout=60,
+                check=False,
+            )
+            if completed.returncode != 0:
+                details = (completed.stderr or completed.stdout or "").strip().replace("\n", " ")
+                return value, f"photo_process_failed:{details[:220]}"
+            processed_base64 = re.sub(r"\s+", "", str(completed.stdout or "").strip())
+            if not processed_base64:
+                return value, "photo_process_empty"
+            return f"data:image/jpeg;base64,{processed_base64}", ""
+    except Exception as e:
+        return value, f"photo_process_exception:{str(e)[:220]}"
 
 
 def _resume_craft_user_turns(history: Any, latest_user_input: str = "", max_turns: int = 32) -> List[str]:
@@ -1217,6 +1427,49 @@ def _is_no_more_experience_message(message: str, history: Any) -> bool:
     return False
 
 
+def _assistant_recently_asked_more_skills(history: Any, max_turns: int = 6) -> bool:
+    if not isinstance(history, list):
+        return False
+    prompts = [
+        "还有要补充的技能",
+        "还有要补充的证书",
+        "继续补充技能",
+        "继续补充证书",
+        "更多技能",
+        "更多证书",
+        "没有更多技能",
+        "没有更多证书",
+    ]
+    for item in reversed(history[-max_turns:]):
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("role") or "").strip().lower() != "assistant":
+            continue
+        content = str(item.get("content") or "").strip().lower()
+        if not content:
+            continue
+        if any(token in content for token in prompts):
+            return True
+    return False
+
+
+def _is_no_more_skills_message(message: str, history: Any) -> bool:
+    text = str(message or "").strip().lower()
+    if not text:
+        return False
+    if any(token in text for token in RESUME_CRAFT_NO_MORE_SKILLS_KEYWORDS):
+        return True
+    if text in RESUME_CRAFT_NO_MORE_SKILLS_EXACT and _assistant_recently_asked_more_skills(history):
+        return True
+    if (
+        _assistant_recently_asked_more_skills(history)
+        and any(token in text for token in ["没有", "无", "不用", "不再", "先不了", "暂时不"])
+        and any(token in text for token in ["技能", "证书", "补充", "更多"])
+    ):
+        return True
+    return False
+
+
 def _count_user_turns(history: Any, max_turns: int = 24) -> int:
     if not isinstance(history, list):
         return 0
@@ -1545,6 +1798,7 @@ def careerforge_resume_craft_chat_turn():
         step4_reasoning_focus: List[str] = []
         step4_probe_round = 0
         no_more_experience = False
+        no_more_skills = False
 
         if step_num == 3:
             wizard_state["collected_by_step"]["education"].append(message[:1800])
@@ -1626,13 +1880,26 @@ def careerforge_resume_craft_chat_turn():
                 next_step_suggestion = "stay"
                 missing_fields = ["experience"]
         elif step_num == 5:
-            wizard_state["collected_by_step"]["skills_and_certs"].append(message[:1800])
-            action = "collect_skills"
-            if wizard_state["step_states"]["step5"]["turn_count"] >= 2:
-                wizard_state["step_states"]["step5"]["confirmed"] = True
-                next_step_suggestion = "next"
-            missing_fields = [] if wizard_state["step_states"]["step5"]["confirmed"] else ["skills"]
-            fallback_question = "请继续补充技能与证书，可包含技术栈、工具熟练度、语言能力和证书。"
+            no_more_skills = _is_no_more_skills_message(message, history)
+            if no_more_skills:
+                has_any_skills = bool(wizard_state["collected_by_step"]["skills_and_certs"])
+                if has_any_skills:
+                    wizard_state["step_states"]["step5"]["confirmed"] = True
+                    action = "skills_done"
+                    next_step_suggestion = "next"
+                    missing_fields = []
+                    fallback_question = "已收到，你目前没有更多技能或证书要补充，系统将进入下一阶段。"
+                else:
+                    action = "collect_skills"
+                    next_step_suggestion = "stay"
+                    missing_fields = ["skills"]
+                    fallback_question = "目前还未记录技能或证书，请先补充至少一项，再确认是否还有补充。"
+            else:
+                wizard_state["collected_by_step"]["skills_and_certs"].append(message[:1800])
+                action = "collect_skills"
+                next_step_suggestion = "stay"
+                missing_fields = ["skills"]
+                fallback_question = "已记录这项技能/证书。是否还有要补充的技能或证书？如果没有请回复“没有更多技能”。"
         else:
             wizard_state["collected_by_step"]["final_preferences"] = message[:1600]
             wizard_state["collected_by_step"]["step6_confirmed"] = True
@@ -1656,6 +1923,8 @@ def careerforge_resume_craft_chat_turn():
             reply = _enforce_step_reply(model_reply, fallback_question, step_num)
         if step_num == 4 and no_more_experience and next_step_suggestion == "next":
             reply = "已收到，你目前没有更多项目/经历。系统将进入下一阶段。"
+        if step_num == 5 and no_more_skills and next_step_suggestion == "next":
+            reply = "已收到，你目前没有更多技能或证书补充。系统将进入下一阶段。"
         if step_num == 6 and render_ready:
             reply = "已完成最终确认。请点击“生成简历”开始渲染。"
 
@@ -1798,10 +2067,13 @@ def careerforge_resume_craft_render():
     language = _normalize_resume_craft_language(data.get("language") or step1_profile.get("language"))
     photo_pref = _normalize_resume_craft_photo_pref(data.get("photo_pref") or step1_profile.get("photo_pref"))
     photo_data_url = str(data.get("photo_data_url") or "").strip()
+    processed_photo_data_url = photo_data_url
+    photo_process_warning = ""
     if photo_pref == "放照片":
         ok, reason = _validate_photo_data_url(photo_data_url)
         if not ok:
             return jsonify({"error": reason, "message": "请上传 PNG/JPG 照片后再生成简历。", "meta": meta}), 400
+        processed_photo_data_url, photo_process_warning = _process_photo_data_url_with_skill(photo_data_url)
 
     templates = _load_resume_craft_templates()
     preview_snippet = _extract_preview_snippet(templates.get("preview_template", ""), template_code)
@@ -1839,7 +2111,7 @@ def careerforge_resume_craft_render():
     raw_html = ai_service.run_resume_craft_html(html_payload, runtime=runtime)
     report_html = _extract_html_document(raw_html)
     if report_html and photo_pref == "放照片":
-        report_html = _inject_photo_data_url_into_html(report_html, photo_data_url, RESUME_CRAFT_PHOTO_TOKEN)
+        report_html = _inject_photo_data_url_into_html(report_html, processed_photo_data_url, RESUME_CRAFT_PHOTO_TOKEN)
     if not report_html:
         strict_payload = dict(html_payload)
         if photo_pref == "放照片":
@@ -1855,7 +2127,7 @@ def careerforge_resume_craft_render():
             )
         retry_html = _extract_html_document(ai_service.run_resume_craft_html(strict_payload, runtime=runtime))
         if retry_html and photo_pref == "放照片":
-            retry_html = _inject_photo_data_url_into_html(retry_html, photo_data_url, RESUME_CRAFT_PHOTO_TOKEN)
+            retry_html = _inject_photo_data_url_into_html(retry_html, processed_photo_data_url, RESUME_CRAFT_PHOTO_TOKEN)
         report_html = retry_html
 
     if not report_html:
@@ -1866,9 +2138,14 @@ def careerforge_resume_craft_render():
                 finalized_list=finalized_list,
                 template_code=template_code,
                 language=language,
+                photo_pref=photo_pref,
             )
             if photo_pref == "放照片":
-                fallback_html = _inject_fallback_header_photo(fallback_html, photo_data_url)
+                fallback_html = _inject_photo_data_url_into_html(
+                    fallback_html,
+                    processed_photo_data_url,
+                    RESUME_CRAFT_PHOTO_TOKEN,
+                )
             report_html = _extract_html_document(fallback_html)
             fallback_used = bool(report_html)
         except Exception as e:
@@ -1884,12 +2161,25 @@ def careerforge_resume_craft_render():
             }
         ), 500
 
-    report_name = f"resume-craft-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}.html"
+    report_name = f"{_build_resume_artifact_stem(step1_profile)}.html"
+    pdf_name, pdf_base64, pdf_error = _generate_resume_craft_pdf_artifact(report_html, report_name)
+    response_meta = {
+        **meta,
+        "resume_craft_render_fallback": "local" if fallback_used else "none",
+        "resume_craft_pdf_generated": bool(pdf_base64),
+    }
+    if pdf_error:
+        response_meta["resume_craft_pdf_error"] = pdf_error
+    if photo_process_warning:
+        response_meta["resume_craft_photo_process_warning"] = photo_process_warning
+
     return jsonify(
         {
             "report_name": report_name,
             "report_html": report_html,
-            "meta": {**meta, "resume_craft_render_fallback": "local" if fallback_used else "none"},
+            "report_pdf_name": pdf_name,
+            "report_pdf_base64": pdf_base64,
+            "meta": response_meta,
             "error": "",
         }
     ), 200
