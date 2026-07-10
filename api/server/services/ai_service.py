@@ -1,4 +1,6 @@
 import json
+import re
+from collections import Counter
 from typing import Any, Dict, Optional
 
 from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
@@ -59,21 +61,49 @@ class AIService:
             return self.careerforge_agent
 
         mode = self._runtime_text(runtime.get("mode") or "platform").lower()
-        if mode != "byok":
-            return self.careerforge_agent
-
         provider = self._runtime_text(runtime.get("provider")).lower()
         model_name = self._runtime_text(runtime.get("model"))
         api_key = self._runtime_text(runtime.get("api_key"))
         base_url = self._runtime_text(runtime.get("base_url"))
 
-        kwargs: Dict[str, Any] = {
-            "temperature": 0.35,
-        }
-        if api_key:
-            kwargs["api_key"] = api_key
-        if base_url:
-            kwargs["base_url"] = base_url
+        # Platform mode defaults to server-side configured provider/model,
+        # but can be overridden by request runtime fields from web settings.
+        if mode == "platform":
+            default_provider = (Config.PLATFORM_PROVIDER or "deepseek").strip().lower() or "deepseek"
+            default_model = (Config.PLATFORM_MODEL or "").strip() or Config.DEEPSEEK_MODEL
+            requested_model = self._runtime_text(runtime.get("model"))
+            provider = provider or default_provider
+            model_name = requested_model or default_model
+            has_override = bool(
+                api_key
+                or base_url
+                or (provider != default_provider)
+                or (requested_model and requested_model != default_model)
+            )
+            if not has_override:
+                return self.careerforge_agent
+        else:
+            # Backward compatibility for legacy BYOK path.
+            provider = provider or "deepseek"
+            model_name = model_name or Config.DEEPSEEK_MODEL
+
+        kwargs: Dict[str, Any] = {"temperature": 0.35}
+
+        if provider == "deepseek":
+            kwargs["api_key"] = api_key or Config.DEEPSEEK_API_KEY
+            kwargs["base_url"] = base_url or Config.DEEPSEEK_BASE_URL
+        elif provider == "openai":
+            kwargs["api_key"] = api_key or Config.OPENAI_API_KEY
+            if base_url:
+                kwargs["base_url"] = base_url
+        elif provider == "anthropic":
+            kwargs["api_key"] = api_key or Config.ANTHROPIC_API_KEY
+            if base_url:
+                kwargs["base_url"] = base_url
+        else:
+            provider = "deepseek"
+            kwargs["api_key"] = api_key or Config.DEEPSEEK_API_KEY
+            kwargs["base_url"] = base_url or Config.DEEPSEEK_BASE_URL
 
         llm = ModelFactory.get_model(provider, model_name, **kwargs)
         return CareerForgeAgent(llm=llm)
@@ -84,6 +114,258 @@ class AIService:
         if lang.startswith("en"):
             return "en"
         return "zh"
+
+    @staticmethod
+    def _tokenize_keywords(text: Any) -> list:
+        raw = str(text or "")
+        lowered = raw.lower()
+        english = re.findall(r"[a-z][a-z0-9+._-]{1,}", lowered)
+        chinese = re.findall(r"[\u4e00-\u9fff]{2,8}", raw)
+        tokens = english + chinese
+        stop = {
+            "and",
+            "the",
+            "for",
+            "with",
+            "from",
+            "that",
+            "this",
+            "you",
+            "your",
+            "will",
+            "have",
+            "are",
+            "job",
+            "岗位",
+            "负责",
+            "具有",
+            "相关",
+            "能力",
+            "经验",
+            "以及",
+            "熟悉",
+            "能够",
+            "优先",
+            "要求",
+            "我们",
+            "公司",
+            "以上",
+            "以下",
+        }
+        clean = []
+        for token in tokens:
+            t = token.strip().lower()
+            if len(t) < 2 or t in stop:
+                continue
+            clean.append(t)
+        return clean
+
+    def _extract_top_keywords(self, text: Any, limit: int = 24) -> list:
+        tokens = self._tokenize_keywords(text)
+        if not tokens:
+            return []
+        counts = Counter(tokens)
+        ranked = sorted(counts.items(), key=lambda item: (-item[1], -len(item[0]), item[0]))
+        return [k for k, _ in ranked[:limit]]
+
+    @staticmethod
+    def _should_fallback_resume_match(result: Any) -> bool:
+        if not isinstance(result, dict):
+            return True
+        if result.get("error"):
+            return True
+
+        assumptions = result.get("assumptions")
+        if not isinstance(assumptions, list):
+            return False
+        markers = {
+            "model_call_failed",
+            "missing_api_key_or_model_init_failed",
+            "model_output_not_json",
+            "model_stream_failed",
+        }
+        return any(str(item).strip().lower() in markers for item in assumptions)
+
+    @staticmethod
+    def _extract_runtime_error_text(result: Any) -> str:
+        if not isinstance(result, dict):
+            return str(result or "")
+        return str(result.get("error") or result.get("message") or result.get("assumptions") or "")
+
+    @staticmethod
+    def _looks_like_auth_failure(text: str) -> bool:
+        lower = (text or "").lower()
+        markers = (
+            "authentication fails",
+            "authentication_error",
+            "invalid api key",
+            "api key is invalid",
+            "invalid_request_error",
+            "unauthorized",
+            "error code: 401",
+            "401",
+        )
+        return any(marker in lower for marker in markers)
+
+    @staticmethod
+    def _normalize_fallback_reason(reason: str) -> str:
+        lower = (reason or "").lower()
+        if AIService._looks_like_auth_failure(lower):
+            return "platform_model_auth_failed"
+        if "timeout" in lower or "timed out" in lower:
+            return "platform_model_timeout"
+        if "llm_not_ready" in lower or "missing_api_key_or_model_init_failed" in lower:
+            return "platform_model_not_ready"
+        if "model_output_not_json" in lower:
+            return "platform_model_non_json"
+        if "model_call_failed" in lower:
+            return "platform_model_call_failed"
+        if "runtime_exception" in lower:
+            return "platform_runtime_exception"
+        return "platform_model_unavailable"
+
+    @staticmethod
+    def _can_retry_with_server_platform_key(runtime: Optional[Dict[str, Any]], reason: str) -> bool:
+        if not isinstance(runtime, dict):
+            return False
+        mode = str(runtime.get("mode") or "platform").strip().lower()
+        if mode != "platform":
+            return False
+        runtime_key = str(runtime.get("api_key") or "").strip()
+        if not runtime_key:
+            return False
+        return AIService._looks_like_auth_failure(reason)
+
+    @staticmethod
+    def _runtime_without_api_key(runtime: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        clean = dict(runtime or {})
+        clean["mode"] = "platform"
+        clean["api_key"] = ""
+        return clean
+
+    @staticmethod
+    def _extract_step4_runtime_error(decision: Any) -> str:
+        if not isinstance(decision, dict):
+            return str(decision or "")
+        return str(
+            decision.get("model_connection_error")
+            or decision.get("error")
+            or decision.get("message")
+            or ""
+        ).strip()
+
+    def _fallback_resume_match(self, payload: Dict[str, Any], reason: str) -> Dict[str, Any]:
+        resume_text = str(payload.get("resume_text") or "")
+        jd_text = str(payload.get("jd_text") or "")
+        target_role = str(payload.get("target_role") or "目标岗位").strip() or "目标岗位"
+
+        resume_keywords = self._extract_top_keywords(resume_text, limit=36)
+        jd_keywords = self._extract_top_keywords(jd_text, limit=36)
+        role_keywords = self._extract_top_keywords(target_role, limit=8)
+
+        resume_set = set(resume_keywords)
+        overlap = [kw for kw in jd_keywords if kw in resume_set]
+        missing = [kw for kw in jd_keywords if kw not in resume_set]
+        role_hits = [kw for kw in role_keywords if kw in resume_set]
+
+        skill_ratio = len(overlap) / max(1, len(jd_keywords))
+        skill_score = int(round(45 + 55 * skill_ratio))
+        role_score = 90 if role_hits else (68 if not role_keywords else 58)
+
+        evidence_hits = re.findall(
+            r"\d+(?:\.\d+)?[%万千kK]?|负责|主导|优化|提升|增长|上线|交付|落地|管理|协作",
+            resume_text,
+        )
+        evidence_score = min(95, 54 + len(evidence_hits) * 4)
+        expression_score = min(92, 58 + int(len(resume_text) / 220))
+        overall = int(round(skill_score * 0.4 + role_score * 0.25 + evidence_score * 0.2 + expression_score * 0.15))
+        overall = max(45, min(96, overall))
+
+        if overall >= 82:
+            match_level = "A"
+        elif overall >= 63:
+            match_level = "B"
+        else:
+            match_level = "C"
+
+        critical_missing = missing[:8] or ["建议补充与 JD 直接对应的核心技能关键词"]
+        advantages = overlap[:8] or resume_keywords[:6]
+
+        summary = (
+            f"当前为降级分析模式：你的简历与“{target_role}”存在 {len(overlap)} 项关键词重合，"
+            f"整体匹配度评估为 {match_level}（{overall}/100）。优先补齐 JD 中未覆盖的高频关键词，可显著提升通过率。"
+        )
+
+        dimension_scores = [
+            {
+                "name": "岗位方向一致性",
+                "score": role_score,
+                "highlight": "简历内容与目标岗位关键词一致" if role_hits else "岗位方向可判断但关键词锚点不足",
+                "gap": "目标岗位关键词在经历中出现偏少" if not role_hits else "可进一步强化岗位专属术语",
+                "advice": "在最近两段经历中明确写出与目标岗位对应的职责与结果。",
+            },
+            {
+                "name": "技能匹配度",
+                "score": skill_score,
+                "highlight": f"已覆盖 {len(overlap)} 项 JD 关键词",
+                "gap": "部分 JD 高频要求未在简历中出现",
+                "advice": "把缺失关键词映射到真实项目经历，按“场景-动作-结果”补充。",
+            },
+            {
+                "name": "经历证据强度",
+                "score": evidence_score,
+                "highlight": "简历中存在可量化表达" if evidence_hits else "已有项目描述基础",
+                "gap": "量化指标或业务结果仍可增强",
+                "advice": "每段经历至少补 1 个量化结果（效率、成本、转化、时长等）。",
+            },
+            {
+                "name": "表达清晰度",
+                "score": expression_score,
+                "highlight": "简历内容具备可读性",
+                "gap": "结构层次仍可进一步聚焦到 JD 核心诉求",
+                "advice": "将最相关项目前置，并把次要描述压缩为 1-2 行。",
+            },
+        ]
+
+        optimization = [
+            "优先补齐“关键缺口”中的前 3 个词，并绑定到真实项目成果。",
+            "简历开头新增“目标岗位 + 3 项核心能力”摘要，提升首屏命中率。",
+            "每段经历保留 1 条动作描述 + 1 条量化结果，减少泛化表述。",
+        ]
+
+        optimized_resume_markdown = "\n".join(
+            [
+                f"## 目标岗位",
+                f"{target_role}",
+                "",
+                "## 核心匹配能力",
+                *[f"- {kw}" for kw in (advantages[:5] or ["请补充与你目标岗位直接对应的技能关键词"])],
+                "",
+                "## 优先补齐关键词",
+                *[f"- {kw}" for kw in critical_missing[:5]],
+                "",
+                "## 写作建议",
+                "- 使用 STAR/项目成果格式：场景 -> 行动 -> 可量化结果。",
+                "- 与 JD 关联较弱的内容放到靠后位置，核心匹配内容前置。",
+            ]
+        )
+
+        normalized_reason = self._normalize_fallback_reason(reason)
+        return {
+            "overall_score": overall,
+            "match_level": match_level,
+            "summary": summary,
+            "dimension_scores": dimension_scores,
+            "critical_missing": critical_missing,
+            "extra_advantages": advantages,
+            "optimization_suggestions": optimization,
+            "optimized_resume_markdown": optimized_resume_markdown,
+            "assumptions": [
+                "platform_model_unavailable_fallback_used",
+                "keyword_based_heuristic_analysis",
+                f"fallback_reason:{normalized_reason}",
+            ],
+        }
 
     def analyze_resume_and_update_job(self, user_id, resume_text, current_job_intention):
         """
@@ -315,13 +597,24 @@ class AIService:
 
     def run_resume_match(self, payload, runtime: Optional[Dict[str, Any]] = None):
         try:
-            return self._build_runtime_agent(runtime).run_resume_match(payload)
+            result = self._build_runtime_agent(runtime).run_resume_match(payload)
+            if self._should_fallback_resume_match(result):
+                reason = self._extract_runtime_error_text(result)
+                if self._can_retry_with_server_platform_key(runtime, reason):
+                    try:
+                        retry_runtime = self._runtime_without_api_key(runtime)
+                        retried = self._build_runtime_agent(retry_runtime).run_resume_match(payload)
+                        if not self._should_fallback_resume_match(retried):
+                            return retried
+                        reason = self._extract_runtime_error_text(retried) or reason
+                    except Exception as retry_error:
+                        logger.warning("run_resume_match platform retry failed: %s", retry_error)
+                        reason = f"runtime_exception:{retry_error}"
+                return self._fallback_resume_match(payload, reason or "resume_match_runtime_unavailable")
+            return result
         except Exception as e:
             logger.error("run_resume_match runtime error: %s", e)
-            return {
-                "error": "runtime_call_failed",
-                "message": "Model runtime call failed.",
-            }
+            return self._fallback_resume_match(payload, f"runtime_exception:{e}")
 
     def run_resume_craft(self, payload, runtime: Optional[Dict[str, Any]] = None):
         try:
@@ -342,16 +635,31 @@ class AIService:
 
     def run_resume_craft_step4_decision(self, payload, runtime: Optional[Dict[str, Any]] = None):
         try:
-            return self._build_runtime_agent(runtime).run_resume_craft_step4_decision(payload)
+            decision = self._build_runtime_agent(runtime).run_resume_craft_step4_decision(payload)
+            reason = self._extract_step4_runtime_error(decision)
+            if self._can_retry_with_server_platform_key(runtime, reason):
+                try:
+                    retry_runtime = self._runtime_without_api_key(runtime)
+                    retried = self._build_runtime_agent(retry_runtime).run_resume_craft_step4_decision(payload)
+                    if bool(retried.get("model_connection_ok")):
+                        return retried
+                    retried_reason = self._extract_step4_runtime_error(retried)
+                    if retried_reason and self._looks_like_auth_failure(reason):
+                        return retried
+                except Exception as retry_error:
+                    logger.warning("run_resume_craft_step4_decision platform retry failed: %s", retry_error)
+            return decision
         except Exception as e:
             logger.error("run_resume_craft_step4_decision runtime error: %s", e)
             return {
                 "reply": str(payload.get("fallback_reply") or "请继续补充这一段项目的关键信息。"),
                 "resume_ready_draft": {"title": "项目经历", "role": "核心开发", "period": "时间待补", "bullets": []},
-                "missing_points": ["项目起止时间", "关键指标口径", "是否有下一段经历"],
+                "missing_points": ["核心功能是如何拆解并实现的（关键模块/调用链）", "效果如何验证（压测口径/线上指标）", "是否还有要补充的经历"],
                 "current_experience_completed": False,
                 "ask_more_experience": True,
                 "reasoning_focus": [],
+                "model_connection_ok": False,
+                "model_connection_error": str(e),
             }
 
     def run_resume_craft_html(self, payload, runtime: Optional[Dict[str, Any]] = None):
@@ -360,19 +668,27 @@ class AIService:
             if str(result or "").strip():
                 return result
             if isinstance(runtime, dict):
-                mode = str(runtime.get("mode") or "").strip().lower()
+                mode = str(runtime.get("mode") or "platform").strip().lower()
                 runtime_key = str(runtime.get("api_key") or "").strip()
-                if mode == "byok" and runtime_key:
+                if mode == "platform" and runtime_key:
                     try:
-                        fallback_runtime = {"mode": "platform", "provider": "deepseek", "model": Config.DEEPSEEK_MODEL}
-                        retry_result = self._build_runtime_agent(fallback_runtime).run_resume_craft_html(payload)
+                        retry_runtime = self._runtime_without_api_key(runtime)
+                        retry_result = self._build_runtime_agent(retry_runtime).run_resume_craft_html(payload)
                         if str(retry_result or "").strip():
                             return retry_result
                     except Exception as retry_error:
-                        logger.warning("run_resume_craft_html byok fallback failed: %s", retry_error)
+                        logger.warning("run_resume_craft_html platform retry failed: %s", retry_error)
             return ""
         except Exception as e:
             logger.error("run_resume_craft_html runtime error: %s", e)
+            if self._can_retry_with_server_platform_key(runtime, str(e)):
+                try:
+                    retry_runtime = self._runtime_without_api_key(runtime)
+                    retry_result = self._build_runtime_agent(retry_runtime).run_resume_craft_html(payload)
+                    if str(retry_result or "").strip():
+                        return retry_result
+                except Exception as retry_error:
+                    logger.warning("run_resume_craft_html platform retry after exception failed: %s", retry_error)
             return ""
 
     def run_cover_letter(self, payload, runtime: Optional[Dict[str, Any]] = None):

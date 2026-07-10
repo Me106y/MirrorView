@@ -50,6 +50,16 @@ export interface ExperienceState {
   followup_count: number;
   drafts: string[];
   finalized_experiences: string[];
+  active_focus?: {
+    topic: string;
+    stage: "implementation" | "tradeoff" | "validation" | "done";
+    evidence: {
+      implementation: boolean;
+      tradeoff: boolean;
+      validation: boolean;
+    };
+    turn_count: number;
+  };
 }
 
 export interface StepChatState {

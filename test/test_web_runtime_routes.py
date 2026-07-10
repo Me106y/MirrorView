@@ -232,6 +232,7 @@ def test_resume_craft_chat_turn_step1_profile_experience_only(monkeypatch):
     assert body["meta"]["resume_craft_chat_turn_version"] == "2026-07-10-v9"
     assert body["meta"]["step4_mode"] == "agent_led"
     assert body["meta"]["step4_missing_points"]
+    assert body["meta"]["step4_raw_missing_points"]
 
 
 def test_resume_craft_chat_turn_step1_profile_auto_finalize_after_max_grill(monkeypatch):
@@ -370,9 +371,10 @@ def test_resume_craft_chat_turn_step4_agent_missing_points_followed(monkeypatch)
     assert resp.status_code == 200
     body = resp.get_json()
     assert body["action"] == "grill_experience"
-    assert "指标口径" in body["reply"]
+    assert "请补 3 点" in body["reply"]
     assert body["meta"]["step4_mode"] == "agent_led"
-    assert "指标口径" in "".join(body["meta"]["step4_missing_points"])
+    assert body["meta"]["step4_missing_points"] == ["项目起止时间", "指标口径", "下一段经历"]
+    assert body["meta"]["step4_raw_missing_points"] == ["项目起止时间", "指标口径", "下一段经历"]
 
 
 def test_resume_craft_chat_turn_step4_dynamic_focus_for_different_stack(monkeypatch):
@@ -425,7 +427,7 @@ def test_resume_craft_chat_turn_step4_dynamic_focus_for_different_stack(monkeypa
     assert resp.status_code == 200
     body = resp.get_json()
     assert body["action"] == "grill_experience"
-    assert "SLO" in body["reply"] or "集群规模" in body["reply"]
+    assert body["meta"]["step4_missing_points"] == ["集群规模", "SLO 口径", "下一段经历"]
     assert "LangChain" not in body["reply"]
     assert "Prompt" not in body["reply"]
     assert body["meta"]["step4_mode"] == "agent_led"
@@ -444,10 +446,10 @@ def test_resume_craft_chat_turn_step4_first_round_returns_resume_ready_draft(mon
                 "Mirrorview智能模拟面试平台｜独立开发｜（时间待补）\n"
                 "基于 LangChain + Agentic RAG 架构实现 AI 面试官，支持多轮对话与上下文推理。\n"
                 "后端采用 Flask + SQLAlchemy，将面试历史查询接口响应时间优化 42%。\n"
-                "请再补 3 个点，我就能定稿这段并继续下一段经历：\n"
+                "请再补充以下信息：\n"
                 "这段项目起止时间（如 2025.03-2025.06）\n"
                 "响应时间降低 42% 的口径（例如从多少 ms 降到多少 ms；如果没有具体值，保留 42% 也可以）\n"
-                "还有没有第 2 段相关经历（实习/项目都行）？如果有，按“名称｜角色｜时间 + 3-5条成果”发我。"
+                "是否还有要补充的经历"
             ),
             "resume_ready_draft": {
                 "title": "Mirrorview智能模拟面试平台",
@@ -497,10 +499,60 @@ def test_resume_craft_chat_turn_step4_first_round_returns_resume_ready_draft(mon
     assert body["action"] == "grill_experience"
     assert "可上简历版本" in body["reply"]
     assert "Mirrorview智能模拟面试平台" in body["reply"]
-    assert "请再补 3 个点" in body["reply"]
     assert "项目起止时间" in body["reply"]
-    assert "还有没有第 2 段相关经历" in body["reply"]
-    assert "请补充你遇到的挑战/难点" not in body["reply"]
+    assert "是否还有要补充的经历" in body["reply"]
+    assert body["meta"]["step4_missing_points"] == ["项目起止时间", "指标口径", "是否有下一段经历"]
+    assert body["meta"]["step4_mode"] == "agent_led"
+
+
+def test_resume_craft_chat_turn_step4_first_round_enforces_structured_contract(monkeypatch):
+    Config.TURNSTILE_ENFORCE = False
+    Config.RATE_LIMIT_ENFORCE = False
+
+    monkeypatch.setattr(
+        routes.ai_service,
+        "run_resume_craft_step4_decision",
+        lambda payload, runtime=None: {
+            "reply": "好的，收到。",
+            "resume_ready_draft": {
+                "title": "在线推理平台",
+                "role": "核心开发",
+                "period": "2025.03-2025.06",
+                "bullets": ["负责链路重构，平均时延下降 42%。"],
+            },
+            "missing_points": ["SLO 口径"],
+            "current_experience_completed": False,
+            "ask_more_experience": True,
+            "reasoning_focus": ["slo", "latency"],
+        },
+    )
+
+    client = _client()
+    resp = client.post(
+        "/api/careerforge/resume-craft/chat-turn",
+        json={
+            "message": "我负责在线推理平台的链路重构，时延下降 42%。",
+            "current_step": 4,
+            "history": [{"role": "assistant", "content": "我们进入 Step4（工作/项目经历）。请描述第一段经历的场景、职责、行动和结果。"}],
+            "step1_profile": {
+                "template_code": "02",
+                "language": "zh",
+                "photo_pref": "no_photo",
+                "target_role": "AI应用开发",
+                "personal_info": {"name": "A", "phone": "1", "email": "a@b.com", "city": "上海", "links": []},
+                "education": [{"school": "X", "major": "CS", "degree": "硕士", "period": "2020-2023", "highlights": ""}],
+                "skills": ["Python", "LangChain"],
+                "certificates": [],
+                "expected_experience_count": 1,
+            },
+            "experience_state": {"current_index": 1, "followup_count": 0, "drafts": [], "finalized_experiences": []},
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["action"] == "grill_experience"
+    assert body["reply"] == "好的，收到。"
+    assert body["meta"]["step4_missing_points"] == ["SLO 口径"]
     assert body["meta"]["step4_mode"] == "agent_led"
 
 

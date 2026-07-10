@@ -2,7 +2,7 @@ import json
 import os
 import re
 from pathlib import Path
-from typing import Dict, Generator, List, Optional
+from typing import Any, Dict, Generator, List, Optional
 
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.output_parsers import StrOutputParser
@@ -409,20 +409,9 @@ You MUST follow the provided Skill specification when answering.
         Agent-led Step4 decision maker.
         Returns structured decision for route state machine consumption.
         """
-        fallback_reply = str(payload.get("fallback_reply") or "").strip() or "请继续补充这一段项目的关键信息。"
-        fallback = {
-            "reply": fallback_reply,
-            "resume_ready_draft": {
-                "title": "项目经历",
-                "role": "核心开发",
-                "period": "时间待补",
-                "bullets": [],
-            },
-            "missing_points": ["项目起止时间", "关键指标口径", "是否有下一段经历"],
-            "current_experience_completed": False,
-            "ask_more_experience": True,
-            "reasoning_focus": [],
-        }
+        fallback = self._build_step4_heuristic_decision(payload)
+        fallback["model_connection_ok"] = False
+        fallback["model_connection_error"] = self.llm_error or "llm_not_ready_or_connection_failed"
 
         if self.llm is None:
             return fallback
@@ -440,6 +429,13 @@ You MUST follow the provided Skill specification when answering.
             "current_experience_completed": False,
             "ask_more_experience": True,
             "reasoning_focus": ["string"],
+            "active_focus_topic": "string",
+            "next_probe_dimension": "implementation|tradeoff|validation|more_experience",
+            "evidence_coverage": {
+                "implementation": False,
+                "tradeoff": False,
+                "validation": False,
+            },
         }
         schema_json = json.dumps(schema, ensure_ascii=False, indent=2)
         prompt = ChatPromptTemplate.from_template(
@@ -461,6 +457,7 @@ You MUST follow the provided Skill specification when answering.
 - followup_count: {followup_count}
 - current_index: {current_index}
 - expected_experience_count: {expected_experience_count}
+- active_focus: {active_focus_json}
 
 [用户最新输入]
 {user_input}
@@ -468,13 +465,12 @@ You MUST follow the provided Skill specification when answering.
 [硬性约束]
 1) 必须事实忠实：不编造、不夸大。
 2) 路由层是状态机，本次只负责 Step4 问答决策。
-3) 若 is_first_round=true，reply 必须采用“半固定结构”：
-   - 先给“可上简历版本（待确认）”
-   - 再给 3 个关键补充点（必须包含：时间、指标口径、是否有下一段经历）
-4) 技术关注点必须动态基于用户输入，不得机械复读“挑战/难点”模板。
-5) missing_points 最多 3 条，必须可执行。
-6) current_experience_completed=true 仅当当前这段信息已可定稿。
-7) ask_more_experience=true 表示应继续询问是否有下一段经历。
+3) 技术关注点必须动态基于用户输入，不得机械复读“挑战/难点”模板。
+4) 优先深挖“功能与技术实现细节”，角色/时间/背景只能作为可选补充，不可抢占主路径。
+5) missing_points 由你基于当前项目动态决定，不要套固定模板；如果用户已覆盖某点，不要重复追问。
+6) 若当前经历已可定稿，使用“是否还有要补充的经历”作为转场问题。
+7) current_experience_completed=true 仅当当前这段信息已可定稿；ask_more_experience=true 表示继续询问是否还有经历。
+8) 需维护 active_focus_topic / next_probe_dimension / evidence_coverage 供状态机追踪，但追问文案由你自由生成。
 
 [输出 JSON Schema]
 {schema_json}
@@ -492,6 +488,7 @@ You MUST follow the provided Skill specification when answering.
                     "followup_count": int(payload.get("followup_count", 0)),
                     "current_index": int(payload.get("current_index", 1)),
                     "expected_experience_count": int(payload.get("expected_experience_count", 1)),
+                    "active_focus_json": json.dumps(payload.get("active_focus") or {}, ensure_ascii=False),
                     "schema_json": schema_json,
                 }
             )
@@ -499,31 +496,427 @@ You MUST follow the provided Skill specification when answering.
             if not isinstance(parsed, dict):
                 return fallback
 
-            reply = str(parsed.get("reply") or "").strip() or fallback["reply"]
-            draft = parsed.get("resume_ready_draft") if isinstance(parsed.get("resume_ready_draft"), dict) else {}
-            bullets = draft.get("bullets") if isinstance(draft.get("bullets"), list) else []
-            safe_bullets = [str(item or "").strip()[:220] for item in bullets if str(item or "").strip()][:5]
-            missing_points_raw = parsed.get("missing_points") if isinstance(parsed.get("missing_points"), list) else []
-            missing_points = [str(item or "").strip()[:80] for item in missing_points_raw if str(item or "").strip()][:3]
-            reasoning_raw = parsed.get("reasoning_focus") if isinstance(parsed.get("reasoning_focus"), list) else []
-            reasoning_focus = [str(item or "").strip()[:80] for item in reasoning_raw if str(item or "").strip()][:6]
-
-            return {
-                "reply": reply,
-                "resume_ready_draft": {
-                    "title": str(draft.get("title") or "项目经历").strip()[:80],
-                    "role": str(draft.get("role") or "核心开发").strip()[:80],
-                    "period": str(draft.get("period") or "时间待补").strip()[:80],
-                    "bullets": safe_bullets,
-                },
-                "missing_points": missing_points or fallback["missing_points"],
-                "current_experience_completed": bool(parsed.get("current_experience_completed", False)),
-                "ask_more_experience": bool(parsed.get("ask_more_experience", True)),
-                "reasoning_focus": reasoning_focus,
-            }
+            normalized = self._coerce_step4_single_focus_decision(
+                payload=payload,
+                candidate=parsed,
+                fallback=fallback,
+            )
+            normalized["model_connection_ok"] = True
+            normalized["model_connection_error"] = ""
+            return normalized
         except Exception as e:
             logger.error("resume-craft step4 decision invoke failed: %s", e)
+            fallback["model_connection_ok"] = False
+            fallback["model_connection_error"] = str(e)
             return fallback
+
+    @staticmethod
+    def _is_generic_step4_reply(reply: str) -> bool:
+        text = str(reply or "").strip().lower()
+        if not text:
+            return True
+        generic_markers = [
+            "请继续补充",
+            "关键信息",
+            "挑战/难点",
+            "挑战和行动",
+            "收到你的信息",
+            "这段经历很关键",
+        ]
+        return any(marker in text for marker in generic_markers)
+
+    @staticmethod
+    def _normalize_step4_evidence(raw: Any) -> Dict[str, bool]:
+        value = raw if isinstance(raw, dict) else {}
+        return {
+            "implementation": bool(value.get("implementation", False)),
+            "tradeoff": bool(value.get("tradeoff", False)),
+            "validation": bool(value.get("validation", False)),
+        }
+
+    @classmethod
+    def _default_step4_active_focus(cls) -> Dict[str, Any]:
+        return {
+            "topic": "",
+            "stage": "implementation",
+            "evidence": cls._normalize_step4_evidence({}),
+            "turn_count": 0,
+        }
+
+    @classmethod
+    def _normalize_step4_active_focus(cls, raw: Any) -> Dict[str, Any]:
+        value = raw if isinstance(raw, dict) else {}
+        topic = str(value.get("topic") or "").strip()[:120]
+        stage = str(value.get("stage") or "").strip().lower()
+        if stage not in {"implementation", "tradeoff", "validation", "done"}:
+            stage = "implementation"
+        try:
+            turn_count = int(value.get("turn_count", 0))
+        except Exception:
+            turn_count = 0
+        evidence = cls._normalize_step4_evidence(value.get("evidence"))
+        if all(evidence.values()):
+            stage = "done"
+        return {
+            "topic": topic,
+            "stage": stage,
+            "evidence": evidence,
+            "turn_count": max(0, min(turn_count, 20)),
+        }
+
+    @staticmethod
+    def _merge_step4_evidence(base: Dict[str, bool], patch: Dict[str, bool]) -> Dict[str, bool]:
+        return {
+            "implementation": bool(base.get("implementation")) or bool(patch.get("implementation")),
+            "tradeoff": bool(base.get("tradeoff")) or bool(patch.get("tradeoff")),
+            "validation": bool(base.get("validation")) or bool(patch.get("validation")),
+        }
+
+    @staticmethod
+    def _detect_step4_evidence_from_text(text: str) -> Dict[str, bool]:
+        lower = str(text or "").lower()
+        implementation = any(
+            token in lower
+            for token in ["实现", "搭建", "重构", "改造", "开发", "模块", "链路", "流程", "接口", "服务", "引擎", "pipeline"]
+        )
+        tradeoff = any(
+            token in lower
+            for token in ["选型", "取舍", "权衡", "为什么", "相比", "而不是", "成本", "稳定性", "扩展性", "兼容", "方案"]
+        )
+        validation = any(
+            token in lower
+            for token in [
+                "压测",
+                "监控",
+                "告警",
+                "线上",
+                "验证",
+                "观测",
+                "slo",
+                "sla",
+                "p95",
+                "p99",
+                "qps",
+                "错误率",
+                "时延",
+                "响应",
+                "%",
+                "ms",
+            ]
+        )
+        return {
+            "implementation": implementation,
+            "tradeoff": tradeoff,
+            "validation": validation,
+        }
+
+    @staticmethod
+    def _next_step4_stage(evidence: Dict[str, bool]) -> str:
+        if not evidence.get("implementation"):
+            return "implementation"
+        if not evidence.get("tradeoff"):
+            return "tradeoff"
+        if not evidence.get("validation"):
+            return "validation"
+        return "done"
+
+    @staticmethod
+    def _normalize_step4_probe_dimension(value: Any) -> str:
+        text = str(value or "").strip().lower()
+        if text in {"implementation", "tradeoff", "validation", "more_experience"}:
+            return text
+        return ""
+
+    @staticmethod
+    def _build_step4_single_probe(topic: str, stage: str, text: str = "") -> str:
+        focus = topic or "该项目核心能力点"
+        lower = str(text or "").lower()
+        is_rag_stack = any(token in lower for token in ["langchain", "agentic rag", "rag", "prompt", "temperature"])
+        is_vision_stack = any(
+            token in lower
+            for token in ["pyqt", "yolov8", "ffmpeg", "rtmp", "kmz", "无人机", "百度地图", "航迹", "大疆"]
+        )
+
+        if stage == "implementation":
+            if is_rag_stack:
+                return (
+                    f"围绕“{focus}”，请展开一个最关键功能：检索、记忆与提示词编排是如何串成一条可运行链路的？"
+                )
+            if is_vision_stack:
+                return (
+                    f"围绕“{focus}”，请拆解一个核心功能的实现链路（如航迹规划或实时检测）：输入、处理、输出分别怎么落地？"
+                )
+            return f"围绕“{focus}”，请具体说明一个核心功能从输入到输出的实现链路是怎么搭起来的？"
+
+        if stage == "tradeoff":
+            if is_rag_stack:
+                return (
+                    f"围绕“{focus}”，你在模型/检索/记忆方案上做过什么关键取舍？为什么这样选而不是备选方案？"
+                )
+            if is_vision_stack:
+                return (
+                    f"围绕“{focus}”，你在实时性与准确性之间做了哪些关键取舍（例如下采样、异步处理、推流方案）？"
+                )
+            return f"围绕“{focus}”，请说明你做过的一次关键技术取舍，以及放弃备选方案的原因。"
+
+        if stage == "validation":
+            if is_vision_stack:
+                return f"围绕“{focus}”，请给出你验证效果的口径（如帧率、延迟、误检率或稳定性指标）。"
+            return f"围绕“{focus}”，请给出验证口径与结果（如 P95/QPS/错误率/业务指标）。"
+
+        return "是否还有要补充的经历"
+
+    def _choose_step4_focus_topic(self, text: str, previous_topic: str = "") -> str:
+        prior = str(previous_topic or "").strip()
+        if prior:
+            return prior
+        raw = str(text or "")
+        title = self._extract_step4_title(raw)
+        if title and title not in {"项目经历"} and any(token in title for token in ["系统", "平台", "项目", "链路"]):
+            return title[:24]
+        patterns = [
+            r"(?:基于|围绕|通过)([^，。；;\n]{2,24})(?:实现|构建|搭建|重构|优化)",
+            r"([^，。；;\n]{2,24})(?:模块|链路|服务|系统|平台|引擎)",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, raw, flags=re.IGNORECASE)
+            if match:
+                topic = match.group(1).strip(" ：:，。；;")
+                if topic:
+                    return topic[:24]
+        focus_terms = self._extract_step4_focus_terms(raw)
+        if focus_terms:
+            return focus_terms[0]
+        return "该项目核心技术点"
+
+    def _coerce_step4_single_focus_decision(self, payload: Dict[str, Any], candidate: Any, fallback: Dict[str, Any]) -> Dict[str, Any]:
+        parsed = candidate if isinstance(candidate, dict) else {}
+        user_input = str(payload.get("user_input") or "").strip()
+        source_focus = self._normalize_step4_active_focus(payload.get("active_focus"))
+        fallback_focus = self._normalize_step4_active_focus(fallback.get("active_focus"))
+
+        topic = str(parsed.get("active_focus_topic") or "").strip()
+        topic = topic or fallback_focus.get("topic") or source_focus.get("topic") or self._choose_step4_focus_topic(user_input)
+        topic = self._choose_step4_focus_topic(user_input, topic)
+
+        evidence = self._merge_step4_evidence(source_focus.get("evidence", {}), fallback_focus.get("evidence", {}))
+        evidence = self._merge_step4_evidence(evidence, self._normalize_step4_evidence(parsed.get("evidence_coverage")))
+        evidence = self._merge_step4_evidence(evidence, self._detect_step4_evidence_from_text(user_input))
+
+        stage = self._normalize_step4_probe_dimension(parsed.get("next_probe_dimension"))
+        inferred_stage = self._next_step4_stage(evidence)
+        if stage == "more_experience":
+            stage = "done"
+        if stage not in {"implementation", "tradeoff", "validation", "done"}:
+            stage = inferred_stage
+
+        current_experience_completed = bool(parsed.get("current_experience_completed", False))
+        if inferred_stage == "done":
+            current_experience_completed = current_experience_completed or True
+        if current_experience_completed:
+            stage = "done"
+        ask_more_experience = bool(parsed.get("ask_more_experience", True))
+
+        draft = parsed.get("resume_ready_draft") if isinstance(parsed.get("resume_ready_draft"), dict) else {}
+        fallback_draft = fallback.get("resume_ready_draft") if isinstance(fallback.get("resume_ready_draft"), dict) else {}
+        bullets = draft.get("bullets") if isinstance(draft.get("bullets"), list) else []
+        safe_bullets = [str(item or "").strip()[:220] for item in bullets if str(item or "").strip()][:5]
+        if not safe_bullets:
+            safe_bullets = [str(item or "").strip()[:220] for item in (fallback_draft.get("bullets") or []) if str(item or "").strip()][:5]
+
+        missing_raw = parsed.get("missing_points") if isinstance(parsed.get("missing_points"), list) else []
+        missing_points = [str(item or "").strip()[:120] for item in missing_raw if str(item or "").strip()][:5]
+
+        if current_experience_completed:
+            missing_points = ["是否还有要补充的经历"] if ask_more_experience else []
+            next_probe_dimension = "more_experience"
+            candidate_reply = str(parsed.get("reply") or "").strip()
+            if ask_more_experience and "还有要补充的经历" not in candidate_reply:
+                reply = "这一段经历已完成深挖。是否还有要补充的经历？"
+            else:
+                reply = candidate_reply or ("这一段经历已完成深挖。是否还有要补充的经历？" if ask_more_experience else "这一段经历已完成深挖。")
+        else:
+            next_probe_dimension = stage if stage in {"implementation", "tradeoff", "validation"} else inferred_stage
+            if not missing_points:
+                fallback_missing = fallback.get("missing_points") if isinstance(fallback.get("missing_points"), list) else []
+                missing_points = [str(item or "").strip()[:120] for item in fallback_missing if str(item or "").strip()][:5]
+            if not missing_points:
+                missing_points = [self._build_step4_single_probe(topic, inferred_stage, user_input)]
+
+            candidate_reply = str(parsed.get("reply") or "").strip()
+            fallback_reply = str(fallback.get("reply") or "").strip()
+            if candidate_reply and not self._is_generic_step4_reply(candidate_reply):
+                reply = candidate_reply
+            else:
+                reply = fallback_reply or f"请继续围绕“{topic or '该项目核心技术点'}”补充最关键的技术实现细节。"
+
+        reasoning_raw = parsed.get("reasoning_focus") if isinstance(parsed.get("reasoning_focus"), list) else []
+        reasoning_focus = [str(item or "").strip()[:80] for item in reasoning_raw if str(item or "").strip()][:6]
+        if topic and topic not in reasoning_focus:
+            reasoning_focus.insert(0, topic)
+        if not reasoning_focus:
+            reasoning_focus = [topic] if topic else []
+
+        active_focus = {
+            "topic": topic,
+            "stage": stage,
+            "evidence": evidence,
+            "turn_count": max(
+                source_focus.get("turn_count", 0),
+                fallback_focus.get("turn_count", 0),
+            )
+            + 1,
+        }
+
+        return {
+            "reply": reply,
+            "resume_ready_draft": {
+                "title": str(draft.get("title") or fallback_draft.get("title") or "项目经历").strip()[:80],
+                "role": str(draft.get("role") or fallback_draft.get("role") or "核心开发").strip()[:80],
+                "period": str(draft.get("period") or fallback_draft.get("period") or "时间待补").strip()[:80],
+                "bullets": safe_bullets,
+            },
+            "missing_points": missing_points,
+            "current_experience_completed": current_experience_completed,
+            "ask_more_experience": ask_more_experience,
+            "reasoning_focus": reasoning_focus,
+            "active_focus_topic": topic,
+            "next_probe_dimension": next_probe_dimension,
+            "evidence_coverage": evidence,
+            "active_focus": active_focus,
+        }
+
+    @staticmethod
+    def _extract_step4_focus_terms(text: str) -> List[str]:
+        lower = str(text or "").lower()
+        catalog = [
+            ("LangChain", ["langchain"]),
+            ("Agentic RAG", ["agentic rag", "rag"]),
+            ("Prompt", ["prompt", "few-shot", "few shot", "temperature"]),
+            ("Flask", ["flask"]),
+            ("FastAPI", ["fastapi"]),
+            ("SQLAlchemy", ["sqlalchemy"]),
+            ("PostgreSQL", ["postgresql", "postgres"]),
+            ("MySQL", ["mysql"]),
+            ("Redis", ["redis"]),
+            ("Kafka", ["kafka"]),
+            ("Kubernetes", ["kubernetes", "k8s"]),
+            ("微服务治理", ["微服务"]),
+            ("WebSocket", ["websocket"]),
+            ("JWT", ["jwt"]),
+            ("SLO", ["slo", "sla"]),
+            ("性能优化", ["性能", "时延", "延迟", "响应"]),
+        ]
+        focus: List[str] = []
+        for label, tokens in catalog:
+            if any(token in lower for token in tokens) and label not in focus:
+                focus.append(label)
+        return focus[:6]
+
+    @staticmethod
+    def _extract_step4_period(text: str) -> str:
+        raw = str(text or "")
+        patterns = [
+            r"(20\d{2}[./-](?:0?[1-9]|1[0-2])\s*(?:[-~到至]\s*20\d{2}[./-](?:0?[1-9]|1[0-2]))?)",
+            r"(20\d{2}年(?:0?[1-9]|1[0-2])月\s*(?:[-~到至]\s*20\d{2}年(?:0?[1-9]|1[0-2])月)?)",
+        ]
+        for pattern in patterns:
+            m = re.search(pattern, raw)
+            if m:
+                return m.group(1).strip()
+        return "时间待补"
+
+    @staticmethod
+    def _extract_step4_title(text: str) -> str:
+        raw = str(text or "").strip()
+        lines = [line.strip(" \t-•") for line in raw.splitlines() if line.strip()]
+        if not lines:
+            return "项目经历"
+        first = lines[0]
+        labeled = re.search(r"(?:项目|平台|系统|产品)\s*[:：]\s*([^\n，。；;]{2,40})", first)
+        if labeled:
+            return labeled.group(1).strip()[:40]
+        head = re.split(r"[，。；;:：]", first)[0].strip()
+        if 2 <= len(head) <= 40:
+            return head
+        return "项目经历"
+
+    @staticmethod
+    def _extract_step4_role(text: str) -> str:
+        raw = str(text or "")
+        if any(token in raw for token in ["独立开发", "独立完成", "独立负责"]):
+            return "独立开发"
+        if "主导" in raw:
+            return "主导开发"
+        if "负责人" in raw:
+            return "项目负责人"
+        if "负责" in raw:
+            return "核心开发"
+        return "核心开发"
+
+    @staticmethod
+    def _extract_step4_bullets(text: str) -> List[str]:
+        raw = str(text or "").strip()
+        if not raw:
+            return ["待补充项目职责与结果细节。"]
+        parts = [p.strip() for p in re.split(r"[。；;\n]+", raw) if p.strip()]
+        bullets: List[str] = []
+        for part in parts:
+            if len(part) < 8:
+                continue
+            item = part[:220]
+            if item not in bullets:
+                bullets.append(item)
+        return bullets[:5] or ["请补充项目职责、关键动作与可验证结果。"]
+
+    def _build_step4_heuristic_decision(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        text = str(payload.get("user_input") or "").strip()
+        is_first_round = bool(payload.get("is_first_round", False))
+        source_focus = self._normalize_step4_active_focus(payload.get("active_focus"))
+        topic = self._choose_step4_focus_topic(text, source_focus.get("topic", ""))
+        evidence = self._merge_step4_evidence(source_focus.get("evidence", {}), self._detect_step4_evidence_from_text(text))
+        stage = self._next_step4_stage(evidence)
+        current_experience_completed = stage == "done"
+        ask_more_experience = True
+        next_probe_dimension = "more_experience" if current_experience_completed else stage
+        probe = self._build_step4_single_probe(topic, stage, text)
+        missing_points = ["是否还有要补充的经历"] if current_experience_completed else [probe]
+        if current_experience_completed:
+            reply = "这一段经历已完成深挖。是否还有要补充的经历？"
+        elif is_first_round:
+            preview_lines = self._extract_step4_bullets(text)
+            preview = "\n".join(f"- {line}" for line in preview_lines[:3])
+            reply = (
+                "我先按你给的信息整理一个可上简历版本（待确认）：\n"
+                f"{self._extract_step4_title(text)}\n"
+                f"{preview}\n"
+                f"接下来我先围绕“{topic}”追问一个最关键问题：{probe}"
+            )
+        else:
+            reply = f"继续围绕“{topic}”深入一层：{probe}"
+
+        return {
+            "reply": reply,
+            "resume_ready_draft": {
+                "title": self._extract_step4_title(text),
+                "role": self._extract_step4_role(text),
+                "period": self._extract_step4_period(text),
+                "bullets": self._extract_step4_bullets(text),
+            },
+            "missing_points": missing_points,
+            "current_experience_completed": current_experience_completed,
+            "ask_more_experience": ask_more_experience,
+            "reasoning_focus": [topic] + [x for x in self._extract_step4_focus_terms(text) if x != topic],
+            "active_focus_topic": topic,
+            "next_probe_dimension": next_probe_dimension,
+            "evidence_coverage": evidence,
+            "active_focus": {
+                "topic": topic,
+                "stage": "done" if current_experience_completed else stage,
+                "evidence": evidence,
+                "turn_count": source_focus.get("turn_count", 0) + 1,
+            },
+        }
 
     def _build_resume_craft_html_prompt(self, payload: dict) -> str:
         skill_spec = self.load_skill("resume-craft")

@@ -243,6 +243,17 @@ class AIService:
         clean["api_key"] = ""
         return clean
 
+    @staticmethod
+    def _extract_step4_runtime_error(decision: Any) -> str:
+        if not isinstance(decision, dict):
+            return str(decision or "")
+        return str(
+            decision.get("model_connection_error")
+            or decision.get("error")
+            or decision.get("message")
+            or ""
+        ).strip()
+
     def _fallback_resume_match(self, payload: Dict[str, Any], reason: str) -> Dict[str, Any]:
         resume_text = str(payload.get("resume_text") or "")
         jd_text = str(payload.get("jd_text") or "")
@@ -624,16 +635,31 @@ class AIService:
 
     def run_resume_craft_step4_decision(self, payload, runtime: Optional[Dict[str, Any]] = None):
         try:
-            return self._build_runtime_agent(runtime).run_resume_craft_step4_decision(payload)
+            decision = self._build_runtime_agent(runtime).run_resume_craft_step4_decision(payload)
+            reason = self._extract_step4_runtime_error(decision)
+            if self._can_retry_with_server_platform_key(runtime, reason):
+                try:
+                    retry_runtime = self._runtime_without_api_key(runtime)
+                    retried = self._build_runtime_agent(retry_runtime).run_resume_craft_step4_decision(payload)
+                    if bool(retried.get("model_connection_ok")):
+                        return retried
+                    retried_reason = self._extract_step4_runtime_error(retried)
+                    if retried_reason and self._looks_like_auth_failure(reason):
+                        return retried
+                except Exception as retry_error:
+                    logger.warning("run_resume_craft_step4_decision platform retry failed: %s", retry_error)
+            return decision
         except Exception as e:
             logger.error("run_resume_craft_step4_decision runtime error: %s", e)
             return {
                 "reply": str(payload.get("fallback_reply") or "请继续补充这一段项目的关键信息。"),
                 "resume_ready_draft": {"title": "项目经历", "role": "核心开发", "period": "时间待补", "bullets": []},
-                "missing_points": ["项目起止时间", "关键指标口径", "是否有下一段经历"],
+                "missing_points": ["核心功能是如何拆解并实现的（关键模块/调用链）", "效果如何验证（压测口径/线上指标）", "是否还有要补充的经历"],
                 "current_experience_completed": False,
                 "ask_more_experience": True,
                 "reasoning_focus": [],
+                "model_connection_ok": False,
+                "model_connection_error": str(e),
             }
 
     def run_resume_craft_html(self, payload, runtime: Optional[Dict[str, Any]] = None):

@@ -893,11 +893,35 @@ def _normalize_experience_state(raw: Any) -> Dict[str, Any]:
     except Exception:
         followup_count = 0
 
+    active_focus_raw = state.get("active_focus") if isinstance(state.get("active_focus"), dict) else {}
+    focus_topic = str(active_focus_raw.get("topic") or "").strip()[:120]
+    focus_stage = str(active_focus_raw.get("stage") or "").strip().lower()
+    if focus_stage not in {"implementation", "tradeoff", "validation", "done"}:
+        focus_stage = "implementation"
+    evidence_raw = active_focus_raw.get("evidence") if isinstance(active_focus_raw.get("evidence"), dict) else {}
+    focus_evidence = {
+        "implementation": bool(evidence_raw.get("implementation", False)),
+        "tradeoff": bool(evidence_raw.get("tradeoff", False)),
+        "validation": bool(evidence_raw.get("validation", False)),
+    }
+    if all(focus_evidence.values()):
+        focus_stage = "done"
+    try:
+        focus_turn_count = int(active_focus_raw.get("turn_count", 0))
+    except Exception:
+        focus_turn_count = 0
+
     return {
         "current_index": max(1, current_index),
         "followup_count": max(0, min(followup_count, 12)),
         "drafts": _clean_exp_list(drafts, limit=20),
         "finalized_experiences": _clean_exp_list(finalized, limit=20),
+        "active_focus": {
+            "topic": focus_topic,
+            "stage": focus_stage,
+            "evidence": focus_evidence,
+            "turn_count": max(0, min(focus_turn_count, 20)),
+        },
     }
 
 
@@ -1046,6 +1070,110 @@ def _build_step1_profile_context(profile: Dict[str, Any], template_code: str, la
     return "\n".join(lines)
 
 
+def _normalize_step4_missing_points(raw_points: Any) -> List[str]:
+    points: List[str] = []
+    if isinstance(raw_points, list):
+        for item in raw_points:
+            text = str(item or "").strip()
+            if text and text not in points:
+                points.append(text[:80])
+    return points[:5]
+
+
+def _normalize_step4_evidence_coverage(raw: Any) -> Dict[str, bool]:
+    value = raw if isinstance(raw, dict) else {}
+    return {
+        "implementation": bool(value.get("implementation", False)),
+        "tradeoff": bool(value.get("tradeoff", False)),
+        "validation": bool(value.get("validation", False)),
+    }
+
+
+def _normalize_step4_probe_dimension(raw: Any) -> str:
+    text = str(raw or "").strip().lower()
+    if text in {"implementation", "tradeoff", "validation", "more_experience"}:
+        return text
+    return ""
+
+
+def _normalize_step4_decision_for_route(
+    decision: Any,
+    fallback_reply: str,
+    is_first_round: bool,
+    current_active_focus: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    data = decision if isinstance(decision, dict) else {}
+    reply = str(data.get("reply") or "").strip()
+    if not reply:
+        reply = str(fallback_reply or "").strip() or "我已收到你的信息，请继续补充该项目最关键的技术/功能细节。"
+
+    missing_points = _normalize_step4_missing_points(data.get("missing_points"))
+    reasoning_focus_raw = data.get("reasoning_focus") if isinstance(data.get("reasoning_focus"), list) else []
+    reasoning_focus = [str(item or "").strip()[:80] for item in reasoning_focus_raw if str(item or "").strip()][:8]
+    current_focus = _normalize_experience_state({"active_focus": current_active_focus}).get("active_focus", {})
+
+    focus_topic = str(data.get("active_focus_topic") or "").strip()[:120]
+    if not focus_topic:
+        focus_topic = str(current_focus.get("topic") or "").strip()[:120]
+    if not focus_topic and reasoning_focus:
+        focus_topic = reasoning_focus[0]
+    if focus_topic and focus_topic not in reasoning_focus:
+        reasoning_focus.insert(0, focus_topic)
+
+    decision_evidence = _normalize_step4_evidence_coverage(data.get("evidence_coverage"))
+    current_evidence = _normalize_step4_evidence_coverage(current_focus.get("evidence"))
+    evidence = {
+        "implementation": bool(current_evidence.get("implementation")) or bool(decision_evidence.get("implementation")),
+        "tradeoff": bool(current_evidence.get("tradeoff")) or bool(decision_evidence.get("tradeoff")),
+        "validation": bool(current_evidence.get("validation")) or bool(decision_evidence.get("validation")),
+    }
+
+    current_experience_completed = bool(data.get("current_experience_completed", False))
+    ask_more_experience = bool(data.get("ask_more_experience", True))
+    if current_experience_completed:
+        missing_points = ["是否还有要补充的经历"] if ask_more_experience else []
+        if ask_more_experience and "还有要补充的经历" not in reply:
+            reply = (reply.rstrip("。") + "。是否还有要补充的经历？").strip("。") if reply else "这一段经历已完成深挖。是否还有要补充的经历？"
+    elif not missing_points:
+        missing_points = ["请继续补充该项目里一个最关键的技术实现或功能细节。"]
+
+    next_probe_dimension = _normalize_step4_probe_dimension(data.get("next_probe_dimension"))
+    active_focus_raw = data.get("active_focus") if isinstance(data.get("active_focus"), dict) else {}
+    stage = str(active_focus_raw.get("stage") or "").strip().lower()
+    if stage not in {"implementation", "tradeoff", "validation", "done"}:
+        if current_experience_completed:
+            stage = "done"
+        elif next_probe_dimension in {"implementation", "tradeoff", "validation"}:
+            stage = next_probe_dimension
+        else:
+            stage = str(current_focus.get("stage") or "implementation")
+    if current_experience_completed:
+        stage = "done"
+
+    try:
+        active_turn = int(active_focus_raw.get("turn_count", 0))
+    except Exception:
+        active_turn = 0
+    active_focus = {
+        "topic": str(active_focus_raw.get("topic") or focus_topic or "").strip()[:120],
+        "stage": stage if stage in {"implementation", "tradeoff", "validation", "done"} else "implementation",
+        "evidence": evidence,
+        "turn_count": max(int(current_focus.get("turn_count", 0)), active_turn) + 1,
+    }
+
+    return {
+        "reply": reply,
+        "missing_points": missing_points,
+        "reasoning_focus": reasoning_focus,
+        "current_experience_completed": current_experience_completed,
+        "ask_more_experience": ask_more_experience,
+        "active_focus_topic": str(active_focus.get("topic") or ""),
+        "next_probe_dimension": next_probe_dimension,
+        "evidence_coverage": evidence,
+        "active_focus": active_focus,
+    }
+
+
 def _assistant_recently_asked_more_experience(history: Any, max_turns: int = 6) -> bool:
     if not isinstance(history, list):
         return False
@@ -1097,6 +1225,12 @@ def _finalize_current_experience_draft(exp_state: Dict[str, Any]) -> bool:
         appended = True
     exp_state["drafts"] = []
     exp_state["followup_count"] = 0
+    exp_state["active_focus"] = {
+        "topic": "",
+        "stage": "implementation",
+        "evidence": {"implementation": False, "tradeoff": False, "validation": False},
+        "turn_count": 0,
+    }
     exp_state["current_index"] = int(exp_state.get("current_index", 1)) + 1
     return appended
 
@@ -1392,6 +1526,7 @@ def careerforge_resume_craft_chat_turn():
         missing_fields: List[str] = []
         action = "collect_experience"
         step4_missing_points: List[str] = []
+        step4_raw_missing_points: List[str] = []
         step4_reasoning_focus: List[str] = []
         no_more_experience = False
 
@@ -1418,30 +1553,39 @@ def careerforge_resume_craft_chat_turn():
             else:
                 exp_state["drafts"].append(message[:2400])
                 exp_state["followup_count"] = int(exp_state["followup_count"]) + 1
-                fallback_reply = "请继续补充这段项目的关键信息（时间、指标口径、是否还有下一段经历）。"
+                fallback_reply = "请继续补充这段项目的功能实现与技术细节（核心模块、技术选型、验证口径）。"
+                is_first_round = int(exp_state["followup_count"]) == 1
                 decision_payload = {
                     "profile_context": _build_step_context_for_prompt(4, step1_profile),
                     "history_text": history_text,
                     "user_input": message,
-                    "is_first_round": int(exp_state["followup_count"]) == 1,
+                    "is_first_round": is_first_round,
                     "followup_count": int(exp_state["followup_count"]),
                     "current_index": int(exp_state.get("current_index", 1)),
                     "expected_experience_count": expected_count,
                     "fallback_reply": fallback_reply,
+                    "active_focus": exp_state.get("active_focus") or {},
                 }
                 decision = ai_service.run_resume_craft_step4_decision(decision_payload, runtime=runtime)
-                fallback_question = str(decision.get("reply") or "").strip() or fallback_reply
-                missing_points_raw = decision.get("missing_points") if isinstance(decision.get("missing_points"), list) else []
-                step4_missing_points = [str(item or "").strip()[:80] for item in missing_points_raw if str(item or "").strip()][:3]
-                reasoning_focus_raw = decision.get("reasoning_focus") if isinstance(decision.get("reasoning_focus"), list) else []
-                step4_reasoning_focus = [str(item or "").strip()[:80] for item in reasoning_focus_raw if str(item or "").strip()][:6]
-
-                should_finalize = bool(decision.get("current_experience_completed", False))
+                step4_raw_missing_points = _normalize_step4_missing_points(
+                    decision.get("missing_points") if isinstance(decision, dict) else []
+                )
+                normalized_step4 = _normalize_step4_decision_for_route(
+                    decision=decision,
+                    fallback_reply=fallback_reply,
+                    is_first_round=is_first_round,
+                    current_active_focus=exp_state.get("active_focus") or {},
+                )
+                fallback_question = normalized_step4["reply"]
+                step4_missing_points = normalized_step4["missing_points"]
+                step4_reasoning_focus = normalized_step4["reasoning_focus"]
+                exp_state["active_focus"] = normalized_step4["active_focus"]
+                should_finalize = normalized_step4["current_experience_completed"]
                 if should_finalize or exp_state["followup_count"] >= RESUME_CRAFT_GRILL_MAX_FOLLOWUPS:
                     _finalize_current_experience_draft(exp_state)
                     action = "experience_done"
                     wizard_state["collected_by_step"]["experiences"] = list(exp_state["finalized_experiences"])
-                    if not bool(decision.get("ask_more_experience", True)):
+                    if not normalized_step4["ask_more_experience"]:
                         fallback_question = "这一段经历已完成深挖。如果没有更多项目/经历，请回复“没有更多项目”。"
 
             wizard_state["step_states"]["step4"] = exp_state
@@ -1503,7 +1647,23 @@ def careerforge_resume_craft_chat_turn():
                     "resume_craft_chat_turn_version": "2026-07-10-v9",
                     "step4_mode": "agent_led" if step_num == 4 else "",
                     "step4_missing_points": step4_missing_points if step_num == 4 else [],
+                    "step4_raw_missing_points": step4_raw_missing_points if step_num == 4 else [],
                     "step4_reasoning_focus": step4_reasoning_focus if step_num == 4 else [],
+                    "step4_focus_topic": (
+                        (wizard_state["step_states"]["step4"].get("active_focus") or {}).get("topic", "")
+                        if step_num == 4
+                        else ""
+                    ),
+                    "step4_focus_stage": (
+                        (wizard_state["step_states"]["step4"].get("active_focus") or {}).get("stage", "")
+                        if step_num == 4
+                        else ""
+                    ),
+                    "step4_evidence_coverage": (
+                        (wizard_state["step_states"]["step4"].get("active_focus") or {}).get("evidence", {})
+                        if step_num == 4
+                        else {}
+                    ),
                     "api_runtime_version": meta.get("api_runtime_version", ""),
                 },
                 "error": "",

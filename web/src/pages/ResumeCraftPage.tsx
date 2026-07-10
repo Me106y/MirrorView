@@ -87,7 +87,22 @@ const EMPTY_WIZARD: ResumeCraftWizardState = {
   },
   step_states: {
     step3: { turn_count: 0, confirmed: false },
-    step4: { current_index: 1, followup_count: 0, drafts: [], finalized_experiences: [] },
+    step4: {
+      current_index: 1,
+      followup_count: 0,
+      drafts: [],
+      finalized_experiences: [],
+      active_focus: {
+        topic: "",
+        stage: "implementation",
+        evidence: {
+          implementation: false,
+          tradeoff: false,
+          validation: false,
+        },
+        turn_count: 0,
+      },
+    },
     step5: { turn_count: 0, confirmed: false },
     step6: { turn_count: 0, confirmed: false },
   },
@@ -350,7 +365,22 @@ export function ResumeCraftPage() {
       next.chat_history_by_step[key] = [];
       if (activeChatStep === 4) {
         next.collected_by_step.experiences = [];
-        next.step_states.step4 = { current_index: 1, followup_count: 0, drafts: [], finalized_experiences: [] };
+        next.step_states.step4 = {
+          current_index: 1,
+          followup_count: 0,
+          drafts: [],
+          finalized_experiences: [],
+          active_focus: {
+            topic: "",
+            stage: "implementation",
+            evidence: {
+              implementation: false,
+              tradeoff: false,
+              validation: false,
+            },
+            turn_count: 0,
+          },
+        };
       }
       if (activeChatStep === 5) {
         next.collected_by_step.skills_and_certs = [];
