@@ -191,6 +191,7 @@ export function ResumeCraftPage() {
   const [chatLoading, setChatLoading] = useState(false);
   const [renderLoading, setRenderLoading] = useState(false);
   const [result, setResult] = useState<ResultState>({ kind: "idle", reportHtml: "", message: "" });
+  const [showFinalPreview, setShowFinalPreview] = useState(false);
   const [reportName, setReportName] = useState("resume-craft-report.html");
   const [frameHeight, setFrameHeight] = useState(980);
   const [viewportHeight, setViewportHeight] = useState<number | null>(null);
@@ -500,8 +501,10 @@ export function ResumeCraftPage() {
       if (!reportHtml) throw new Error(String(resp.message || "未返回有效简历 HTML"));
       setResult({ kind: "report", reportHtml, message: "" });
       setReportName(String(resp.report_name || "resume-craft-report.html"));
+      setShowFinalPreview(true);
     } catch (err) {
       setResult({ kind: "error", reportHtml: "", message: (err as Error).message || "生成失败" });
+      setShowFinalPreview(false);
     } finally {
       setRenderLoading(false);
     }
@@ -534,11 +537,46 @@ export function ResumeCraftPage() {
     win.print();
   };
 
+  const backToWizardFromPreview = () => {
+    setShowFinalPreview(false);
+    setStep(6);
+  };
+
   const stepCard = (stepNo: StepNumber, content: ReactNode) => (
     <article className={`surface resume-craft-step-card ${stepNo <= 2 ? "resume-craft-step1-card" : "resume-craft-chat-step"}`} ref={(el) => (stepRefs.current[stepNo] = el)}>
       {content}
     </article>
   );
+
+  if (showFinalPreview && result.kind === "report") {
+    return (
+      <section className="resume-craft-page">
+        <div className="resume-craft-layout">
+          <section className="surface resume-craft-final-page">
+            <header className="resume-craft-final-head">
+              <div>
+                <h2>简历预览</h2>
+                <p>已生成 HTML 简历，你可以直接预览或导出。</p>
+              </div>
+              <div className="resume-craft-final-head-actions">
+                <button type="button" className="ghost-btn" onClick={backToWizardFromPreview}>返回继续编辑</button>
+                <button type="button" className="ghost-btn" onClick={exportHtml}>导出 HTML</button>
+                <button type="button" className="ghost-btn" onClick={exportPdf}>导出 PDF</button>
+              </div>
+            </header>
+            <iframe
+              ref={previewFrameRef}
+              title="Resume Craft HTML Preview Final"
+              className="resume-craft-preview-frame resume-craft-final-frame"
+              srcDoc={result.reportHtml}
+              onLoad={onPreviewLoad}
+              style={{ height: `${frameHeight}px` }}
+            />
+          </section>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="resume-craft-page">
@@ -911,29 +949,9 @@ export function ResumeCraftPage() {
           </div>
         </div>
 
-        {result.kind !== "idle" ? (
+        {result.kind === "error" ? (
           <section className="surface resume-craft-output" style={{ marginTop: 14 }}>
-            {result.kind === "error" ? <p className="resume-result-error">{result.message}</p> : null}
-            {result.kind === "report" ? (
-            <>
-              <header className="resume-craft-preview-head">
-                <h3>简历预览</h3>
-                <span>已嵌入当前页面</span>
-              </header>
-              <iframe
-                ref={previewFrameRef}
-                title="Resume Craft HTML Preview"
-                className="resume-craft-preview-frame"
-                srcDoc={result.reportHtml}
-                onLoad={onPreviewLoad}
-                style={{ height: `${frameHeight}px` }}
-              />
-              <div className="resume-craft-actions">
-                <button type="button" className="ghost-btn" onClick={exportHtml}>导出 HTML</button>
-                <button type="button" className="ghost-btn" onClick={exportPdf}>导出 PDF</button>
-              </div>
-            </>
-            ) : null}
+            <p className="resume-result-error">{result.message}</p>
           </section>
         ) : null}
       </div>

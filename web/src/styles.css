@@ -1622,6 +1622,44 @@ a {
   margin-top: 2px;
 }
 
+.resume-craft-final-page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+}
+
+.resume-craft-final-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.resume-craft-final-head h2 {
+  margin: 0;
+  font-size: 1.2rem;
+  color: #141414;
+}
+
+.resume-craft-final-head p {
+  margin: 6px 0 0;
+  color: #6d6d6d;
+  font-size: 0.9rem;
+}
+
+.resume-craft-final-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.resume-craft-final-frame {
+  min-height: 70vh;
+}
+
 .resume-craft-readiness-note p {
   margin: 4px 0 0;
   color: #5b6c7b;
@@ -2233,5 +2271,14 @@ textarea {
   .resume-craft-restart-btn {
     width: 100%;
     flex: 1 1 0;
+  }
+
+  .resume-craft-final-head {
+    flex-direction: column;
+  }
+
+  .resume-craft-final-head-actions {
+    width: 100%;
+    justify-content: flex-start;
   }
 }

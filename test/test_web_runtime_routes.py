@@ -420,6 +420,50 @@ def test_resume_craft_chat_turn_step4_avoids_repeating_generic_challenge_prompt(
     assert ("LangChain" in body["reply"]) or ("Prompt" in body["reply"]) or ("会话恢复" in body["reply"])
 
 
+def test_resume_craft_chat_turn_step4_first_round_returns_resume_ready_draft(monkeypatch):
+    Config.TURNSTILE_ENFORCE = False
+    Config.RATE_LIMIT_ENFORCE = False
+
+    monkeypatch.setattr(routes.ai_service, "run_resume_craft_dialog", lambda payload, runtime=None: "好的，继续。")
+
+    client = _client()
+    resp = client.post(
+        "/api/careerforge/resume-craft/chat-turn",
+        json={
+            "message": (
+                "Mirrorview智能模拟面试平台\n"
+                "基于 LangChain 与 Agentic RAG 架构，构建具备思维链能力的 AI 面试官。"
+                "使用 Few-shot 技巧设计 Prompt，通过工厂模式对接 DeepSeek 模型并调优 Temperature 参数；"
+                "利用数据库实现长上下文记忆与会话恢复。后端基于 Flask + SQLAlchemy，"
+                "面试历史查询接口响应时间降低 42%。支持实时视频旁听与 JWT 权限控制。独立开发。"
+            ),
+            "current_step": 4,
+            "history": [{"role": "assistant", "content": "我们进入 Step4（工作/项目经历）。请描述第一段经历的场景、职责、行动和结果。"}],
+            "step1_profile": {
+                "template_code": "02",
+                "language": "zh",
+                "photo_pref": "no_photo",
+                "target_role": "AI应用开发",
+                "personal_info": {"name": "A", "phone": "1", "email": "a@b.com", "city": "上海", "links": []},
+                "education": [{"school": "X", "major": "CS", "degree": "硕士", "period": "2020-2023", "highlights": ""}],
+                "skills": ["Python", "LangChain"],
+                "certificates": [],
+                "expected_experience_count": 2,
+            },
+            "experience_state": {"current_index": 1, "followup_count": 0, "drafts": [], "finalized_experiences": []},
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["action"] == "grill_experience"
+    assert "可上简历版本" in body["reply"]
+    assert "Mirrorview智能模拟面试平台" in body["reply"]
+    assert "请再补 3 个点" in body["reply"]
+    assert "项目起止时间" in body["reply"]
+    assert "还有没有第 2 段相关经历" in body["reply"]
+    assert "请补充你遇到的挑战/难点" not in body["reply"]
+
+
 def test_resume_craft_chat_turn_step3_only_education(monkeypatch):
     Config.TURNSTILE_ENFORCE = False
     Config.RATE_LIMIT_ENFORCE = False

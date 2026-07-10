@@ -1116,6 +1116,115 @@ def _compose_experience_followup(
     )
 
 
+def _extract_experience_title(text: str) -> str:
+    raw = str(text or "")
+    lines = [line.strip(" \t-•") for line in raw.splitlines() if line.strip()]
+    if not lines:
+        return "项目经历"
+
+    first_line = lines[0]
+    labeled = re.search(r"(?:项目|平台|系统|产品|经历)\s*[:：]\s*([^\n，。；;]{2,40})", first_line)
+    if labeled:
+        return labeled.group(1).strip()[:40]
+
+    for line in lines[:2]:
+        if len(line) <= 40 and re.search(r"(平台|系统|项目|应用|引擎|服务|产品|工具)", line):
+            return line[:40]
+
+    head = re.split(r"[，。；;:：]", first_line)[0].strip()
+    if 2 <= len(head) <= 40:
+        return head[:40]
+    return "项目经历"
+
+
+def _extract_experience_role(text: str) -> str:
+    raw = str(text or "")
+    if any(token in raw for token in ["独立开发", "独立完成", "独立负责"]):
+        return "独立开发"
+    if "主导" in raw:
+        return "主导开发"
+    if "实习" in raw:
+        return "实习开发"
+    if "负责人" in raw:
+        return "项目负责人"
+    if "负责" in raw:
+        return "核心开发"
+    return "核心开发"
+
+
+def _extract_percent_metric(text: str) -> str:
+    matched = re.search(r"(\d+(?:\.\d+)?)\s*%", str(text or ""))
+    if not matched:
+        return ""
+    return f"{matched.group(1)}%"
+
+
+def _build_experience_resume_bullets(text: str) -> List[str]:
+    raw = str(text or "")
+    lower = raw.lower()
+    bullets: List[str] = []
+
+    if "langchain" in lower or "agentic rag" in lower or "rag" in lower:
+        bullets.append("基于 LangChain + Agentic RAG 架构实现 AI 面试官，支持多轮对话与上下文推理。")
+    if any(token in lower for token in ["few-shot", "few shot", "prompt", "deepseek", "temperature"]):
+        bullets.append("使用 Few-shot Prompt 策略优化问答质量，通过工厂模式接入模型并调优 Temperature。")
+    if any(token in lower for token in ["sqlite", "postgresql", "sqlalchemy", "数据库", "上下文记忆", "会话恢复"]):
+        bullets.append("基于数据库实现长上下文记忆与会话恢复，提升连续面试体验与历史追踪能力。")
+    if any(token in lower for token in ["flask", "sqlalchemy", "%", "响应时间", "时延", "p95"]):
+        metric = _extract_percent_metric(raw)
+        if metric:
+            bullets.append(f"后端采用 Flask + SQLAlchemy，将核心接口响应性能优化 {metric}。")
+        else:
+            bullets.append("后端采用 Flask + SQLAlchemy，完成查询接口性能优化与稳定性提升。")
+    if any(token in lower for token in ["jwt", "websocket", "视频旁听", "权限控制", "实时"]):
+        bullets.append("实现实时视频旁听与 JWT 权限控制，保障访问安全与会话管理。")
+
+    if not bullets:
+        snippets = [part.strip() for part in re.split(r"[。!！\n]", raw) if part.strip()]
+        for snippet in snippets[:5]:
+            line = snippet
+            if len(line) > 72:
+                line = line[:72].rstrip("，,；;。") + "…"
+            bullets.append(line + ("。" if not line.endswith(("。", "！", "？")) else ""))
+
+    # Deduplicate while preserving order
+    seen = set()
+    unique: List[str] = []
+    for bullet in bullets:
+        key = bullet.strip()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        unique.append(key)
+    return unique[:5]
+
+
+def _build_first_round_experience_reply(step1_profile: Dict[str, Any], latest_input: str) -> str:
+    title = _extract_experience_title(latest_input)
+    role = _extract_experience_role(latest_input)
+    bullets = _build_experience_resume_bullets(latest_input)
+    metric = _extract_percent_metric(latest_input)
+
+    metric_line = (
+        f"响应时间降低 {metric} 的口径（例如从多少 ms 降到多少 ms；如果没有具体值，保留 {metric} 也可以）"
+        if metric
+        else "关键指标的口径（例如时延/成本/转化从多少到多少；如果没有绝对值，给相对提升也可以）"
+    )
+    target_role = str(step1_profile.get("target_role") or "").strip()
+    role_hint = f"（贴近“{target_role}”岗位）" if target_role else ""
+
+    lines = [
+        "这段经历很强，我先按你给的信息整理成可上简历版本（待你确认）：",
+        f"{title}｜{role}｜（时间待补）",
+        *bullets,
+        f"请再补 3 个点，我就能定稿这段并继续下一段经历{role_hint}：",
+        "这段项目起止时间（如 2025.03-2025.06）",
+        metric_line,
+        "还有没有第 2 段相关经历（实习/项目都行）？如果有，按“名称｜角色｜时间 + 3-5条成果”发我。",
+    ]
+    return "\n".join(lines)
+
+
 def _enforce_experience_only_reply(reply: str, fallback_question: str) -> str:
     text = str(reply or "").strip()
     if not text:
@@ -1502,6 +1611,7 @@ def careerforge_resume_craft_chat_turn():
         next_step_suggestion = "stay"
         missing_fields: List[str] = []
         action = "collect_experience"
+        forced_reply = ""
 
         if step_num == 3:
             wizard_state["collected_by_step"]["education"].append(message[:1800])
@@ -1526,7 +1636,11 @@ def careerforge_resume_craft_chat_turn():
             else:
                 exp_state["drafts"].append(message[:2400])
                 exp_state["followup_count"] = int(exp_state["followup_count"]) + 1
-                fallback_question = _compose_experience_followup(step1_profile, exp_state, message)
+                if int(exp_state["followup_count"]) == 1:
+                    fallback_question = _build_first_round_experience_reply(step1_profile, message)
+                    forced_reply = fallback_question
+                else:
+                    fallback_question = _compose_experience_followup(step1_profile, exp_state, message)
                 if exp_state["followup_count"] >= RESUME_CRAFT_GRILL_MAX_FOLLOWUPS:
                     _finalize_current_experience_draft(exp_state)
                     action = "experience_done"
@@ -1564,16 +1678,19 @@ def careerforge_resume_craft_chat_turn():
             next_step_suggestion = "stay"
             fallback_question = "如果确认信息无误，我将按当前内容生成简历。你也可以补充排版或语气偏好。"
 
-        dialog_payload = {
-            "profile_context": _build_step_context_for_prompt(step_num, step1_profile),
-            "history_text": history_text,
-            "user_input": message,
-            "next_prompt": fallback_question,
-        }
-        model_reply = (ai_service.run_resume_craft_dialog(dialog_payload, runtime=runtime) or "").strip()
-        reply = _enforce_step_reply(model_reply, fallback_question, step_num)
-        if step_num == 4 and _is_repetitive_step4_reply(reply, history):
-            reply = fallback_question
+        if forced_reply:
+            reply = forced_reply
+        else:
+            dialog_payload = {
+                "profile_context": _build_step_context_for_prompt(step_num, step1_profile),
+                "history_text": history_text,
+                "user_input": message,
+                "next_prompt": fallback_question,
+            }
+            model_reply = (ai_service.run_resume_craft_dialog(dialog_payload, runtime=runtime) or "").strip()
+            reply = _enforce_step_reply(model_reply, fallback_question, step_num)
+            if step_num == 4 and _is_repetitive_step4_reply(reply, history):
+                reply = fallback_question
         if step_num == 4 and action == "experience_done":
             if next_step_suggestion == "next":
                 reply = "已收到，你目前没有更多项目/经历。系统将进入下一阶段。"
