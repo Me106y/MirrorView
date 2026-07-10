@@ -404,6 +404,127 @@ You MUST follow the provided Skill specification when answering.
             chunks.append(part)
         return "".join(chunks).strip()
 
+    def run_resume_craft_step4_decision(self, payload: dict) -> dict:
+        """
+        Agent-led Step4 decision maker.
+        Returns structured decision for route state machine consumption.
+        """
+        fallback_reply = str(payload.get("fallback_reply") or "").strip() or "请继续补充这一段项目的关键信息。"
+        fallback = {
+            "reply": fallback_reply,
+            "resume_ready_draft": {
+                "title": "项目经历",
+                "role": "核心开发",
+                "period": "时间待补",
+                "bullets": [],
+            },
+            "missing_points": ["项目起止时间", "关键指标口径", "是否有下一段经历"],
+            "current_experience_completed": False,
+            "ask_more_experience": True,
+            "reasoning_focus": [],
+        }
+
+        if self.llm is None:
+            return fallback
+
+        skill_spec = self.load_skill("resume-craft")
+        schema = {
+            "reply": "string",
+            "resume_ready_draft": {
+                "title": "string",
+                "role": "string",
+                "period": "string",
+                "bullets": ["string"],
+            },
+            "missing_points": ["string"],
+            "current_experience_completed": False,
+            "ask_more_experience": True,
+            "reasoning_focus": ["string"],
+        }
+        schema_json = json.dumps(schema, ensure_ascii=False, indent=2)
+        prompt = ChatPromptTemplate.from_template(
+            """
+你正在运行 CareerForge 的 resume-craft Step4（工作/项目经历 Grill）决策器。
+请严格遵循 Skill 规范，输出结构化 JSON（不要代码块）。
+
+[Skill Specification]
+{skill_spec}
+
+[Step1 已定稿上下文]
+{profile_context}
+
+[最近对话]
+{history_text}
+
+[当前经历状态]
+- is_first_round: {is_first_round}
+- followup_count: {followup_count}
+- current_index: {current_index}
+- expected_experience_count: {expected_experience_count}
+
+[用户最新输入]
+{user_input}
+
+[硬性约束]
+1) 必须事实忠实：不编造、不夸大。
+2) 路由层是状态机，本次只负责 Step4 问答决策。
+3) 若 is_first_round=true，reply 必须采用“半固定结构”：
+   - 先给“可上简历版本（待确认）”
+   - 再给 3 个关键补充点（必须包含：时间、指标口径、是否有下一段经历）
+4) 技术关注点必须动态基于用户输入，不得机械复读“挑战/难点”模板。
+5) missing_points 最多 3 条，必须可执行。
+6) current_experience_completed=true 仅当当前这段信息已可定稿。
+7) ask_more_experience=true 表示应继续询问是否有下一段经历。
+
+[输出 JSON Schema]
+{schema_json}
+"""
+        )
+        chain = prompt | self.llm | StrOutputParser()
+        try:
+            raw = chain.invoke(
+                {
+                    "skill_spec": skill_spec[:14000],
+                    "profile_context": (payload.get("profile_context") or "（无）")[:9000],
+                    "history_text": (payload.get("history_text") or "")[:14000],
+                    "user_input": (payload.get("user_input") or "").strip()[:3600],
+                    "is_first_round": str(bool(payload.get("is_first_round", False))).lower(),
+                    "followup_count": int(payload.get("followup_count", 0)),
+                    "current_index": int(payload.get("current_index", 1)),
+                    "expected_experience_count": int(payload.get("expected_experience_count", 1)),
+                    "schema_json": schema_json,
+                }
+            )
+            parsed = self._safe_json_loads(raw)
+            if not isinstance(parsed, dict):
+                return fallback
+
+            reply = str(parsed.get("reply") or "").strip() or fallback["reply"]
+            draft = parsed.get("resume_ready_draft") if isinstance(parsed.get("resume_ready_draft"), dict) else {}
+            bullets = draft.get("bullets") if isinstance(draft.get("bullets"), list) else []
+            safe_bullets = [str(item or "").strip()[:220] for item in bullets if str(item or "").strip()][:5]
+            missing_points_raw = parsed.get("missing_points") if isinstance(parsed.get("missing_points"), list) else []
+            missing_points = [str(item or "").strip()[:80] for item in missing_points_raw if str(item or "").strip()][:3]
+            reasoning_raw = parsed.get("reasoning_focus") if isinstance(parsed.get("reasoning_focus"), list) else []
+            reasoning_focus = [str(item or "").strip()[:80] for item in reasoning_raw if str(item or "").strip()][:6]
+
+            return {
+                "reply": reply,
+                "resume_ready_draft": {
+                    "title": str(draft.get("title") or "项目经历").strip()[:80],
+                    "role": str(draft.get("role") or "核心开发").strip()[:80],
+                    "period": str(draft.get("period") or "时间待补").strip()[:80],
+                    "bullets": safe_bullets,
+                },
+                "missing_points": missing_points or fallback["missing_points"],
+                "current_experience_completed": bool(parsed.get("current_experience_completed", False)),
+                "ask_more_experience": bool(parsed.get("ask_more_experience", True)),
+                "reasoning_focus": reasoning_focus,
+            }
+        except Exception as e:
+            logger.error("resume-craft step4 decision invoke failed: %s", e)
+            return fallback
+
     def _build_resume_craft_html_prompt(self, payload: dict) -> str:
         skill_spec = self.load_skill("resume-craft")
         template_code = (payload.get("template_code") or "02").strip()[:8]

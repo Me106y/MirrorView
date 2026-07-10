@@ -622,6 +622,20 @@ class AIService:
             logger.error("run_resume_craft_dialog runtime error: %s", e)
             return "简历助手暂时不可用，请稍后重试。"
 
+    def run_resume_craft_step4_decision(self, payload, runtime: Optional[Dict[str, Any]] = None):
+        try:
+            return self._build_runtime_agent(runtime).run_resume_craft_step4_decision(payload)
+        except Exception as e:
+            logger.error("run_resume_craft_step4_decision runtime error: %s", e)
+            return {
+                "reply": str(payload.get("fallback_reply") or "请继续补充这一段项目的关键信息。"),
+                "resume_ready_draft": {"title": "项目经历", "role": "核心开发", "period": "时间待补", "bullets": []},
+                "missing_points": ["项目起止时间", "关键指标口径", "是否有下一段经历"],
+                "current_experience_completed": False,
+                "ask_more_experience": True,
+                "reasoning_focus": [],
+            }
+
     def run_resume_craft_html(self, payload, runtime: Optional[Dict[str, Any]] = None):
         try:
             result = self._build_runtime_agent(runtime).run_resume_craft_html(payload)

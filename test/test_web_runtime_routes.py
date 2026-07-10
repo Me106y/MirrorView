@@ -193,8 +193,15 @@ def test_resume_craft_chat_turn_step1_profile_experience_only(monkeypatch):
 
     monkeypatch.setattr(
         routes.ai_service,
-        "run_resume_craft_dialog",
-        lambda payload, runtime=None: "请继续补充教育背景。",
+        "run_resume_craft_step4_decision",
+        lambda payload, runtime=None: {
+            "reply": "这段经历很强，我先整理成可上简历版本，并请你补充时间、指标口径和下一段经历。",
+            "resume_ready_draft": {"title": "RAG 检索服务", "role": "核心开发", "period": "时间待补", "bullets": []},
+            "missing_points": ["项目起止时间", "指标口径", "是否有下一段经历"],
+            "current_experience_completed": False,
+            "ask_more_experience": True,
+            "reasoning_focus": ["RAG", "检索"],
+        },
     )
 
     client = _client()
@@ -222,7 +229,9 @@ def test_resume_craft_chat_turn_step1_profile_experience_only(monkeypatch):
     assert body["action"] in {"grill_experience", "experience_done", "confirm_finalize"}
     assert "experience_state" in body
     assert "教育背景" not in body["reply"]
-    assert body["meta"]["resume_craft_chat_turn_version"] == "2026-07-09-v8"
+    assert body["meta"]["resume_craft_chat_turn_version"] == "2026-07-10-v9"
+    assert body["meta"]["step4_mode"] == "agent_led"
+    assert body["meta"]["step4_missing_points"]
 
 
 def test_resume_craft_chat_turn_step1_profile_auto_finalize_after_max_grill(monkeypatch):
@@ -231,8 +240,15 @@ def test_resume_craft_chat_turn_step1_profile_auto_finalize_after_max_grill(monk
 
     monkeypatch.setattr(
         routes.ai_service,
-        "run_resume_craft_dialog",
-        lambda payload, runtime=None: "请补充经历结果与量化指标。",
+        "run_resume_craft_step4_decision",
+        lambda payload, runtime=None: {
+            "reply": "请补充经历结果与量化指标。",
+            "resume_ready_draft": {"title": "RAG 服务", "role": "核心开发", "period": "时间待补", "bullets": []},
+            "missing_points": ["项目起止时间", "指标口径", "是否有下一段经历"],
+            "current_experience_completed": False,
+            "ask_more_experience": True,
+            "reasoning_focus": ["指标"],
+        },
     )
 
     client = _client()
@@ -265,18 +281,14 @@ def test_resume_craft_chat_turn_step1_profile_auto_finalize_after_max_grill(monk
     assert body["render_ready"] is False
     assert body["action"] == "experience_done"
     assert body["experience_state"]["finalized_experiences"]
-    assert "还有要补充的项目" in body["reply"]
+    assert "量化指标" in body["reply"]
+    assert body["next_step_suggestion"] == "stay"
+    assert body["missing_fields"] == ["experience"]
 
 
 def test_resume_craft_chat_turn_step4_no_more_experience_goes_next(monkeypatch):
     Config.TURNSTILE_ENFORCE = False
     Config.RATE_LIMIT_ENFORCE = False
-
-    monkeypatch.setattr(
-        routes.ai_service,
-        "run_resume_craft_dialog",
-        lambda payload, runtime=None: "好的，我们继续下一阶段。",
-    )
 
     client = _client()
     resp = client.post(
@@ -312,15 +324,21 @@ def test_resume_craft_chat_turn_step4_no_more_experience_goes_next(monkeypatch):
     assert "进入下一阶段" in body["reply"]
 
 
-def test_resume_craft_chat_turn_step4_fallback_focuses_on_missing_metric(monkeypatch):
+def test_resume_craft_chat_turn_step4_agent_missing_points_followed(monkeypatch):
     Config.TURNSTILE_ENFORCE = False
     Config.RATE_LIMIT_ENFORCE = False
 
-    # Return off-topic response so server falls back to its rule-based Grill question.
     monkeypatch.setattr(
         routes.ai_service,
-        "run_resume_craft_dialog",
-        lambda payload, runtime=None: "好的，继续。",
+        "run_resume_craft_step4_decision",
+        lambda payload, runtime=None: {
+            "reply": "这段项目先按简历稿整理好了。请补 3 点：项目时间、指标口径、是否有下一段经历。",
+            "resume_ready_draft": {"title": "在线推理服务", "role": "核心开发", "period": "时间待补", "bullets": []},
+            "missing_points": ["项目起止时间", "指标口径", "下一段经历"],
+            "current_experience_completed": False,
+            "ask_more_experience": True,
+            "reasoning_focus": ["可用性", "性能"],
+        },
     )
 
     client = _client()
@@ -352,21 +370,42 @@ def test_resume_craft_chat_turn_step4_fallback_focuses_on_missing_metric(monkeyp
     assert resp.status_code == 200
     body = resp.get_json()
     assert body["action"] == "grill_experience"
-    assert ("量化" in body["reply"]) or ("数字" in body["reply"])
+    assert "指标口径" in body["reply"]
+    assert body["meta"]["step4_mode"] == "agent_led"
+    assert "指标口径" in "".join(body["meta"]["step4_missing_points"])
 
 
-def test_resume_craft_chat_turn_step4_avoids_repeating_generic_challenge_prompt(monkeypatch):
+def test_resume_craft_chat_turn_step4_dynamic_focus_for_different_stack(monkeypatch):
     Config.TURNSTILE_ENFORCE = False
     Config.RATE_LIMIT_ENFORCE = False
 
-    generic = "我已收到你的信息。这段经历很关键。请补充你遇到的挑战/难点，并说明它与“AI应用开发”岗位能力的关系。"
-    monkeypatch.setattr(routes.ai_service, "run_resume_craft_dialog", lambda payload, runtime=None: generic)
+    def _fake_step4_decision(payload, runtime=None):
+        user_input = str(payload.get("user_input") or "").lower()
+        if "k8s" in user_input or "kubernetes" in user_input or "微服务" in user_input:
+            return {
+                "reply": "这段经历已整理。请补充集群规模、SLO 抖动口径，以及是否还有下一段相关经历。",
+                "resume_ready_draft": {"title": "微服务平台", "role": "平台开发", "period": "时间待补", "bullets": []},
+                "missing_points": ["集群规模", "SLO 口径", "下一段经历"],
+                "current_experience_completed": False,
+                "ask_more_experience": True,
+                "reasoning_focus": ["k8s", "slo", "微服务治理"],
+            }
+        return {
+            "reply": "请补充项目时间、指标口径和下一段经历。",
+            "resume_ready_draft": {"title": "项目经历", "role": "核心开发", "period": "时间待补", "bullets": []},
+            "missing_points": ["项目时间", "指标口径", "下一段经历"],
+            "current_experience_completed": False,
+            "ask_more_experience": True,
+            "reasoning_focus": [],
+        }
+
+    monkeypatch.setattr(routes.ai_service, "run_resume_craft_step4_decision", _fake_step4_decision)
 
     client = _client()
-    first = client.post(
+    resp = client.post(
         "/api/careerforge/resume-craft/chat-turn",
         json={
-            "message": "基于 LangChain 与 Agentic RAG 架构，构建具备思维链能力的 AI 面试官，P95 响应时间降低 42%。",
+            "message": "基于 K8s 的微服务平台，做了灰度发布和服务治理，优化了 SLO。",
             "current_step": 4,
             "history": [{"role": "assistant", "content": "我们进入 Step4（工作/项目经历）。请描述第一段经历的场景、职责、行动和结果。"}],
             "step1_profile": {
@@ -383,48 +422,48 @@ def test_resume_craft_chat_turn_step4_avoids_repeating_generic_challenge_prompt(
             "experience_state": {"current_index": 1, "followup_count": 0, "drafts": [], "finalized_experiences": []},
         },
     )
-    assert first.status_code == 200
-    first_body = first.get_json()
-    exp_state = first_body["experience_state"]
-
-    second_history = [
-        {"role": "assistant", "content": "我们进入 Step4（工作/项目经历）。请描述第一段经历的场景、职责、行动和结果。"},
-        {"role": "user", "content": "基于 LangChain 与 Agentic RAG 架构，构建具备思维链能力的 AI 面试官，P95 响应时间降低 42%。"},
-        {"role": "assistant", "content": generic},
-    ]
-    second = client.post(
-        "/api/careerforge/resume-craft/chat-turn",
-        json={
-            "message": "我主要负责 Few-shot Prompt、Temperature 调优、SQLAlchemy 会话恢复和 JWT 权限控制，系统已在30余场真实面试试运行。",
-            "current_step": 4,
-            "history": second_history,
-            "step1_profile": {
-                "template_code": "02",
-                "language": "zh",
-                "photo_pref": "no_photo",
-                "target_role": "AI应用开发",
-                "personal_info": {"name": "A", "phone": "1", "email": "a@b.com", "city": "上海", "links": []},
-                "education": [{"school": "X", "major": "CS", "degree": "硕士", "period": "2020-2023", "highlights": ""}],
-                "skills": ["Python", "LangChain"],
-                "certificates": [],
-                "expected_experience_count": 1,
-            },
-            "experience_state": exp_state,
-        },
-    )
-    assert second.status_code == 200
-    body = second.get_json()
+    assert resp.status_code == 200
+    body = resp.get_json()
     assert body["action"] == "grill_experience"
-    assert body["reply"] != generic
-    assert "挑战" in body["reply"]
-    assert ("LangChain" in body["reply"]) or ("Prompt" in body["reply"]) or ("会话恢复" in body["reply"])
+    assert "SLO" in body["reply"] or "集群规模" in body["reply"]
+    assert "LangChain" not in body["reply"]
+    assert "Prompt" not in body["reply"]
+    assert body["meta"]["step4_mode"] == "agent_led"
 
 
 def test_resume_craft_chat_turn_step4_first_round_returns_resume_ready_draft(monkeypatch):
     Config.TURNSTILE_ENFORCE = False
     Config.RATE_LIMIT_ENFORCE = False
 
-    monkeypatch.setattr(routes.ai_service, "run_resume_craft_dialog", lambda payload, runtime=None: "好的，继续。")
+    monkeypatch.setattr(
+        routes.ai_service,
+        "run_resume_craft_step4_decision",
+        lambda payload, runtime=None: {
+            "reply": (
+                "这段经历很强，我先按你给的信息整理成可上简历版本（待你确认）：\n"
+                "Mirrorview智能模拟面试平台｜独立开发｜（时间待补）\n"
+                "基于 LangChain + Agentic RAG 架构实现 AI 面试官，支持多轮对话与上下文推理。\n"
+                "后端采用 Flask + SQLAlchemy，将面试历史查询接口响应时间优化 42%。\n"
+                "请再补 3 个点，我就能定稿这段并继续下一段经历：\n"
+                "这段项目起止时间（如 2025.03-2025.06）\n"
+                "响应时间降低 42% 的口径（例如从多少 ms 降到多少 ms；如果没有具体值，保留 42% 也可以）\n"
+                "还有没有第 2 段相关经历（实习/项目都行）？如果有，按“名称｜角色｜时间 + 3-5条成果”发我。"
+            ),
+            "resume_ready_draft": {
+                "title": "Mirrorview智能模拟面试平台",
+                "role": "独立开发",
+                "period": "时间待补",
+                "bullets": [
+                    "基于 LangChain + Agentic RAG 架构实现 AI 面试官。",
+                    "后端采用 Flask + SQLAlchemy，响应时间优化 42%。",
+                ],
+            },
+            "missing_points": ["项目起止时间", "指标口径", "是否有下一段经历"],
+            "current_experience_completed": False,
+            "ask_more_experience": True,
+            "reasoning_focus": ["LangChain", "Flask", "JWT"],
+        },
+    )
 
     client = _client()
     resp = client.post(
@@ -462,6 +501,7 @@ def test_resume_craft_chat_turn_step4_first_round_returns_resume_ready_draft(mon
     assert "项目起止时间" in body["reply"]
     assert "还有没有第 2 段相关经历" in body["reply"]
     assert "请补充你遇到的挑战/难点" not in body["reply"]
+    assert body["meta"]["step4_mode"] == "agent_led"
 
 
 def test_resume_craft_chat_turn_step3_only_education(monkeypatch):
