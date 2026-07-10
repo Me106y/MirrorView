@@ -1217,6 +1217,21 @@ def _is_no_more_experience_message(message: str, history: Any) -> bool:
     return False
 
 
+def _count_user_turns(history: Any, max_turns: int = 24) -> int:
+    if not isinstance(history, list):
+        return 0
+    count = 0
+    for item in history[-max_turns:]:
+        if not isinstance(item, dict):
+            continue
+        role = str(item.get("role") or "").strip().lower()
+        if role == "user":
+            content = str(item.get("content") or "").strip()
+            if content:
+                count += 1
+    return count
+
+
 def _finalize_current_experience_draft(exp_state: Dict[str, Any]) -> bool:
     merged = "\\n".join(exp_state.get("drafts") or []).strip()[:3000]
     appended = False
@@ -1543,6 +1558,16 @@ def careerforge_resume_craft_chat_turn():
             expected_count = int(step1_profile.get("expected_experience_count") or 1)
             expected_count = max(1, min(expected_count, 5))
             action = "grill_experience"
+            history_user_turns = _count_user_turns(history)
+            # Frontend may reset visible messages without resetting wizard_state payload.
+            # If Step4 history has no user turns, treat this as a fresh round and clear stale grill state.
+            if history_user_turns == 0:
+                stale_focus_topic = str((exp_state.get("active_focus") or {}).get("topic") or "").strip()
+                if stale_focus_topic or exp_state.get("drafts") or int(exp_state.get("followup_count", 0)) > 0:
+                    fresh = _normalize_experience_state({})
+                    exp_state["followup_count"] = fresh["followup_count"]
+                    exp_state["drafts"] = fresh["drafts"]
+                    exp_state["active_focus"] = fresh["active_focus"]
             no_more_experience = _is_no_more_experience_message(message, history)
 
             if no_more_experience:
@@ -1554,7 +1579,7 @@ def careerforge_resume_craft_chat_turn():
                 exp_state["drafts"].append(message[:2400])
                 exp_state["followup_count"] = int(exp_state["followup_count"]) + 1
                 fallback_reply = "请继续补充这段项目的功能实现与技术细节（核心模块、技术选型、验证口径）。"
-                is_first_round = int(exp_state["followup_count"]) == 1
+                is_first_round = history_user_turns == 0 or int(exp_state["followup_count"]) == 1
                 decision_payload = {
                     "profile_context": _build_step_context_for_prompt(4, step1_profile),
                     "history_text": history_text,

@@ -325,6 +325,67 @@ def test_resume_craft_chat_turn_step4_no_more_experience_goes_next(monkeypatch):
     assert "进入下一阶段" in body["reply"]
 
 
+def test_resume_craft_chat_turn_step4_resets_stale_state_when_history_restarted(monkeypatch):
+    Config.TURNSTILE_ENFORCE = False
+    Config.RATE_LIMIT_ENFORCE = False
+
+    captured = {}
+
+    def _fake_step4_decision(payload, runtime=None):
+        captured.update(payload)
+        return {
+            "reply": "请补充该核心功能的实现链路细节。",
+            "resume_ready_draft": {"title": "项目经历", "role": "核心开发", "period": "时间待补", "bullets": []},
+            "missing_points": ["实现链路"],
+            "current_experience_completed": False,
+            "ask_more_experience": True,
+            "reasoning_focus": ["实现链路"],
+        }
+
+    monkeypatch.setattr(routes.ai_service, "run_resume_craft_step4_decision", _fake_step4_decision)
+
+    client = _client()
+    resp = client.post(
+        "/api/careerforge/resume-craft/chat-turn",
+        json={
+            "message": "我负责构建多轮面试引擎，包含检索、记忆和追问编排。",
+            "current_step": 4,
+            "history": [{"role": "assistant", "content": "我们进入 Step4（工作/项目经历）。请描述第一段经历的场景、职责、行动和结果。"}],
+            "step1_profile": {
+                "template_code": "02",
+                "language": "zh",
+                "photo_pref": "no_photo",
+                "target_role": "AI应用开发",
+                "personal_info": {"name": "A", "phone": "1", "email": "a@b.com", "city": "上海", "links": []},
+                "education": [{"school": "X", "major": "CS", "degree": "硕士", "period": "2020-2023", "highlights": ""}],
+                "skills": ["Python", "LangChain"],
+                "certificates": [],
+                "expected_experience_count": 2,
+            },
+            "experience_state": {
+                "current_index": 2,
+                "followup_count": 3,
+                "drafts": ["旧草稿：请补取舍。"],
+                "finalized_experiences": ["项目A：时延降低35%。"],
+                "active_focus": {
+                    "topic": "旧项目",
+                    "stage": "tradeoff",
+                    "evidence": {"implementation": True, "tradeoff": False, "validation": True},
+                    "turn_count": 4,
+                },
+            },
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["action"] == "grill_experience"
+    assert captured["is_first_round"] is True
+    assert captured["followup_count"] == 1
+    assert captured["active_focus"]["topic"] == ""
+    assert body["experience_state"]["followup_count"] == 1
+    assert body["experience_state"]["finalized_experiences"] == ["项目A：时延降低35%。"]
+
+
 def test_resume_craft_chat_turn_step4_agent_missing_points_followed(monkeypatch):
     Config.TURNSTILE_ENFORCE = False
     Config.RATE_LIMIT_ENFORCE = False

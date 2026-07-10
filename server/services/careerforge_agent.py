@@ -581,7 +581,27 @@ You MUST follow the provided Skill specification when answering.
         )
         tradeoff = any(
             token in lower
-            for token in ["选型", "取舍", "权衡", "为什么", "相比", "而不是", "成本", "稳定性", "扩展性", "兼容", "方案"]
+            for token in [
+                "选型",
+                "取舍",
+                "权衡",
+                "为什么",
+                "因为",
+                "由于",
+                "因此",
+                "相比",
+                "相比之下",
+                "而不是",
+                "而非",
+                "备选",
+                "最终选择",
+                "选择",
+                "成本",
+                "稳定性",
+                "扩展性",
+                "兼容",
+                "方案",
+            ]
         )
         validation = any(
             token in lower
@@ -621,6 +641,30 @@ You MUST follow the provided Skill specification when answering.
         return "done"
 
     @staticmethod
+    def _next_stage_label(stage: str) -> str:
+        s = str(stage or "").strip().lower()
+        if s == "implementation":
+            return "tradeoff"
+        if s == "tradeoff":
+            return "validation"
+        if s == "validation":
+            return "done"
+        return "implementation"
+
+    @staticmethod
+    def _step4_stage_rank(stage: str) -> int:
+        s = str(stage or "").strip().lower()
+        if s == "implementation":
+            return 1
+        if s == "tradeoff":
+            return 2
+        if s == "validation":
+            return 3
+        if s == "done":
+            return 4
+        return 0
+
+    @staticmethod
     def _normalize_step4_probe_dimension(value: Any) -> str:
         text = str(value or "").strip().lower()
         if text in {"implementation", "tradeoff", "validation", "more_experience"}:
@@ -631,7 +675,24 @@ You MUST follow the provided Skill specification when answering.
     def _build_step4_single_probe(topic: str, stage: str, text: str = "") -> str:
         focus = topic or "该项目核心能力点"
         lower = str(text or "").lower()
-        is_rag_stack = any(token in lower for token in ["langchain", "agentic rag", "rag", "prompt", "temperature"])
+        is_rag_stack = any(
+            token in lower
+            for token in [
+                "langchain",
+                "agentic rag",
+                "rag",
+                "prompt",
+                "temperature",
+                "deepseek",
+                "gpt-4",
+                "gpt4",
+                "llama",
+                "embedding",
+                "memory",
+                "检索",
+                "记忆",
+            ]
+        )
         is_vision_stack = any(
             token in lower
             for token in ["pyqt", "yolov8", "ffmpeg", "rtmp", "kmz", "无人机", "百度地图", "航迹", "大疆"]
@@ -691,6 +752,11 @@ You MUST follow the provided Skill specification when answering.
 
     def _coerce_step4_single_focus_decision(self, payload: Dict[str, Any], candidate: Any, fallback: Dict[str, Any]) -> Dict[str, Any]:
         parsed = candidate if isinstance(candidate, dict) else {}
+        is_first_round = bool(payload.get("is_first_round", False))
+        try:
+            followup_count = int(payload.get("followup_count", 0))
+        except Exception:
+            followup_count = 0
         user_input = str(payload.get("user_input") or "").strip()
         source_focus = self._normalize_step4_active_focus(payload.get("active_focus"))
         fallback_focus = self._normalize_step4_active_focus(fallback.get("active_focus"))
@@ -707,12 +773,25 @@ You MUST follow the provided Skill specification when answering.
         inferred_stage = self._next_step4_stage(evidence)
         if stage == "more_experience":
             stage = "done"
-        if stage not in {"implementation", "tradeoff", "validation", "done"}:
-            stage = inferred_stage
+        if is_first_round:
+            stage = inferred_stage if inferred_stage == "done" else "implementation"
+        else:
+            if stage not in {"implementation", "tradeoff", "validation", "done"}:
+                stage = inferred_stage
+            # Never regress behind what merged evidence already proves.
+            if self._step4_stage_rank(stage) < self._step4_stage_rank(inferred_stage):
+                stage = inferred_stage
+
+        prior_stage = str(source_focus.get("stage") or "").strip().lower()
+        if not is_first_round and stage in {"implementation", "tradeoff", "validation"} and prior_stage == stage:
+            if (stage == "implementation" and followup_count >= 2) or (stage == "tradeoff" and followup_count >= 3) or (
+                stage == "validation" and followup_count >= 4
+            ):
+                stage = self._next_stage_label(stage)
 
         current_experience_completed = bool(parsed.get("current_experience_completed", False))
-        if inferred_stage == "done":
-            current_experience_completed = current_experience_completed or True
+        if stage == "done":
+            current_experience_completed = True
         if current_experience_completed:
             stage = "done"
         ask_more_experience = bool(parsed.get("ask_more_experience", True))
@@ -745,10 +824,33 @@ You MUST follow the provided Skill specification when answering.
 
             candidate_reply = str(parsed.get("reply") or "").strip()
             fallback_reply = str(fallback.get("reply") or "").strip()
+            if (
+                is_first_round
+                and candidate_reply
+                and "取舍" in candidate_reply
+                and all(token not in candidate_reply for token in ["实现", "链路", "模块", "输入", "输出"])
+            ):
+                candidate_reply = ""
             if candidate_reply and not self._is_generic_step4_reply(candidate_reply):
                 reply = candidate_reply
             else:
                 reply = fallback_reply or f"请继续围绕“{topic or '该项目核心技术点'}”补充最关键的技术实现细节。"
+
+            if is_first_round:
+                title = str(draft.get("title") or fallback_draft.get("title") or self._extract_step4_title(user_input) or "项目经历").strip()[:80]
+                preview_lines = safe_bullets[:3] or self._extract_step4_bullets(user_input)[:3]
+                preview = "\n".join(f"- {line}" for line in preview_lines if str(line or "").strip())
+                implementation_probe = missing_points[0] if missing_points else self._build_step4_single_probe(topic, "implementation", user_input)
+                stage = "implementation"
+                next_probe_dimension = "implementation"
+                missing_points = [self._build_step4_single_probe(topic, "implementation", user_input)]
+                implementation_probe = missing_points[0]
+                reply = (
+                    "我先按你给的信息整理一个可上简历版本（待确认）：\n"
+                    f"{title}\n"
+                    f"{preview}\n"
+                    f"接下来我先围绕“{topic or '该项目核心技术点'}”追问一个最关键问题：{implementation_probe}"
+                ).strip()
 
         reasoning_raw = parsed.get("reasoning_focus") if isinstance(parsed.get("reasoning_focus"), list) else []
         reasoning_focus = [str(item or "").strip()[:80] for item in reasoning_raw if str(item or "").strip()][:6]
@@ -872,10 +974,26 @@ You MUST follow the provided Skill specification when answering.
     def _build_step4_heuristic_decision(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         text = str(payload.get("user_input") or "").strip()
         is_first_round = bool(payload.get("is_first_round", False))
+        try:
+            followup_count = int(payload.get("followup_count", 0))
+        except Exception:
+            followup_count = 0
         source_focus = self._normalize_step4_active_focus(payload.get("active_focus"))
         topic = self._choose_step4_focus_topic(text, source_focus.get("topic", ""))
         evidence = self._merge_step4_evidence(source_focus.get("evidence", {}), self._detect_step4_evidence_from_text(text))
-        stage = self._next_step4_stage(evidence)
+        inferred_stage = self._next_step4_stage(evidence)
+        if is_first_round:
+            stage = inferred_stage if inferred_stage == "done" else "implementation"
+        else:
+            stage = inferred_stage
+            # If user keeps giving weak/irrelevant info, force monotonic advance after enough turns
+            # to avoid staying on one dimension forever.
+            prior_stage = str(source_focus.get("stage") or "").strip().lower()
+            if prior_stage in {"implementation", "tradeoff", "validation"} and stage == prior_stage:
+                if (stage == "implementation" and followup_count >= 2) or (stage == "tradeoff" and followup_count >= 3) or (
+                    stage == "validation" and followup_count >= 4
+                ):
+                    stage = self._next_stage_label(stage)
         current_experience_completed = stage == "done"
         ask_more_experience = True
         next_probe_dimension = "more_experience" if current_experience_completed else stage
