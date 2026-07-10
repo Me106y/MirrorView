@@ -430,7 +430,7 @@ You MUST follow the provided Skill specification when answering.
             "ask_more_experience": True,
             "reasoning_focus": ["string"],
             "active_focus_topic": "string",
-            "next_probe_dimension": "implementation|tradeoff|validation|more_experience",
+            "next_probe_dimension": "implementation|more_experience",
             "evidence_coverage": {
                 "implementation": False,
                 "tradeoff": False,
@@ -465,12 +465,13 @@ You MUST follow the provided Skill specification when answering.
 [硬性约束]
 1) 必须事实忠实：不编造、不夸大。
 2) 路由层是状态机，本次只负责 Step4 问答决策。
-3) 技术关注点必须动态基于用户输入，不得机械复读“挑战/难点”模板。
+3) Step4 采用固定三轮实现链路式深挖：Round1/2/3 都只问“实现链路与落地细节”，禁止改成取舍比较题。
 4) 优先深挖“功能与技术实现细节”，角色/时间/背景只能作为可选补充，不可抢占主路径。
-5) missing_points 由你基于当前项目动态决定，不要套固定模板；如果用户已覆盖某点，不要重复追问。
-6) 若当前经历已可定稿，使用“是否还有要补充的经历”作为转场问题。
-7) current_experience_completed=true 仅当当前这段信息已可定稿；ask_more_experience=true 表示继续询问是否还有经历。
-8) 需维护 active_focus_topic / next_probe_dimension / evidence_coverage 供状态机追踪，但追问文案由你自由生成。
+5) 第二、三轮要围绕同一个 active_focus_topic，不允许跳主题。
+6) 若你生成了“取舍/权衡/备选方案”措辞，路由会改写为实现链路问题；请直接输出实现链路问题。
+7) 若当前经历已可定稿，使用“是否还有要补充的经历”作为转场问题。
+8) current_experience_completed=true 仅当当前这段信息已可定稿；ask_more_experience=true 表示继续询问是否还有经历。
+9) 需维护 active_focus_topic / next_probe_dimension / evidence_coverage 供状态机追踪。
 
 [输出 JSON Schema]
 {schema_json}
@@ -672,7 +673,7 @@ You MUST follow the provided Skill specification when answering.
         return ""
 
     @staticmethod
-    def _build_step4_single_probe(topic: str, stage: str, text: str = "") -> str:
+    def _build_step4_single_probe(topic: str, round_idx: int, text: str = "") -> str:
         focus = topic or "该项目核心能力点"
         lower = str(text or "").lower()
         is_rag_stack = any(
@@ -697,8 +698,9 @@ You MUST follow the provided Skill specification when answering.
             token in lower
             for token in ["pyqt", "yolov8", "ffmpeg", "rtmp", "kmz", "无人机", "百度地图", "航迹", "大疆"]
         )
+        round_num = max(1, min(int(round_idx or 1), 3))
 
-        if stage == "implementation":
+        if round_num == 1:
             if is_rag_stack:
                 return (
                     f"围绕“{focus}”，请展开一个最关键功能：检索、记忆与提示词编排是如何串成一条可运行链路的？"
@@ -709,23 +711,22 @@ You MUST follow the provided Skill specification when answering.
                 )
             return f"围绕“{focus}”，请具体说明一个核心功能从输入到输出的实现链路是怎么搭起来的？"
 
-        if stage == "tradeoff":
+        if round_num == 2:
             if is_rag_stack:
                 return (
-                    f"围绕“{focus}”，你在模型/检索/记忆方案上做过什么关键取舍？为什么这样选而不是备选方案？"
+                    f"围绕“{focus}”，请继续拆解一个关键子模块（如检索召回、会话记忆更新或提示词编排）：它在整条链路中的输入、处理、输出分别是什么？"
                 )
             if is_vision_stack:
                 return (
-                    f"围绕“{focus}”，你在实时性与准确性之间做了哪些关键取舍（例如下采样、异步处理、推流方案）？"
+                    f"围绕“{focus}”，请继续拆解一个关键子模块（如航迹规划、目标检测或推流管道）：它在整条链路中的输入、处理、输出分别是什么？"
                 )
-            return f"围绕“{focus}”，请说明你做过的一次关键技术取舍，以及放弃备选方案的原因。"
+            return f"围绕“{focus}”，请继续拆解一个关键子模块：它在整条链路中的输入、处理、输出分别是什么？"
 
-        if stage == "validation":
-            if is_vision_stack:
-                return f"围绕“{focus}”，请给出你验证效果的口径（如帧率、延迟、误检率或稳定性指标）。"
-            return f"围绕“{focus}”，请给出验证口径与结果（如 P95/QPS/错误率/业务指标）。"
-
-        return "是否还有要补充的经历"
+        if is_rag_stack:
+            return f"围绕“{focus}”，请补充落地闭环：这条链路在接口调用、异常处理与监控验证上是如何串联并稳定运行的？"
+        if is_vision_stack:
+            return f"围绕“{focus}”，请补充落地闭环：这条链路在实时推理、异常处理与监控告警上是如何串联并稳定运行的？"
+        return f"围绕“{focus}”，请补充落地闭环：这条链路在接口调用、异常处理与监控验证上是如何串联并稳定运行的？"
 
     def _choose_step4_focus_topic(self, text: str, previous_topic: str = "") -> str:
         prior = str(previous_topic or "").strip()
@@ -768,32 +769,11 @@ You MUST follow the provided Skill specification when answering.
         evidence = self._merge_step4_evidence(source_focus.get("evidence", {}), fallback_focus.get("evidence", {}))
         evidence = self._merge_step4_evidence(evidence, self._normalize_step4_evidence(parsed.get("evidence_coverage")))
         evidence = self._merge_step4_evidence(evidence, self._detect_step4_evidence_from_text(user_input))
-
-        stage = self._normalize_step4_probe_dimension(parsed.get("next_probe_dimension"))
-        inferred_stage = self._next_step4_stage(evidence)
-        if stage == "more_experience":
-            stage = "done"
-        if is_first_round:
-            stage = inferred_stage if inferred_stage == "done" else "implementation"
-        else:
-            if stage not in {"implementation", "tradeoff", "validation", "done"}:
-                stage = inferred_stage
-            # Never regress behind what merged evidence already proves.
-            if self._step4_stage_rank(stage) < self._step4_stage_rank(inferred_stage):
-                stage = inferred_stage
-
-        prior_stage = str(source_focus.get("stage") or "").strip().lower()
-        if not is_first_round and stage in {"implementation", "tradeoff", "validation"} and prior_stage == stage:
-            if (stage == "implementation" and followup_count >= 2) or (stage == "tradeoff" and followup_count >= 3) or (
-                stage == "validation" and followup_count >= 4
-            ):
-                stage = self._next_stage_label(stage)
-
-        current_experience_completed = bool(parsed.get("current_experience_completed", False))
-        if stage == "done":
-            current_experience_completed = True
-        if current_experience_completed:
-            stage = "done"
+        safe_followup_count = max(1, followup_count)
+        probe_round = min(safe_followup_count, 3)
+        close_after_three_rounds = safe_followup_count > 3
+        current_experience_completed = close_after_three_rounds
+        stage = "done" if current_experience_completed else "implementation"
         ask_more_experience = bool(parsed.get("ask_more_experience", True))
 
         draft = parsed.get("resume_ready_draft") if isinstance(parsed.get("resume_ready_draft"), dict) else {}
@@ -806,6 +786,8 @@ You MUST follow the provided Skill specification when answering.
         missing_raw = parsed.get("missing_points") if isinstance(parsed.get("missing_points"), list) else []
         missing_points = [str(item or "").strip()[:120] for item in missing_raw if str(item or "").strip()][:5]
 
+        canonical_probe = self._build_step4_single_probe(topic, probe_round, user_input)
+
         if current_experience_completed:
             missing_points = ["是否还有要补充的经历"] if ask_more_experience else []
             next_probe_dimension = "more_experience"
@@ -815,42 +797,21 @@ You MUST follow the provided Skill specification when answering.
             else:
                 reply = candidate_reply or ("这一段经历已完成深挖。是否还有要补充的经历？" if ask_more_experience else "这一段经历已完成深挖。")
         else:
-            next_probe_dimension = stage if stage in {"implementation", "tradeoff", "validation"} else inferred_stage
-            if not missing_points:
-                fallback_missing = fallback.get("missing_points") if isinstance(fallback.get("missing_points"), list) else []
-                missing_points = [str(item or "").strip()[:120] for item in fallback_missing if str(item or "").strip()][:5]
-            if not missing_points:
-                missing_points = [self._build_step4_single_probe(topic, inferred_stage, user_input)]
-
-            candidate_reply = str(parsed.get("reply") or "").strip()
-            fallback_reply = str(fallback.get("reply") or "").strip()
-            if (
-                is_first_round
-                and candidate_reply
-                and "取舍" in candidate_reply
-                and all(token not in candidate_reply for token in ["实现", "链路", "模块", "输入", "输出"])
-            ):
-                candidate_reply = ""
-            if candidate_reply and not self._is_generic_step4_reply(candidate_reply):
-                reply = candidate_reply
-            else:
-                reply = fallback_reply or f"请继续围绕“{topic or '该项目核心技术点'}”补充最关键的技术实现细节。"
+            next_probe_dimension = "implementation"
+            missing_points = [canonical_probe]
 
             if is_first_round:
                 title = str(draft.get("title") or fallback_draft.get("title") or self._extract_step4_title(user_input) or "项目经历").strip()[:80]
                 preview_lines = safe_bullets[:3] or self._extract_step4_bullets(user_input)[:3]
                 preview = "\n".join(f"- {line}" for line in preview_lines if str(line or "").strip())
-                implementation_probe = missing_points[0] if missing_points else self._build_step4_single_probe(topic, "implementation", user_input)
-                stage = "implementation"
-                next_probe_dimension = "implementation"
-                missing_points = [self._build_step4_single_probe(topic, "implementation", user_input)]
-                implementation_probe = missing_points[0]
                 reply = (
                     "我先按你给的信息整理一个可上简历版本（待确认）：\n"
                     f"{title}\n"
                     f"{preview}\n"
-                    f"接下来我先围绕“{topic or '该项目核心技术点'}”追问一个最关键问题：{implementation_probe}"
+                    f"接下来我先围绕“{topic or '该项目核心技术点'}”追问一个最关键问题：{canonical_probe}"
                 ).strip()
+            else:
+                reply = f"继续围绕“{topic or '该项目核心技术点'}”深入一层：{canonical_probe}"
 
         reasoning_raw = parsed.get("reasoning_focus") if isinstance(parsed.get("reasoning_focus"), list) else []
         reasoning_focus = [str(item or "").strip()[:80] for item in reasoning_raw if str(item or "").strip()][:6]
@@ -981,23 +942,12 @@ You MUST follow the provided Skill specification when answering.
         source_focus = self._normalize_step4_active_focus(payload.get("active_focus"))
         topic = self._choose_step4_focus_topic(text, source_focus.get("topic", ""))
         evidence = self._merge_step4_evidence(source_focus.get("evidence", {}), self._detect_step4_evidence_from_text(text))
-        inferred_stage = self._next_step4_stage(evidence)
-        if is_first_round:
-            stage = inferred_stage if inferred_stage == "done" else "implementation"
-        else:
-            stage = inferred_stage
-            # If user keeps giving weak/irrelevant info, force monotonic advance after enough turns
-            # to avoid staying on one dimension forever.
-            prior_stage = str(source_focus.get("stage") or "").strip().lower()
-            if prior_stage in {"implementation", "tradeoff", "validation"} and stage == prior_stage:
-                if (stage == "implementation" and followup_count >= 2) or (stage == "tradeoff" and followup_count >= 3) or (
-                    stage == "validation" and followup_count >= 4
-                ):
-                    stage = self._next_stage_label(stage)
-        current_experience_completed = stage == "done"
+        safe_followup_count = max(1, followup_count)
+        probe_round = min(safe_followup_count, 3)
+        current_experience_completed = safe_followup_count > 3
         ask_more_experience = True
-        next_probe_dimension = "more_experience" if current_experience_completed else stage
-        probe = self._build_step4_single_probe(topic, stage, text)
+        next_probe_dimension = "more_experience" if current_experience_completed else "implementation"
+        probe = self._build_step4_single_probe(topic, probe_round, text)
         missing_points = ["是否还有要补充的经历"] if current_experience_completed else [probe]
         if current_experience_completed:
             reply = "这一段经历已完成深挖。是否还有要补充的经历？"
@@ -1030,7 +980,7 @@ You MUST follow the provided Skill specification when answering.
             "evidence_coverage": evidence,
             "active_focus": {
                 "topic": topic,
-                "stage": "done" if current_experience_completed else stage,
+                "stage": "done" if current_experience_completed else "implementation",
                 "evidence": evidence,
                 "turn_count": source_focus.get("turn_count", 0) + 1,
             },

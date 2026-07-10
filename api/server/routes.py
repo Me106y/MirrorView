@@ -1543,6 +1543,7 @@ def careerforge_resume_craft_chat_turn():
         step4_missing_points: List[str] = []
         step4_raw_missing_points: List[str] = []
         step4_reasoning_focus: List[str] = []
+        step4_probe_round = 0
         no_more_experience = False
 
         if step_num == 3:
@@ -1578,6 +1579,7 @@ def careerforge_resume_craft_chat_turn():
             else:
                 exp_state["drafts"].append(message[:2400])
                 exp_state["followup_count"] = int(exp_state["followup_count"]) + 1
+                step4_probe_round = min(int(exp_state["followup_count"]), RESUME_CRAFT_GRILL_MAX_FOLLOWUPS)
                 fallback_reply = "请继续补充这段项目的功能实现与技术细节（核心模块、技术选型、验证口径）。"
                 is_first_round = history_user_turns == 0 or int(exp_state["followup_count"]) == 1
                 decision_payload = {
@@ -1606,7 +1608,7 @@ def careerforge_resume_craft_chat_turn():
                 step4_reasoning_focus = normalized_step4["reasoning_focus"]
                 exp_state["active_focus"] = normalized_step4["active_focus"]
                 should_finalize = normalized_step4["current_experience_completed"]
-                if should_finalize or exp_state["followup_count"] >= RESUME_CRAFT_GRILL_MAX_FOLLOWUPS:
+                if should_finalize or exp_state["followup_count"] > RESUME_CRAFT_GRILL_MAX_FOLLOWUPS:
                     _finalize_current_experience_draft(exp_state)
                     action = "experience_done"
                     wizard_state["collected_by_step"]["experiences"] = list(exp_state["finalized_experiences"])
@@ -1689,6 +1691,7 @@ def careerforge_resume_craft_chat_turn():
                         if step_num == 4
                         else {}
                     ),
+                    "step4_probe_round": step4_probe_round if step_num == 4 else 0,
                     "api_runtime_version": meta.get("api_runtime_version", ""),
                 },
                 "error": "",

@@ -99,7 +99,7 @@ def test_step4_heuristic_decision_dynamic_focus_and_missing_points():
     assert decision["resume_ready_draft"]["bullets"]
 
 
-def test_step4_heuristic_decision_marks_completed_when_input_already_covers_all_core_evidence():
+def test_step4_heuristic_decision_second_round_stays_in_implementation_style():
     agent = _agent()
     decision = agent._build_step4_heuristic_decision(
         {
@@ -116,12 +116,14 @@ def test_step4_heuristic_decision_marks_completed_when_input_already_covers_all_
         }
     )
 
-    assert decision["missing_points"] == ["是否还有要补充的经历"]
-    assert decision["next_probe_dimension"] == "more_experience"
-    assert decision["current_experience_completed"] is True
+    assert decision["current_experience_completed"] is False
+    assert decision["next_probe_dimension"] == "implementation"
+    assert len(decision["missing_points"]) == 1
+    assert any(token in decision["missing_points"][0] for token in ["链路", "输入", "输出", "模块"])
+    assert all(token not in decision["missing_points"][0] for token in ["取舍", "备选", "权衡"])
 
 
-def test_step4_coerce_prefers_agent_missing_points_without_route_style_rewrite():
+def test_step4_coerce_overrides_tradeoff_like_candidate_into_implementation_style_round2():
     agent = _agent()
     payload = {
         "user_input": "我做了一个基于 LangChain 的检索服务，接口响应提升 42%。",
@@ -146,9 +148,11 @@ def test_step4_coerce_prefers_agent_missing_points_without_route_style_rewrite()
     )
 
     assert decision["current_experience_completed"] is False
-    assert decision["next_probe_dimension"] == "tradeoff"
-    assert decision["missing_points"] == ["项目时间", "角色定位", "还有没有第2段经历"]
-    assert "补充时间" in decision["reply"]
+    assert decision["next_probe_dimension"] == "implementation"
+    assert len(decision["missing_points"]) == 1
+    assert any(token in decision["missing_points"][0] for token in ["链路", "输入", "输出", "模块"])
+    assert all(token not in decision["missing_points"][0] for token in ["取舍", "备选", "权衡"])
+    assert "深入一层" in decision["reply"]
 
 
 def test_step4_coerce_forces_first_round_into_implementation_probe_when_candidate_is_tradeoff():
@@ -177,7 +181,7 @@ def test_step4_coerce_forces_first_round_into_implementation_probe_when_candidat
     assert any(token in decision["missing_points"][0] for token in ["实现", "链路", "输入", "输出", "核心功能"])
 
 
-def test_step4_coerce_advances_stage_when_stuck_on_same_dimension_for_too_many_turns():
+def test_step4_coerce_third_round_still_asks_implementation_style_probe():
     agent = _agent()
     payload = {
         "user_input": "继续补充：我们做了缓存和重试，整体更稳定。",
@@ -204,8 +208,27 @@ def test_step4_coerce_advances_stage_when_stuck_on_same_dimension_for_too_many_t
         fallback=fallback,
     )
 
-    assert decision["next_probe_dimension"] == "validation"
-    assert decision["active_focus"]["stage"] == "validation"
+    assert decision["current_experience_completed"] is False
+    assert decision["next_probe_dimension"] == "implementation"
+    assert decision["active_focus"]["stage"] == "implementation"
+    assert any(token in decision["missing_points"][0] for token in ["链路", "输入", "输出", "异常处理", "监控"])
+    assert all(token not in decision["missing_points"][0] for token in ["取舍", "备选", "权衡"])
+
+
+def test_step4_heuristic_fourth_turn_closes_with_more_experience_question():
+    agent = _agent()
+    decision = agent._build_step4_heuristic_decision(
+        {
+            "user_input": "第三轮问题我补充完了：链路在接口调用和告警上都已闭环。",
+            "is_first_round": False,
+            "followup_count": 4,
+            "fallback_reply": "请继续补充这段项目的关键信息。",
+        }
+    )
+
+    assert decision["current_experience_completed"] is True
+    assert decision["next_probe_dimension"] == "more_experience"
+    assert decision["missing_points"] == ["是否还有要补充的经历"]
 
 
 def test_step4_runtime_auth_failure_retries_without_runtime_api_key(monkeypatch):

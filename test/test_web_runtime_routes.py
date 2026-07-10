@@ -271,7 +271,7 @@ def test_resume_craft_chat_turn_step1_profile_auto_finalize_after_max_grill(monk
             },
             "experience_state": {
                 "current_index": 1,
-                "followup_count": 2,
+                "followup_count": 3,
                 "drafts": ["我负责搭建 RAG 检索服务。", "挑战是并发抖动明显。"],
                 "finalized_experiences": [],
             },
@@ -285,6 +285,63 @@ def test_resume_craft_chat_turn_step1_profile_auto_finalize_after_max_grill(monk
     assert "量化指标" in body["reply"]
     assert body["next_step_suggestion"] == "stay"
     assert body["missing_fields"] == ["experience"]
+
+
+def test_resume_craft_chat_turn_step4_third_round_stays_grill_and_reports_probe_round(monkeypatch):
+    Config.TURNSTILE_ENFORCE = False
+    Config.RATE_LIMIT_ENFORCE = False
+
+    monkeypatch.setattr(
+        routes.ai_service,
+        "run_resume_craft_step4_decision",
+        lambda payload, runtime=None: {
+            "reply": "继续围绕该项目补充链路细节。",
+            "resume_ready_draft": {"title": "RAG 服务", "role": "核心开发", "period": "时间待补", "bullets": []},
+            "missing_points": ["请继续拆解一个关键子模块的输入、处理、输出。"],
+            "current_experience_completed": False,
+            "ask_more_experience": True,
+            "reasoning_focus": ["实现链路"],
+            "next_probe_dimension": "implementation",
+        },
+    )
+
+    client = _client()
+    resp = client.post(
+        "/api/careerforge/resume-craft/chat-turn",
+        json={
+            "message": "我补充了第二轮问题的答案。",
+            "history": [
+                {"role": "assistant", "content": "我们进入 Step4（工作/项目经历）。请描述第一段经历的场景、职责、行动和结果。"},
+                {"role": "user", "content": "第一轮输入"},
+                {"role": "assistant", "content": "请继续拆解关键子模块。"},
+                {"role": "user", "content": "第二轮输入"},
+                {"role": "assistant", "content": "请继续补充链路细节。"},
+            ],
+            "current_step": 4,
+            "step1_profile": {
+                "template_code": "02",
+                "language": "zh",
+                "photo_pref": "no_photo",
+                "target_role": "AI应用开发",
+                "personal_info": {"name": "A", "phone": "1", "email": "a@b.com", "city": "上海", "links": []},
+                "education": [{"school": "X", "major": "CS", "degree": "硕士", "period": "2020-2023", "highlights": ""}],
+                "skills": ["Python"],
+                "certificates": [],
+                "expected_experience_count": 1,
+            },
+            "experience_state": {
+                "current_index": 1,
+                "followup_count": 2,
+                "drafts": ["第一轮输入", "第二轮输入"],
+                "finalized_experiences": [],
+            },
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["action"] == "grill_experience"
+    assert body["meta"]["step4_probe_round"] == 3
+    assert body["next_step_suggestion"] == "stay"
 
 
 def test_resume_craft_chat_turn_step4_no_more_experience_goes_next(monkeypatch):
