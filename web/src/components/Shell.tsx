@@ -92,7 +92,7 @@ export function Shell({ onOpenSettings }: { onOpenSettings: () => void }) {
             </button>
           ) : (
             <button className="topbar-action-btn github-login-btn" onClick={login}>
-              GitHub 登录
+              通过 GitHub 登录
             </button>
           )}
         </div>
