@@ -30,6 +30,20 @@ from urllib.parse import urlencode
 
 api = Blueprint('api', __name__)
 
+
+@api.app_errorhandler(500)
+def _handle_500(e):
+    """Catch unhandled 500 errors at the blueprint level."""
+    logger.error("Unhandled 500: %s", e)
+    return jsonify({"error": "internal_error", "message": str(e)}), 200
+
+
+@api.app_errorhandler(Exception)
+def _handle_exception(e):
+    """Catch any unhandled exception."""
+    logger.error("Unhandled exception: %s", e, exc_info=True)
+    return jsonify({"error": "unhandled_exception", "message": str(e)}), 200
+
 ai_service = AIService()
 command_agent = CareerForgeCommandAgent(ai_service)
 rtmp_service = RTMPService(Config.RTMP_SERVER_URL)
@@ -284,6 +298,30 @@ def health():
         }
     ), 200
 
+
+@api.route('/debug/oauth', methods=['GET'])
+def debug_oauth():
+    """Diagnostic endpoint to check OAuth configuration."""
+    from server.config import Config
+    db_ok = False
+    db_error = None
+    try:
+        User.query.first()
+        db_ok = True
+    except Exception as e:
+        db_error = str(e)
+
+    return jsonify({
+        "github_client_id_set": bool(Config.GITHUB_CLIENT_ID),
+        "github_client_id_preview": (Config.GITHUB_CLIENT_ID[:4] + "..." if Config.GITHUB_CLIENT_ID else None),
+        "github_client_secret_set": bool(Config.GITHUB_CLIENT_SECRET),
+        "db_uri": Config.SQLALCHEMY_DATABASE_URI,
+        "db_ok": db_ok,
+        "db_error": db_error,
+        "vercel": bool(os.environ.get("VERCEL")),
+        "secret_key_set": bool(Config.SECRET_KEY),
+    }), 200
+
 @api.route('/auth/register', methods=['POST'])
 def register():
     data = request.json
@@ -440,10 +478,23 @@ def github_oauth_start():
 @api.route('/auth/github/callback', methods=['GET'])
 def github_oauth_callback():
     """Step 2: GitHub redirects here after user authorizes."""
+    try:
+        return _github_oauth_callback_inner()
+    except Exception as exc:
+        logger.error("OAuth callback error: %s", exc, exc_info=True)
+        return jsonify({
+            "error": "oauth_callback_error",
+            "message": str(exc),
+        }), 500
+
+
+def _github_oauth_callback_inner():
+    """Inner callback logic wrapped by error handler."""
     # CSRF check
     state = request.args.get("state", "")
     expected_state = request.cookies.get("oauth_state", "")
     if not state or state != expected_state:
+        logger.warning("OAuth CSRF: state=%s expected=%s", state[:8] if state else None, expected_state[:8] if expected_state else None)
         return jsonify({"error": "csrf_detected", "message": "Invalid OAuth state."}), 403
 
     code = request.args.get("code")
@@ -452,61 +503,101 @@ def github_oauth_callback():
 
     # Exchange code for access token
     base_url = _get_public_base_url()
-    token_resp = requests.post(
-        Config.GITHUB_TOKEN_URL,
-        data={
-            "client_id": Config.GITHUB_CLIENT_ID,
-            "client_secret": Config.GITHUB_CLIENT_SECRET,
-            "code": code,
-            "redirect_uri": f"{base_url}/api/auth/github/callback",
-        },
-        headers={"Accept": "application/json"},
-        timeout=10,
-    )
-    token_data = token_resp.json()
+    logger.info("OAuth callback: exchanging code for token, base_url=%s", base_url)
+
+    try:
+        token_resp = requests.post(
+            Config.GITHUB_TOKEN_URL,
+            data={
+                "client_id": Config.GITHUB_CLIENT_ID,
+                "client_secret": Config.GITHUB_CLIENT_SECRET,
+                "code": code,
+                "redirect_uri": f"{base_url}/api/auth/github/callback",
+            },
+            headers={"Accept": "application/json"},
+            timeout=15,
+        )
+        token_data = token_resp.json()
+    except Exception as exc:
+        logger.error("GitHub token exchange request failed: %s", exc)
+        return jsonify({
+            "error": "token_exchange_failed",
+            "message": "Failed to reach GitHub token endpoint.",
+            "detail": str(exc),
+        }), 502
+
     access_token = token_data.get("access_token")
     if not access_token:
         logger.error("GitHub token exchange failed: %s", token_data)
-        return jsonify({"error": "token_exchange_failed", "message": "Failed to obtain access token."}), 502
+        return jsonify({
+            "error": "token_exchange_failed",
+            "message": "Failed to obtain access token.",
+            "detail": token_data.get("error_description") or str(token_data),
+        }), 502
 
     # Fetch GitHub user info
-    user_resp = requests.get(
-        Config.GITHUB_USER_URL,
-        headers={
-            "Authorization": f"Bearer {access_token}",
-            "Accept": "application/json",
-        },
-        timeout=10,
-    )
-    gh_user = user_resp.json()
+    try:
+        user_resp = requests.get(
+            Config.GITHUB_USER_URL,
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Accept": "application/json",
+            },
+            timeout=15,
+        )
+        gh_user = user_resp.json()
+    except Exception as exc:
+        logger.error("GitHub user info request failed: %s", exc)
+        return jsonify({
+            "error": "github_user_failed",
+            "message": "Failed to fetch GitHub user info.",
+            "detail": str(exc),
+        }), 502
+
     github_id = str(gh_user.get("id", ""))
     if not github_id:
-        return jsonify({"error": "github_user_failed", "message": "Failed to fetch GitHub user."}), 502
+        logger.error("GitHub user info missing id: %s", gh_user)
+        return jsonify({"error": "github_user_failed", "message": "GitHub user has no id."}), 502
+
+    logger.info("OAuth login: github_id=%s username=%s", github_id, gh_user.get("login"))
 
     gh_username = gh_user.get("login", "") or f"github_{github_id}"
     gh_avatar = gh_user.get("avatar_url", "")
 
-    # Find or create user
-    user = User.query.filter_by(github_id=github_id).first()
-    if not user:
-        user = User(
-            username=gh_username,
-            github_id=github_id,
-            avatar_url=gh_avatar,
-        )
-        db.session.add(user)
-    else:
-        # Update avatar on each login
-        user.avatar_url = gh_avatar
-        user.username = gh_username
+    # Find or create user (handle duplicate username gracefully)
+    try:
+        user = User.query.filter_by(github_id=github_id).first()
+        if not user:
+            # Ensure unique username
+            base_name = gh_username
+            suffix = 1
+            while User.query.filter_by(username=gh_username).first():
+                gh_username = f"{base_name}_{suffix}"
+                suffix += 1
+            user = User(
+                username=gh_username,
+                github_id=github_id,
+                avatar_url=gh_avatar,
+            )
+            db.session.add(user)
+        else:
+            user.avatar_url = gh_avatar
+            user.username = gh_username
 
-    user.last_login = datetime.utcnow()
-    db.session.commit()
+        user.last_login = datetime.utcnow()
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        logger.error("Database error during OAuth login: %s", exc)
+        return jsonify({
+            "error": "db_error",
+            "message": "Failed to save user session.",
+            "detail": str(exc),
+        }), 500
 
     # Create session
     session_token = _session_create(user.id)
-    frontend_url = "/"  # redirect to SPA root
-    resp = make_response(redirect(frontend_url))
+    resp = make_response(redirect("/"))
     _set_session_cookie(resp, session_token)
     # Clear oauth_state cookie
     resp.delete_cookie("oauth_state", path="/")
