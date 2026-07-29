@@ -30,20 +30,6 @@ from urllib.parse import urlencode
 
 api = Blueprint('api', __name__)
 
-
-@api.app_errorhandler(500)
-def _handle_500(e):
-    """Catch unhandled 500 errors at the blueprint level."""
-    logger.error("Unhandled 500: %s", e)
-    return jsonify({"error": "internal_error", "message": str(e)}), 200
-
-
-@api.app_errorhandler(Exception)
-def _handle_exception(e):
-    """Catch any unhandled exception."""
-    logger.error("Unhandled exception: %s", e, exc_info=True)
-    return jsonify({"error": "unhandled_exception", "message": str(e)}), 200
-
 ai_service = AIService()
 command_agent = CareerForgeCommandAgent(ai_service)
 rtmp_service = RTMPService(Config.RTMP_SERVER_URL)
@@ -478,14 +464,19 @@ def github_oauth_start():
 @api.route('/auth/github/callback', methods=['GET'])
 def github_oauth_callback():
     """Step 2: GitHub redirects here after user authorizes."""
+    import traceback
+    print("[OAUTH] callback started", flush=True)
     try:
         return _github_oauth_callback_inner()
     except Exception as exc:
-        logger.error("OAuth callback error: %s", exc, exc_info=True)
+        tb = traceback.format_exc()
+        print(f"[OAUTH] FATAL: {exc}\n{tb}", flush=True)
+        logger.error("OAuth callback error: %s\n%s", exc, tb)
         return jsonify({
             "error": "oauth_callback_error",
             "message": str(exc),
-        }), 500
+            "trace": tb,
+        }), 200
 
 
 def _github_oauth_callback_inner():
@@ -524,7 +515,7 @@ def _github_oauth_callback_inner():
             "error": "token_exchange_failed",
             "message": "Failed to reach GitHub token endpoint.",
             "detail": str(exc),
-        }), 502
+        }), 200
 
     access_token = token_data.get("access_token")
     if not access_token:
@@ -533,7 +524,7 @@ def _github_oauth_callback_inner():
             "error": "token_exchange_failed",
             "message": "Failed to obtain access token.",
             "detail": token_data.get("error_description") or str(token_data),
-        }), 502
+        }), 200
 
     # Fetch GitHub user info
     try:
@@ -552,12 +543,12 @@ def _github_oauth_callback_inner():
             "error": "github_user_failed",
             "message": "Failed to fetch GitHub user info.",
             "detail": str(exc),
-        }), 502
+        }), 200
 
     github_id = str(gh_user.get("id", ""))
     if not github_id:
         logger.error("GitHub user info missing id: %s", gh_user)
-        return jsonify({"error": "github_user_failed", "message": "GitHub user has no id."}), 502
+        return jsonify({"error": "github_user_failed", "message": "GitHub user has no id."}), 200
 
     logger.info("OAuth login: github_id=%s username=%s", github_id, gh_user.get("login"))
 
@@ -593,7 +584,7 @@ def _github_oauth_callback_inner():
             "error": "db_error",
             "message": "Failed to save user session.",
             "detail": str(exc),
-        }), 500
+        }), 200
 
     # Create session
     session_token = _session_create(user.id)
