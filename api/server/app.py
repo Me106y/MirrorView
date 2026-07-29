@@ -17,6 +17,19 @@ from server.models import db
 from server.routes import api
 
 
+def _register_error_handlers(app):
+    """Register app-level error handlers for Vercel debugging."""
+    @app.errorhandler(500)
+    def handle_500(e):
+        logger.error("App 500 error: %s", e)
+        return jsonify({"error": "server_error", "message": str(e)}), 200
+
+    @app.errorhandler(Exception)
+    def handle_exception(e):
+        logger.error("App unhandled exception: %s", e, exc_info=True)
+        return jsonify({"error": "unhandled", "message": str(e)}), 200
+
+
 def _load_runtime_env_files():
     """
     Load local env files before importing Config, so Config picks up keys
@@ -68,6 +81,10 @@ def _ensure_users_table_columns():
         alter_sql.append("ALTER TABLE users ADD COLUMN target_jd TEXT")
     if 'resume_uploaded_at' not in existing:
         alter_sql.append("ALTER TABLE users ADD COLUMN resume_uploaded_at DATETIME")
+    if 'github_id' not in existing:
+        alter_sql.append("ALTER TABLE users ADD COLUMN github_id VARCHAR(50)")
+    if 'avatar_url' not in existing:
+        alter_sql.append("ALTER TABLE users ADD COLUMN avatar_url VARCHAR(500)")
 
     for statement in alter_sql:
         db.session.execute(text(statement))
@@ -105,6 +122,7 @@ def create_app():
 
     app = Flask(__name__)
     app.config.from_object(Config)
+    _register_error_handlers(app)
 
     db.init_app(app)
 

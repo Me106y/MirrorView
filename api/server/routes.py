@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, current_app, Response, stream_with_context
+from flask import Blueprint, request, jsonify, current_app, Response, stream_with_context, redirect, make_response
 from client.core.resume_match_report import build_resume_match_html_report
 from server.models import db, User, Interview, Message, InviteCode, Listener
 from server.services.ai_service import AIService
@@ -12,8 +12,11 @@ from utils.logger_handler import logger
 from datetime import datetime
 import base64
 import binascii
-import uuid
+import hashlib
+import hmac
+import secrets
 import tempfile
+import time
 import os
 import re
 import subprocess
@@ -23,8 +26,23 @@ from html import unescape
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import urlencode
 
 api = Blueprint('api', __name__)
+
+
+@api.app_errorhandler(500)
+def _handle_500(e):
+    """Catch unhandled 500 errors at the blueprint level."""
+    logger.error("Unhandled 500: %s", e)
+    return jsonify({"error": "internal_error", "message": str(e)}), 200
+
+
+@api.app_errorhandler(Exception)
+def _handle_exception(e):
+    """Catch any unhandled exception."""
+    logger.error("Unhandled exception: %s", e, exc_info=True)
+    return jsonify({"error": "unhandled_exception", "message": str(e)}), 200
 
 ai_service = AIService()
 command_agent = CareerForgeCommandAgent(ai_service)
@@ -280,6 +298,30 @@ def health():
         }
     ), 200
 
+
+@api.route('/debug/oauth', methods=['GET'])
+def debug_oauth():
+    """Diagnostic endpoint to check OAuth configuration."""
+    from server.config import Config
+    db_ok = False
+    db_error = None
+    try:
+        User.query.first()
+        db_ok = True
+    except Exception as e:
+        db_error = str(e)
+
+    return jsonify({
+        "github_client_id_set": bool(Config.GITHUB_CLIENT_ID),
+        "github_client_id_preview": (Config.GITHUB_CLIENT_ID[:4] + "..." if Config.GITHUB_CLIENT_ID else None),
+        "github_client_secret_set": bool(Config.GITHUB_CLIENT_SECRET),
+        "db_uri": Config.SQLALCHEMY_DATABASE_URI,
+        "db_ok": db_ok,
+        "db_error": db_error,
+        "vercel": bool(os.environ.get("VERCEL")),
+        "secret_key_set": bool(Config.SECRET_KEY),
+    }), 200
+
 @api.route('/auth/register', methods=['POST'])
 def register():
     data = request.json
@@ -319,7 +361,270 @@ def login():
         }), 200
     return jsonify({'message': 'Invalid username or password'}), 401
 
-import json
+
+# ──────────────────────────────────────────────────────
+# Session helpers (HMAC-SHA256 signed cookie)
+# ──────────────────────────────────────────────────────
+
+def _session_sign(payload: str, secret: str) -> str:
+    """HMAC-SHA256 signature for session payload."""
+    return hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
+
+
+def _session_create(user_id: int) -> str:
+    """Create a signed session token: base64(json) + '.' + hmac_hex."""
+    import json as _json
+    payload = _json.dumps({
+        "uid": user_id,
+        "exp": int(time.time()) + Config.SESSION_MAX_AGE_SECONDS,
+    })
+    payload_b64 = base64.urlsafe_b64encode(payload.encode()).decode().rstrip("=")
+    sig = _session_sign(payload_b64, Config.SECRET_KEY)
+    return f"{payload_b64}.{sig}"
+
+
+def _session_verify(token: str) -> Optional[int]:
+    """Verify session token and return user_id, or None."""
+    import json as _json
+    if not token or "." not in token:
+        return None
+    payload_b64, sig = token.rsplit(".", 1)
+    expected = _session_sign(payload_b64, Config.SECRET_KEY)
+    if not hmac.compare_digest(sig, expected):
+        return None
+    try:
+        # Restore base64 padding
+        padded = payload_b64 + "=" * (4 - len(payload_b64) % 4)
+        data = _json.loads(base64.urlsafe_b64decode(padded))
+        if data.get("exp", 0) < time.time():
+            return None
+        return int(data["uid"])
+    except Exception:
+        return None
+
+
+def _get_public_base_url() -> str:
+    """Build the public-facing base URL, respecting Vercel/proxy headers."""
+    # On Vercel serverless, request.url_root may report http:// internally.
+    # Use X-Forwarded-Proto and Host to reconstruct the correct public URL.
+    forwarded_proto = request.headers.get("X-Forwarded-Proto", "").strip()
+    host = request.headers.get("Host", "").strip() or request.host
+    if forwarded_proto and host:
+        return f"{forwarded_proto}://{host}"
+    # Fallback: force https for non-localhost, http for localhost
+    url_root = request.url_root.rstrip("/")
+    if "localhost" in host or "127.0.0.1" in host:
+        return url_root
+    return url_root.replace("http://", "https://", 1)
+
+
+def _set_session_cookie(response, token: str):
+    """Set httpOnly session cookie on a Flask response."""
+    is_secure = not (
+        "localhost" in request.host or "127.0.0.1" in request.host
+    )
+    response.set_cookie(
+        Config.SESSION_COOKIE_NAME,
+        token,
+        max_age=Config.SESSION_MAX_AGE_SECONDS,
+        httponly=True,
+        secure=is_secure,
+        samesite="lax",
+        path="/",
+    )
+
+
+def _clear_session_cookie(response):
+    """Clear session cookie."""
+    response.delete_cookie(Config.SESSION_COOKIE_NAME, path="/")
+
+
+def _get_current_user() -> Optional[User]:
+    """Read session cookie and return User or None."""
+    token = request.cookies.get(Config.SESSION_COOKIE_NAME, "")
+    uid = _session_verify(token)
+    if uid is None:
+        return None
+    return db.session.get(User, uid)
+
+
+# ──────────────────────────────────────────────────────
+# GitHub OAuth2 Routes
+# ──────────────────────────────────────────────────────
+
+@api.route('/auth/github', methods=['GET'])
+def github_oauth_start():
+    """Step 1: Redirect user to GitHub authorize page."""
+    if not Config.GITHUB_CLIENT_ID:
+        return jsonify({"error": "github_not_configured", "message": "GitHub OAuth not configured."}), 503
+
+    state = secrets.token_urlsafe(32)
+    base_url = _get_public_base_url()
+    params = urlencode({
+        "client_id": Config.GITHUB_CLIENT_ID,
+        "redirect_uri": f"{base_url}/api/auth/github/callback",
+        "scope": "read:user user:email",
+        "state": state,
+    })
+
+    redirect_url = f"{Config.GITHUB_AUTHORIZE_URL}?{params}"
+    resp = make_response(redirect(redirect_url))
+    # Store state in a short-lived cookie for CSRF check
+    is_secure = not ("localhost" in request.host or "127.0.0.1" in request.host)
+    resp.set_cookie("oauth_state", state, max_age=600, httponly=True, secure=is_secure, samesite="lax", path="/")
+    return resp
+
+
+@api.route('/auth/github/callback', methods=['GET'])
+def github_oauth_callback():
+    """Step 2: GitHub redirects here after user authorizes."""
+    try:
+        return _github_oauth_callback_inner()
+    except Exception as exc:
+        logger.error("OAuth callback error: %s", exc, exc_info=True)
+        return jsonify({
+            "error": "oauth_callback_error",
+            "message": str(exc),
+        }), 500
+
+
+def _github_oauth_callback_inner():
+    """Inner callback logic wrapped by error handler."""
+    # CSRF check
+    state = request.args.get("state", "")
+    expected_state = request.cookies.get("oauth_state", "")
+    if not state or state != expected_state:
+        logger.warning("OAuth CSRF: state=%s expected=%s", state[:8] if state else None, expected_state[:8] if expected_state else None)
+        return jsonify({"error": "csrf_detected", "message": "Invalid OAuth state."}), 403
+
+    code = request.args.get("code")
+    if not code:
+        return jsonify({"error": "missing_code", "message": "No authorization code received."}), 400
+
+    # Exchange code for access token
+    base_url = _get_public_base_url()
+    logger.info("OAuth callback: exchanging code for token, base_url=%s", base_url)
+
+    try:
+        token_resp = requests.post(
+            Config.GITHUB_TOKEN_URL,
+            data={
+                "client_id": Config.GITHUB_CLIENT_ID,
+                "client_secret": Config.GITHUB_CLIENT_SECRET,
+                "code": code,
+                "redirect_uri": f"{base_url}/api/auth/github/callback",
+            },
+            headers={"Accept": "application/json"},
+            timeout=15,
+        )
+        token_data = token_resp.json()
+    except Exception as exc:
+        logger.error("GitHub token exchange request failed: %s", exc)
+        return jsonify({
+            "error": "token_exchange_failed",
+            "message": "Failed to reach GitHub token endpoint.",
+            "detail": str(exc),
+        }), 502
+
+    access_token = token_data.get("access_token")
+    if not access_token:
+        logger.error("GitHub token exchange failed: %s", token_data)
+        return jsonify({
+            "error": "token_exchange_failed",
+            "message": "Failed to obtain access token.",
+            "detail": token_data.get("error_description") or str(token_data),
+        }), 502
+
+    # Fetch GitHub user info
+    try:
+        user_resp = requests.get(
+            Config.GITHUB_USER_URL,
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Accept": "application/json",
+            },
+            timeout=15,
+        )
+        gh_user = user_resp.json()
+    except Exception as exc:
+        logger.error("GitHub user info request failed: %s", exc)
+        return jsonify({
+            "error": "github_user_failed",
+            "message": "Failed to fetch GitHub user info.",
+            "detail": str(exc),
+        }), 502
+
+    github_id = str(gh_user.get("id", ""))
+    if not github_id:
+        logger.error("GitHub user info missing id: %s", gh_user)
+        return jsonify({"error": "github_user_failed", "message": "GitHub user has no id."}), 502
+
+    logger.info("OAuth login: github_id=%s username=%s", github_id, gh_user.get("login"))
+
+    gh_username = gh_user.get("login", "") or f"github_{github_id}"
+    gh_avatar = gh_user.get("avatar_url", "")
+
+    # Find or create user (handle duplicate username gracefully)
+    try:
+        user = User.query.filter_by(github_id=github_id).first()
+        if not user:
+            # Ensure unique username
+            base_name = gh_username
+            suffix = 1
+            while User.query.filter_by(username=gh_username).first():
+                gh_username = f"{base_name}_{suffix}"
+                suffix += 1
+            user = User(
+                username=gh_username,
+                github_id=github_id,
+                avatar_url=gh_avatar,
+            )
+            db.session.add(user)
+        else:
+            user.avatar_url = gh_avatar
+            user.username = gh_username
+
+        user.last_login = datetime.utcnow()
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        logger.error("Database error during OAuth login: %s", exc)
+        return jsonify({
+            "error": "db_error",
+            "message": "Failed to save user session.",
+            "detail": str(exc),
+        }), 500
+
+    # Create session
+    session_token = _session_create(user.id)
+    resp = make_response(redirect("/"))
+    _set_session_cookie(resp, session_token)
+    # Clear oauth_state cookie
+    resp.delete_cookie("oauth_state", path="/")
+    return resp
+
+
+@api.route('/auth/me', methods=['GET'])
+def auth_me():
+    """Return current logged-in user info, or 401."""
+    user = _get_current_user()
+    if not user:
+        return jsonify({"authenticated": False}), 401
+    return jsonify({
+        "authenticated": True,
+        "user_id": user.id,
+        "username": user.username,
+        "github_id": user.github_id,
+        "avatar_url": user.avatar_url,
+    }), 200
+
+
+@api.route('/auth/logout', methods=['GET', 'POST'])
+def auth_logout():
+    """Clear session and redirect to /."""
+    resp = make_response(redirect("/"))
+    _clear_session_cookie(resp)
+    return resp
 
 def _is_interview_expired(interview):
     if not interview or not interview.start_time:
