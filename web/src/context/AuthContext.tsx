@@ -60,7 +60,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(() => {
     const base = resolveApiBase();
-    window.location.href = `${base}/auth/github`;
+    const returnTo = encodeURIComponent(window.location.origin);
+    window.location.href = `${base}/auth/github?return_to=${returnTo}`;
   }, []);
 
   const logout = useCallback(async () => {
@@ -74,7 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // ignore network errors during logout
     }
     setUser(null);
-    window.location.href = "/login";
+    window.location.href = "/";
   }, []);
 
   return (

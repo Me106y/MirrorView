@@ -114,6 +114,7 @@ a {
   background: #111111;
   color: #ffffff;
   border-radius: 999px;
+  border: 1px solid #111111;
 }
 
 .ghost-btn.topbar-action-btn:hover {
@@ -144,6 +145,24 @@ a {
 .home-landing-hero {
   text-align: center;
   margin-bottom: 18px;
+}
+
+.home-landing-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.home-landing-login-btn {
+  min-width: 216px;
+}
+
+.home-landing-login-note {
+  margin: 0;
+  color: #777777;
+  font-size: 0.9rem;
 }
 
 .home-landing-badge {
@@ -204,6 +223,13 @@ a {
   position: relative;
   overflow: hidden;
   transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.landing-card-button {
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
 .landing-card::after {
@@ -2399,9 +2425,32 @@ textarea {
 
 /* ─── User Menu (topbar) ─── */
 .user-menu {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 8px;
+}
+
+.user-avatar-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 999px;
+  background: #ffffff;
+  cursor: pointer;
+  transition: box-shadow 140ms ease, transform 140ms ease, border-color 140ms ease;
+}
+
+.user-avatar-trigger:hover {
+  border-color: rgba(0, 0, 0, 0.2);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+}
+
+.user-avatar-trigger:active {
+  transform: translateY(1px);
 }
 
 .user-avatar {
@@ -2412,12 +2461,43 @@ textarea {
   border: 1px solid rgba(0, 0, 0, 0.1);
 }
 
-.user-name {
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: #333333;
-  max-width: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.user-avatar-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #111111;
+  color: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.user-dropdown {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  min-width: 144px;
+  padding: 8px;
+  border: 1px solid rgba(17, 17, 17, 0.1);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.12);
+  backdrop-filter: blur(10px);
+  z-index: 20;
+}
+
+.user-dropdown-item {
+  width: 100%;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: #111111;
+  font: inherit;
+  text-align: left;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: background 140ms ease;
+}
+
+.user-dropdown-item:hover {
+  background: #f4f4f5;
 }

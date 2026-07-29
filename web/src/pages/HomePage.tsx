@@ -1,4 +1,5 @@
 import { NavLink } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 const ENTRIES = [
   {
@@ -39,6 +40,8 @@ const ENTRIES = [
 ];
 
 export function HomePage() {
+  const { user, login } = useAuth();
+
   return (
     <section className="home-landing">
       <header className="home-landing-hero">
@@ -46,18 +49,37 @@ export function HomePage() {
         <h2>智能求职助手</h2>
         <p className="home-landing-subline-primary">利用人工智能技术，为您的求职之路提供全方位支持。</p>
         <p className="home-landing-subline-secondary">从简历优化到模拟面试，让每一次投递更有把握。</p>
+        {!user ? (
+          <div className="home-landing-actions">
+            <button type="button" className="github-oauth-btn home-landing-login-btn" onClick={login}>
+              通过 GitHub 登录
+            </button>
+            <p className="home-landing-login-note">点击后会跳转到 GitHub，确认授权后返回主页。</p>
+          </div>
+        ) : null}
       </header>
 
       <div className="home-landing-grid">
         {ENTRIES.map((item) => (
-          <NavLink key={item.to} to={item.to} className="landing-card">
-            <span className={`landing-card-icon ${item.tone}`}>{item.icon}</span>
-            <h3>{item.title}</h3>
-            <p>{item.desc}</p>
-            <span className="landing-card-cta">
-              开始使用 <span className="landing-card-cta-arrow">→</span>
-            </span>
-          </NavLink>
+          user ? (
+            <NavLink key={item.to} to={item.to} className="landing-card">
+              <span className={`landing-card-icon ${item.tone}`}>{item.icon}</span>
+              <h3>{item.title}</h3>
+              <p>{item.desc}</p>
+              <span className="landing-card-cta">
+                开始使用 <span className="landing-card-cta-arrow">→</span>
+              </span>
+            </NavLink>
+          ) : (
+            <button key={item.to} type="button" className="landing-card landing-card-button" onClick={login}>
+              <span className={`landing-card-icon ${item.tone}`}>{item.icon}</span>
+              <h3>{item.title}</h3>
+              <p>{item.desc}</p>
+              <span className="landing-card-cta">
+                通过 GitHub 登录后使用 <span className="landing-card-cta-arrow">→</span>
+              </span>
+            </button>
+          )
         ))}
         <article className="landing-card landing-card-placeholder">
           <span className="landing-card-icon">+</span>
