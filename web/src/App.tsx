@@ -14,11 +14,8 @@ import { ByokRiskPage } from "./pages/legal/ByokRiskPage";
 import { useState } from "react";
 import { ConsentModal } from "./components/ConsentModal";
 import { Analytics } from "@vercel/analytics/react";
-import { useAuth } from "./context/AuthContext";
 
 function ProtectedShell({ onOpenSettings }: { onOpenSettings: () => void }) {
-  const { loading } = useAuth();
-  if (loading) return null;
   return <Shell onOpenSettings={onOpenSettings} />;
 }
 
