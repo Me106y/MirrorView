@@ -16,6 +16,7 @@
   "RATE_LIMIT_REQUESTS": 30,
   "RATE_LIMIT_WINDOW_SECONDS": 60,
   "PUBLIC_BASE_URL": "https://mirrorview.dpdns.org",
+  "GITHUB_CALLBACK_BASE_URL": "https://mirror-view-wei29.vercel.app",
   "GITHUB_CLIENT_ID": "your-github-client-id",
   "GITHUB_CLIENT_SECRET": "your-github-client-secret",
   "paths": {

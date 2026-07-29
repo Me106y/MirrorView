@@ -19,6 +19,7 @@ import tempfile
 import time
 import os
 import re
+import requests
 import subprocess
 import sys
 import html
@@ -26,7 +27,7 @@ from html import unescape
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-from urllib.parse import urlencode, urlsplit
+from urllib.parse import urlencode, urlsplit, quote, unquote
 
 api = Blueprint('api', __name__)
 
@@ -303,6 +304,8 @@ def debug_oauth():
         "github_client_secret_set": bool(Config.GITHUB_CLIENT_SECRET),
         "public_base_url_configured": Config.PUBLIC_BASE_URL or None,
         "public_base_url_resolved": _get_public_base_url(),
+        "github_callback_base_url_configured": Config.GITHUB_CALLBACK_BASE_URL or None,
+        "github_callback_base_url_resolved": _get_github_callback_base_url(),
         "request_host": request.host,
         "request_url_root": request.url_root,
         "db_uri": Config.SQLALCHEMY_DATABASE_URI,
@@ -416,6 +419,93 @@ def _get_public_base_url() -> str:
     return url_root.replace("http://", "https://", 1)
 
 
+def _get_github_callback_base_url() -> str:
+    configured_base_url = (Config.GITHUB_CALLBACK_BASE_URL or "").strip().rstrip("/")
+    if configured_base_url:
+        if "://" not in configured_base_url:
+            configured_base_url = f"https://{configured_base_url}"
+        parsed = urlsplit(configured_base_url)
+        if parsed.scheme and parsed.netloc:
+            return f"{parsed.scheme}://{parsed.netloc}"
+    return _get_public_base_url()
+
+
+def _normalize_absolute_url(url: str) -> str:
+    value = (url or "").strip().rstrip("/")
+    if not value:
+        return ""
+    if "://" not in value:
+        value = f"https://{value}"
+    parsed = urlsplit(value)
+    if not parsed.scheme or not parsed.netloc:
+        return ""
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def _get_request_base_url() -> str:
+    forwarded_proto = request.headers.get("X-Forwarded-Proto", "").strip()
+    host = request.headers.get("Host", "").strip() or request.host
+    if forwarded_proto and host:
+        return f"{forwarded_proto}://{host}"
+    return request.url_root.rstrip("/")
+
+
+def _is_allowed_return_origin(origin: str) -> bool:
+    normalized = _normalize_absolute_url(origin)
+    if not normalized:
+        return False
+    allowed = {
+        _normalize_absolute_url(_get_public_base_url()),
+        _normalize_absolute_url(_get_github_callback_base_url()),
+    }
+    return normalized in allowed
+
+
+def _create_login_handoff_token(user_id: int, return_to: str) -> str:
+    import json as _json
+
+    payload = _json.dumps({
+        "uid": user_id,
+        "exp": int(time.time()) + 120,
+        "return_to": _normalize_absolute_url(return_to),
+        "kind": "oauth_handoff",
+    })
+    payload_b64 = base64.urlsafe_b64encode(payload.encode()).decode().rstrip("=")
+    sig = _session_sign(payload_b64, Config.SECRET_KEY)
+    return f"{payload_b64}.{sig}"
+
+
+def _verify_login_handoff_token(token: str) -> Optional[Dict[str, Any]]:
+    import json as _json
+
+    if not token or "." not in token:
+        return None
+    payload_b64, sig = token.rsplit(".", 1)
+    expected = _session_sign(payload_b64, Config.SECRET_KEY)
+    if not hmac.compare_digest(sig, expected):
+        return None
+
+    try:
+        padded = payload_b64 + "=" * (-len(payload_b64) % 4)
+        data = _json.loads(base64.urlsafe_b64decode(padded))
+    except Exception:
+        return None
+
+    if data.get("kind") != "oauth_handoff" or data.get("exp", 0) < time.time():
+        return None
+
+    return_to = _normalize_absolute_url(str(data.get("return_to", "")))
+    if not _is_allowed_return_origin(return_to):
+        return None
+
+    try:
+        uid = int(data["uid"])
+    except Exception:
+        return None
+
+    return {"uid": uid, "return_to": return_to}
+
+
 def _redirect_to_canonical_public_origin() -> Optional[Response]:
     configured_base_url = (Config.PUBLIC_BASE_URL or "").strip().rstrip("/")
     if not configured_base_url:
@@ -430,6 +520,20 @@ def _redirect_to_canonical_public_origin() -> Optional[Response]:
     target_url = f"{public_base_url}{request.path}"
     if query:
         target_url = f"{target_url}?{query}"
+    return redirect(target_url, code=302)
+
+
+def _redirect_to_github_callback_origin() -> Optional[Response]:
+    callback_base_url = _normalize_absolute_url(_get_github_callback_base_url())
+    request_base_url = _normalize_absolute_url(_get_request_base_url())
+    if not callback_base_url or callback_base_url == request_base_url:
+        return None
+
+    return_to = request.args.get("return_to", "").strip() or _get_public_base_url()
+    if not _is_allowed_return_origin(return_to):
+        return_to = _get_public_base_url()
+
+    target_url = f"{callback_base_url}{request.path}?return_to={quote(_normalize_absolute_url(return_to), safe='')}"
     return redirect(target_url, code=302)
 
 
@@ -473,12 +577,23 @@ def github_oauth_start():
     if not Config.GITHUB_CLIENT_ID:
         return jsonify({"error": "github_not_configured", "message": "GitHub OAuth not configured."}), 503
 
-    canonical_redirect = _redirect_to_canonical_public_origin()
-    if canonical_redirect is not None:
-        return canonical_redirect
+    callback_redirect = _redirect_to_github_callback_origin()
+    if callback_redirect is not None:
+        return callback_redirect
+
+    callback_base_url = _normalize_absolute_url(_get_github_callback_base_url())
+    request_base_url = _normalize_absolute_url(request.url_root.rstrip("/"))
+    if callback_base_url == request_base_url:
+        canonical_redirect = _redirect_to_canonical_public_origin()
+        if canonical_redirect is not None and callback_base_url == _normalize_absolute_url(_get_public_base_url()):
+            return canonical_redirect
+
+    return_to = request.args.get("return_to", "").strip() or _get_public_base_url()
+    if not _is_allowed_return_origin(return_to):
+        return_to = _get_public_base_url()
 
     state = secrets.token_urlsafe(32)
-    base_url = _get_public_base_url()
+    base_url = _get_github_callback_base_url()
     params = urlencode({
         "client_id": Config.GITHUB_CLIENT_ID,
         "redirect_uri": f"{base_url}/api/auth/github/callback",
@@ -491,6 +606,7 @@ def github_oauth_start():
     # Store state in a short-lived cookie for CSRF check
     is_secure = not ("localhost" in request.host or "127.0.0.1" in request.host)
     resp.set_cookie("oauth_state", state, max_age=600, httponly=True, secure=is_secure, samesite="lax", path="/")
+    resp.set_cookie("oauth_return_to", quote(_normalize_absolute_url(return_to), safe=""), max_age=600, httponly=True, secure=is_secure, samesite="lax", path="/")
     return resp
 
 
@@ -525,8 +641,12 @@ def _github_oauth_callback_inner():
     if not code:
         return jsonify({"error": "missing_code", "message": "No authorization code received."}), 400
 
+    return_to = unquote(request.cookies.get("oauth_return_to", "") or "").strip() or _get_public_base_url()
+    if not _is_allowed_return_origin(return_to):
+        return_to = _get_public_base_url()
+
     # Exchange code for access token
-    base_url = _get_public_base_url()
+    base_url = _get_github_callback_base_url()
     logger.info("OAuth callback: exchanging code for token, base_url=%s", base_url)
 
     try:
@@ -603,6 +723,7 @@ def _github_oauth_callback_inner():
                 github_id=github_id,
                 avatar_url=gh_avatar,
             )
+            user.set_password(secrets.token_urlsafe(32))
             db.session.add(user)
         else:
             user.avatar_url = gh_avatar
@@ -619,12 +740,35 @@ def _github_oauth_callback_inner():
             "detail": str(exc),
         }), 200
 
-    # Create session
+    callback_origin = _normalize_absolute_url(_get_github_callback_base_url())
+    public_origin = _normalize_absolute_url(_get_public_base_url())
+
+    if callback_origin and public_origin and callback_origin != public_origin:
+        handoff_token = _create_login_handoff_token(user.id, return_to)
+        target_url = f"{return_to}/api/auth/complete?token={quote(handoff_token, safe='')}"
+        resp = make_response(redirect(target_url))
+        resp.delete_cookie("oauth_state", path="/")
+        resp.delete_cookie("oauth_return_to", path="/")
+        return resp
+
     session_token = _session_create(user.id)
     resp = make_response(redirect("/"))
     _set_session_cookie(resp, session_token)
-    # Clear oauth_state cookie
     resp.delete_cookie("oauth_state", path="/")
+    resp.delete_cookie("oauth_return_to", path="/")
+    return resp
+
+
+@api.route('/auth/complete', methods=['GET'])
+def auth_complete():
+    token = request.args.get("token", "").strip()
+    payload = _verify_login_handoff_token(token)
+    if not payload:
+        return jsonify({"error": "invalid_handoff_token", "message": "Invalid or expired login completion token."}), 400
+
+    session_token = _session_create(payload["uid"])
+    resp = make_response(redirect("/"))
+    _set_session_cookie(resp, session_token)
     return resp
 
 

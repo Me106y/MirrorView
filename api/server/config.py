@@ -55,6 +55,11 @@ class Config:
         or os.environ.get("PUBLIC_BASE_URL")
         or str(_JSON_CONFIG.get("PUBLIC_BASE_URL", ""))
     ).strip().rstrip("/")
+    GITHUB_CALLBACK_BASE_URL = (
+        os.environ.get("MIRRORVIEW_GITHUB_CALLBACK_BASE_URL")
+        or os.environ.get("GITHUB_CALLBACK_BASE_URL")
+        or str(_JSON_CONFIG.get("GITHUB_CALLBACK_BASE_URL", ""))
+    ).strip().rstrip("/")
 
     SECRET_KEY = os.environ.get("SECRET_KEY") or str(
         _JSON_CONFIG.get("SECRET_KEY", "dev-key-mirrorview")
