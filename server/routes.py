@@ -365,13 +365,32 @@ def _session_verify(token: str) -> Optional[int]:
         return None
 
 
+def _get_public_base_url() -> str:
+    """Build the public-facing base URL, respecting Vercel/proxy headers."""
+    # On Vercel serverless, request.url_root may report http:// internally.
+    # Use X-Forwarded-Proto and Host to reconstruct the correct public URL.
+    forwarded_proto = request.headers.get("X-Forwarded-Proto", "").strip()
+    host = request.headers.get("Host", "").strip() or request.host
+    if forwarded_proto and host:
+        return f"{forwarded_proto}://{host}"
+    # Fallback: force https for non-localhost, http for localhost
+    url_root = request.url_root.rstrip("/")
+    if "localhost" in host or "127.0.0.1" in host:
+        return url_root
+    return url_root.replace("http://", "https://", 1)
+
+
 def _set_session_cookie(response, token: str):
     """Set httpOnly session cookie on a Flask response."""
+    is_secure = not (
+        "localhost" in request.host or "127.0.0.1" in request.host
+    )
     response.set_cookie(
         Config.SESSION_COOKIE_NAME,
         token,
         max_age=Config.SESSION_MAX_AGE_SECONDS,
         httponly=True,
+        secure=is_secure,
         samesite="lax",
         path="/",
     )
@@ -402,9 +421,10 @@ def github_oauth_start():
         return jsonify({"error": "github_not_configured", "message": "GitHub OAuth not configured."}), 503
 
     state = secrets.token_urlsafe(32)
+    base_url = _get_public_base_url()
     params = urlencode({
         "client_id": Config.GITHUB_CLIENT_ID,
-        "redirect_uri": request.url_root.rstrip("/") + "/api/auth/github/callback",
+        "redirect_uri": f"{base_url}/api/auth/github/callback",
         "scope": "read:user user:email",
         "state": state,
     })
@@ -412,7 +432,8 @@ def github_oauth_start():
     redirect_url = f"{Config.GITHUB_AUTHORIZE_URL}?{params}"
     resp = make_response(redirect(redirect_url))
     # Store state in a short-lived cookie for CSRF check
-    resp.set_cookie("oauth_state", state, max_age=600, httponly=True, samesite="lax", path="/")
+    is_secure = not ("localhost" in request.host or "127.0.0.1" in request.host)
+    resp.set_cookie("oauth_state", state, max_age=600, httponly=True, secure=is_secure, samesite="lax", path="/")
     return resp
 
 
@@ -430,13 +451,14 @@ def github_oauth_callback():
         return jsonify({"error": "missing_code", "message": "No authorization code received."}), 400
 
     # Exchange code for access token
+    base_url = _get_public_base_url()
     token_resp = requests.post(
         Config.GITHUB_TOKEN_URL,
         data={
             "client_id": Config.GITHUB_CLIENT_ID,
             "client_secret": Config.GITHUB_CLIENT_SECRET,
             "code": code,
-            "redirect_uri": request.url_root.rstrip("/") + "/api/auth/github/callback",
+            "redirect_uri": f"{base_url}/api/auth/github/callback",
         },
         headers={"Accept": "application/json"},
         timeout=10,
