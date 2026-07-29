@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, current_app, Response, stream_with_context
+from flask import Blueprint, request, jsonify, current_app, Response, stream_with_context, redirect, make_response
 from client.core.resume_match_report import build_resume_match_html_report
 from server.models import db, User, Interview, Message, InviteCode, Listener
 from server.services.ai_service import AIService
@@ -12,8 +12,11 @@ from utils.logger_handler import logger
 from datetime import datetime
 import base64
 import binascii
-import uuid
+import hashlib
+import hmac
+import secrets
 import tempfile
+import time
 import os
 import re
 import subprocess
@@ -23,6 +26,7 @@ from html import unescape
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import urlencode
 
 api = Blueprint('api', __name__)
 
@@ -319,7 +323,195 @@ def login():
         }), 200
     return jsonify({'message': 'Invalid username or password'}), 401
 
-import json
+
+# ──────────────────────────────────────────────────────
+# Session helpers (HMAC-SHA256 signed cookie)
+# ──────────────────────────────────────────────────────
+
+def _session_sign(payload: str, secret: str) -> str:
+    """HMAC-SHA256 signature for session payload."""
+    return hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
+
+
+def _session_create(user_id: int) -> str:
+    """Create a signed session token: base64(json) + '.' + hmac_hex."""
+    import json as _json
+    payload = _json.dumps({
+        "uid": user_id,
+        "exp": int(time.time()) + Config.SESSION_MAX_AGE_SECONDS,
+    })
+    payload_b64 = base64.urlsafe_b64encode(payload.encode()).decode().rstrip("=")
+    sig = _session_sign(payload_b64, Config.SECRET_KEY)
+    return f"{payload_b64}.{sig}"
+
+
+def _session_verify(token: str) -> Optional[int]:
+    """Verify session token and return user_id, or None."""
+    import json as _json
+    if not token or "." not in token:
+        return None
+    payload_b64, sig = token.rsplit(".", 1)
+    expected = _session_sign(payload_b64, Config.SECRET_KEY)
+    if not hmac.compare_digest(sig, expected):
+        return None
+    try:
+        # Restore base64 padding
+        padded = payload_b64 + "=" * (4 - len(payload_b64) % 4)
+        data = _json.loads(base64.urlsafe_b64decode(padded))
+        if data.get("exp", 0) < time.time():
+            return None
+        return int(data["uid"])
+    except Exception:
+        return None
+
+
+def _set_session_cookie(response, token: str):
+    """Set httpOnly session cookie on a Flask response."""
+    response.set_cookie(
+        Config.SESSION_COOKIE_NAME,
+        token,
+        max_age=Config.SESSION_MAX_AGE_SECONDS,
+        httponly=True,
+        samesite="lax",
+        path="/",
+    )
+
+
+def _clear_session_cookie(response):
+    """Clear session cookie."""
+    response.delete_cookie(Config.SESSION_COOKIE_NAME, path="/")
+
+
+def _get_current_user() -> Optional[User]:
+    """Read session cookie and return User or None."""
+    token = request.cookies.get(Config.SESSION_COOKIE_NAME, "")
+    uid = _session_verify(token)
+    if uid is None:
+        return None
+    return db.session.get(User, uid)
+
+
+# ──────────────────────────────────────────────────────
+# GitHub OAuth2 Routes
+# ──────────────────────────────────────────────────────
+
+@api.route('/auth/github', methods=['GET'])
+def github_oauth_start():
+    """Step 1: Redirect user to GitHub authorize page."""
+    if not Config.GITHUB_CLIENT_ID:
+        return jsonify({"error": "github_not_configured", "message": "GitHub OAuth not configured."}), 503
+
+    state = secrets.token_urlsafe(32)
+    params = urlencode({
+        "client_id": Config.GITHUB_CLIENT_ID,
+        "redirect_uri": request.url_root.rstrip("/") + "/api/auth/github/callback",
+        "scope": "read:user user:email",
+        "state": state,
+    })
+
+    redirect_url = f"{Config.GITHUB_AUTHORIZE_URL}?{params}"
+    resp = make_response(redirect(redirect_url))
+    # Store state in a short-lived cookie for CSRF check
+    resp.set_cookie("oauth_state", state, max_age=600, httponly=True, samesite="lax", path="/")
+    return resp
+
+
+@api.route('/auth/github/callback', methods=['GET'])
+def github_oauth_callback():
+    """Step 2: GitHub redirects here after user authorizes."""
+    # CSRF check
+    state = request.args.get("state", "")
+    expected_state = request.cookies.get("oauth_state", "")
+    if not state or state != expected_state:
+        return jsonify({"error": "csrf_detected", "message": "Invalid OAuth state."}), 403
+
+    code = request.args.get("code")
+    if not code:
+        return jsonify({"error": "missing_code", "message": "No authorization code received."}), 400
+
+    # Exchange code for access token
+    token_resp = requests.post(
+        Config.GITHUB_TOKEN_URL,
+        data={
+            "client_id": Config.GITHUB_CLIENT_ID,
+            "client_secret": Config.GITHUB_CLIENT_SECRET,
+            "code": code,
+            "redirect_uri": request.url_root.rstrip("/") + "/api/auth/github/callback",
+        },
+        headers={"Accept": "application/json"},
+        timeout=10,
+    )
+    token_data = token_resp.json()
+    access_token = token_data.get("access_token")
+    if not access_token:
+        logger.error("GitHub token exchange failed: %s", token_data)
+        return jsonify({"error": "token_exchange_failed", "message": "Failed to obtain access token."}), 502
+
+    # Fetch GitHub user info
+    user_resp = requests.get(
+        Config.GITHUB_USER_URL,
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "Accept": "application/json",
+        },
+        timeout=10,
+    )
+    gh_user = user_resp.json()
+    github_id = str(gh_user.get("id", ""))
+    if not github_id:
+        return jsonify({"error": "github_user_failed", "message": "Failed to fetch GitHub user."}), 502
+
+    gh_username = gh_user.get("login", "") or f"github_{github_id}"
+    gh_avatar = gh_user.get("avatar_url", "")
+
+    # Find or create user
+    user = User.query.filter_by(github_id=github_id).first()
+    if not user:
+        user = User(
+            username=gh_username,
+            github_id=github_id,
+            avatar_url=gh_avatar,
+        )
+        db.session.add(user)
+    else:
+        # Update avatar on each login
+        user.avatar_url = gh_avatar
+        user.username = gh_username
+
+    user.last_login = datetime.utcnow()
+    db.session.commit()
+
+    # Create session
+    session_token = _session_create(user.id)
+    frontend_url = "/"  # redirect to SPA root
+    resp = make_response(redirect(frontend_url))
+    _set_session_cookie(resp, session_token)
+    # Clear oauth_state cookie
+    resp.delete_cookie("oauth_state", path="/")
+    return resp
+
+
+@api.route('/auth/me', methods=['GET'])
+def auth_me():
+    """Return current logged-in user info, or 401."""
+    user = _get_current_user()
+    if not user:
+        return jsonify({"authenticated": False}), 401
+    return jsonify({
+        "authenticated": True,
+        "user_id": user.id,
+        "username": user.username,
+        "github_id": user.github_id,
+        "avatar_url": user.avatar_url,
+    }), 200
+
+
+@api.route('/auth/logout', methods=['GET', 'POST'])
+def auth_logout():
+    """Clear session and redirect to /."""
+    resp = make_response(redirect("/"))
+    _clear_session_cookie(resp)
+    return resp
 
 def _is_interview_expired(interview):
     if not interview or not interview.start_time:

@@ -148,6 +148,19 @@ class Config:
         default=60,
     )
 
+    # GitHub OAuth2
+    GITHUB_CLIENT_ID = os.environ.get("GITHUB_CLIENT_ID") or str(
+        _JSON_CONFIG.get("GITHUB_CLIENT_ID", "")
+    )
+    GITHUB_CLIENT_SECRET = os.environ.get("GITHUB_CLIENT_SECRET") or str(
+        _JSON_CONFIG.get("GITHUB_CLIENT_SECRET", "")
+    )
+    GITHUB_AUTHORIZE_URL = "https://github.com/login/oauth/authorize"
+    GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token"
+    GITHUB_USER_URL = "https://api.github.com/user"
+    SESSION_COOKIE_NAME = "mv_session"
+    SESSION_MAX_AGE_SECONDS = 7 * 24 * 3600  # 7 days
+
     # ── TTS: Boson.ai Higgs Audio v3 ──
     BOSON_API_KEY = os.environ.get("BOSON_API_KEY", "")
 

@@ -9,8 +9,10 @@ class User(db.Model):
     __tablename__ = 'users'
     
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(50), unique=True, nullable=False)
-    password_hash = db.Column(db.String(256), nullable=False)
+    username = db.Column(db.String(50), nullable=False)
+    password_hash = db.Column(db.String(256), nullable=True)
+    github_id = db.Column(db.String(50), unique=True, nullable=True)
+    avatar_url = db.Column(db.String(500), nullable=True)
     # Legacy field kept for backward compatibility.
     job_intention = db.Column(db.String(100))
     target_role = db.Column(db.String(120))

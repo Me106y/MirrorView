@@ -1,4 +1,4 @@
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes, Navigate } from "react-router-dom";
 import { Shell } from "./components/Shell";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { ResumeMatchPage } from "./pages/ResumeMatchPage";
@@ -7,6 +7,7 @@ import { CoverLetterPage } from "./pages/CoverLetterPage";
 import { MockInterviewPage } from "./pages/MockInterviewPage";
 import { JobHuntPage } from "./pages/JobHuntPage";
 import { HomePage } from "./pages/HomePage";
+import { LoginPage } from "./pages/LoginPage";
 import { PrivacyPage } from "./pages/legal/PrivacyPage";
 import { TermsPage } from "./pages/legal/TermsPage";
 import { AiDisclaimerPage } from "./pages/legal/AiDisclaimerPage";
@@ -14,6 +15,14 @@ import { ByokRiskPage } from "./pages/legal/ByokRiskPage";
 import { useState } from "react";
 import { ConsentModal } from "./components/ConsentModal";
 import { Analytics } from "@vercel/analytics/react";
+import { useAuth } from "./context/AuthContext";
+
+function ProtectedShell({ onOpenSettings }: { onOpenSettings: () => void }) {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  if (!user) return <Navigate to="/login" replace />;
+  return <Shell onOpenSettings={onOpenSettings} />;
+}
 
 export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -21,7 +30,8 @@ export default function App() {
   return (
     <>
       <Routes>
-        <Route element={<Shell onOpenSettings={() => setSettingsOpen(true)} />}>
+        <Route path="/login" element={<LoginPage />} />
+        <Route element={<ProtectedShell onOpenSettings={() => setSettingsOpen(true)} />}>
           <Route path="/" element={<HomePage />} />
           <Route path="/resume-match" element={<ResumeMatchPage />} />
           <Route path="/resume-craft" element={<ResumeCraftPage />} />

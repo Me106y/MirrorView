@@ -68,6 +68,10 @@ def _ensure_users_table_columns():
         alter_sql.append("ALTER TABLE users ADD COLUMN target_jd TEXT")
     if 'resume_uploaded_at' not in existing:
         alter_sql.append("ALTER TABLE users ADD COLUMN resume_uploaded_at DATETIME")
+    if 'github_id' not in existing:
+        alter_sql.append("ALTER TABLE users ADD COLUMN github_id VARCHAR(50)")
+    if 'avatar_url' not in existing:
+        alter_sql.append("ALTER TABLE users ADD COLUMN avatar_url VARCHAR(500)")
 
     for statement in alter_sql:
         db.session.execute(text(statement))
