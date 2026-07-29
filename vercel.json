@@ -14,7 +14,35 @@
       "destination": "/api/index.py"
     },
     {
-      "source": "/(.*)",
+      "source": "/",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/login",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/resume-match",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/resume-craft",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/cover-letter",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/mock-interview",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/job-hunt",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/legal/(.*)",
       "destination": "/index.html"
     }
   ]
