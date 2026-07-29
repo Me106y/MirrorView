@@ -60,3 +60,5 @@ sherpa-onnx-*/
 test.pcm
 out.pcm
 .vercel
+.env*
+/test-output/vercel-login-page.png

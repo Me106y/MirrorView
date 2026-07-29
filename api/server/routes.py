@@ -26,7 +26,7 @@ from html import unescape
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 api = Blueprint('api', __name__)
 
@@ -301,6 +301,10 @@ def debug_oauth():
         "github_client_id_set": bool(Config.GITHUB_CLIENT_ID),
         "github_client_id_preview": (Config.GITHUB_CLIENT_ID[:4] + "..." if Config.GITHUB_CLIENT_ID else None),
         "github_client_secret_set": bool(Config.GITHUB_CLIENT_SECRET),
+        "public_base_url_configured": Config.PUBLIC_BASE_URL or None,
+        "public_base_url_resolved": _get_public_base_url(),
+        "request_host": request.host,
+        "request_url_root": request.url_root,
         "db_uri": Config.SQLALCHEMY_DATABASE_URI,
         "db_ok": db_ok,
         "db_error": db_error,
@@ -391,6 +395,14 @@ def _session_verify(token: str) -> Optional[int]:
 
 def _get_public_base_url() -> str:
     """Build the public-facing base URL, respecting Vercel/proxy headers."""
+    configured_base_url = (Config.PUBLIC_BASE_URL or "").strip().rstrip("/")
+    if configured_base_url:
+        if "://" not in configured_base_url:
+            configured_base_url = f"https://{configured_base_url}"
+        parsed = urlsplit(configured_base_url)
+        if parsed.scheme and parsed.netloc:
+            return f"{parsed.scheme}://{parsed.netloc}"
+
     # On Vercel serverless, request.url_root may report http:// internally.
     # Use X-Forwarded-Proto and Host to reconstruct the correct public URL.
     forwarded_proto = request.headers.get("X-Forwarded-Proto", "").strip()
@@ -402,6 +414,23 @@ def _get_public_base_url() -> str:
     if "localhost" in host or "127.0.0.1" in host:
         return url_root
     return url_root.replace("http://", "https://", 1)
+
+
+def _redirect_to_canonical_public_origin() -> Optional[Response]:
+    configured_base_url = (Config.PUBLIC_BASE_URL or "").strip().rstrip("/")
+    if not configured_base_url:
+        return None
+
+    public_base_url = _get_public_base_url()
+    request_base_url = request.url_root.rstrip("/")
+    if urlsplit(public_base_url).netloc.lower() == urlsplit(request_base_url).netloc.lower():
+        return None
+
+    query = request.query_string.decode("utf-8", errors="ignore")
+    target_url = f"{public_base_url}{request.path}"
+    if query:
+        target_url = f"{target_url}?{query}"
+    return redirect(target_url, code=302)
 
 
 def _set_session_cookie(response, token: str):
@@ -443,6 +472,10 @@ def github_oauth_start():
     """Step 1: Redirect user to GitHub authorize page."""
     if not Config.GITHUB_CLIENT_ID:
         return jsonify({"error": "github_not_configured", "message": "GitHub OAuth not configured."}), 503
+
+    canonical_redirect = _redirect_to_canonical_public_origin()
+    if canonical_redirect is not None:
+        return canonical_redirect
 
     state = secrets.token_urlsafe(32)
     base_url = _get_public_base_url()

@@ -50,6 +50,12 @@ if not isinstance(_PATH_CONFIG, dict):
 class Config:
     basedir = Path(__file__).resolve().parent
 
+    PUBLIC_BASE_URL = (
+        os.environ.get("MIRRORVIEW_PUBLIC_BASE_URL")
+        or os.environ.get("PUBLIC_BASE_URL")
+        or str(_JSON_CONFIG.get("PUBLIC_BASE_URL", ""))
+    ).strip().rstrip("/")
+
     SECRET_KEY = os.environ.get("SECRET_KEY") or str(
         _JSON_CONFIG.get("SECRET_KEY", "dev-key-mirrorview")
     )
