@@ -2144,18 +2144,101 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 20px;
+  margin-bottom: 22px;
 }
 .settings-modal-head h2 {
   margin: 0;
   font-size: 1.15rem;
+  font-weight: 700;
   color: var(--ink);
+  letter-spacing: 0.01em;
+  line-height: 1.3;
+}
+.settings-close-btn {
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+  transition: background 140ms ease, color 140ms ease;
+}
+.settings-close-btn:hover {
+  background: rgba(0, 0, 0, 0.07);
+  color: var(--ink);
+}
+.settings-label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 4px;
+}
+.settings-label-text {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-body);
+  line-height: 1.4;
+}
+.settings-label-optional {
+  font-weight: 400;
+  color: var(--text-subtle);
+  font-size: 0.8rem;
+}
+.settings-label-hint {
+  color: var(--text-subtle);
+  font-size: 0.75rem;
+  line-height: 1.4;
 }
 .settings-actions {
   display: flex;
   gap: 10px;
-  margin-top: 24px;
-  justify-content: flex-end;
+  margin-top: 26px;
+  justify-content: center;
+}
+.settings-action-btn {
+  border: none;
+  border-radius: 10px;
+  padding: 10px 20px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 140ms ease, background 140ms ease, box-shadow 140ms ease, border-color 140ms ease, color 140ms ease;
+  min-width: 96px;
+  text-align: center;
+}
+.settings-action-btn--primary {
+  background: #111111;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+.settings-action-btn--primary:hover:not(:disabled) {
+  background: #3d556c;
+  box-shadow: 0 4px 12px rgba(62, 89, 112, 0.2);
+  transform: translateY(-1px);
+}
+.settings-action-btn--outline {
+  background: transparent;
+  color: var(--accent);
+  border: 1.5px solid var(--accent);
+}
+.settings-action-btn--outline:hover:not(:disabled) {
+  background: rgba(79, 123, 163, 0.08);
+  border-color: var(--accent-strong);
+  color: var(--accent-strong);
+}
+.settings-action-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.settings-action-btn:active:not(:disabled) {
+  transform: scale(0.97);
 }
 .settings-test-result {
   margin-top: 12px;
@@ -3013,6 +3096,10 @@ textarea {
 
   .settings-modal { background: var(--surface); border-color: var(--line); }
   .settings-overlay { background: rgba(0, 0, 0, 0.6); }
+  .settings-close-btn:hover { background: rgba(255, 255, 255, 0.1); }
+  .settings-action-btn--primary { background: #e0e0e0; color: #111111; }
+  .settings-action-btn--outline { color: var(--accent); border-color: var(--accent); }
+  .settings-action-btn--outline:hover:not(:disabled) { background: rgba(127, 179, 212, 0.12); }
 
   .login-page { background: var(--bg); }
 

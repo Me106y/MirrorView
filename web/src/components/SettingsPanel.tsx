@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { useModelSettings } from "../context/ModelSettingsContext";
-import { callCareerforgeSkill } from "../lib/api";
 
 type TestState =
   | { kind: "idle" }
@@ -91,21 +90,43 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
     }
     setTestState({ kind: "loading" });
     try {
-      const testSettings = {
-        ...settings,
-        model: draftModel || "deepseek-chat",
-        apiKey: draftApiKey,
-        baseUrl: draftBaseUrl,
-      };
-      const resp = await callCareerforgeSkill(testSettings, "/careerforge/test-connection", {
-        message: "ping",
+      // Build the base URL for direct LLM API call
+      const rawBase = draftBaseUrl.trim() || "https://api.deepseek.com";
+      const normalizedBase = rawBase.endsWith("/v1") || rawBase.endsWith("/v1/")
+        ? rawBase.replace(/\/+$/, "")
+        : rawBase.replace(/\/+$/, "") + "/v1";
+      const url = `${normalizedBase}/chat/completions`;
+
+      const resp = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${draftApiKey.trim()}`,
+        },
+        body: JSON.stringify({
+          model: draftModel.trim() || "deepseek-chat",
+          messages: [{ role: "user", content: "hi" }],
+          max_tokens: 5,
+        }),
       });
-      const balance = (resp as Record<string, unknown>).balance as string | undefined;
-      const message = (resp as Record<string, unknown>).message as string | undefined;
+
+      if (!resp.ok) {
+        let errMsg = `Request failed (${resp.status})`;
+        try {
+          const errData = await resp.json();
+          const detail = (errData as Record<string, unknown>).error as Record<string, unknown> | undefined;
+          if (detail && typeof detail.message === "string") {
+            errMsg = detail.message;
+          } else if (typeof (errData as Record<string, unknown>).message === "string") {
+            errMsg = (errData as Record<string, unknown>).message as string;
+          }
+        } catch { /* ignore parse error */ }
+        throw new Error(errMsg);
+      }
+
       setTestState({
         kind: "success",
-        message: message || "连接成功，API 可用。",
-        balance: balance || undefined,
+        message: "连接成功，API 可用。",
       });
     } catch (err) {
       setTestState({ kind: "error", message: (err as Error).message || "连接失败，请检查配置。" });
@@ -128,13 +149,16 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
       >
         <div className="settings-modal-head">
           <h2>模型设置</h2>
-          <button className="ghost-btn" onClick={onClose} aria-label="关闭设置">
-            ✕
+          <button className="settings-close-btn" onClick={onClose} aria-label="关闭设置">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <line x1="1" y1="1" x2="13" y2="13" />
+              <line x1="13" y1="1" x2="1" y2="13" />
+            </svg>
           </button>
         </div>
 
-        <label htmlFor="sp-model" title="模型标识符，如 deepseek-chat、gpt-4o。">
-          Model
+        <label htmlFor="sp-model" className="settings-label" title="模型标识符，如 deepseek-chat、gpt-4o。">
+          <span className="settings-label-text">Model</span>
           <input
             id="sp-model"
             value={draftModel}
@@ -142,13 +166,13 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
             placeholder="deepseek-chat"
             disabled={!editing}
           />
-          <small style={{ color: 'var(--text-subtle, #888)', fontSize: '0.75rem' }}>
+          <small className="settings-label-hint">
             如 deepseek-chat、gpt-4o
           </small>
         </label>
 
-        <label htmlFor="sp-apikey" title="你的 API 密钥，仅存储在浏览器本地。">
-          API Key
+        <label htmlFor="sp-apikey" className="settings-label" title="你的 API 密钥，仅存储在浏览器本地。">
+          <span className="settings-label-text">API Key</span>
           <input
             id="sp-apikey"
             type="password"
@@ -157,13 +181,13 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
             placeholder="sk-..."
             disabled={!editing}
           />
-          <small style={{ color: 'var(--text-subtle, #888)', fontSize: '0.75rem' }}>
+          <small className="settings-label-hint">
             仅存储在浏览器本地
           </small>
         </label>
 
-        <label htmlFor="sp-baseurl" title="API 服务的根地址。仅在自建代理时需要填写。">
-          Base URL (可选)
+        <label htmlFor="sp-baseurl" className="settings-label" title="API 服务的根地址。仅在自建代理时需要填写。">
+          <span className="settings-label-text">Base URL <span className="settings-label-optional">(可选)</span></span>
           <input
             id="sp-baseurl"
             value={draftBaseUrl}
@@ -171,7 +195,7 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
             placeholder="https://api.deepseek.com/v1"
             disabled={!editing}
           />
-          <small style={{ color: 'var(--text-subtle, #888)', fontSize: '0.75rem' }}>
+          <small className="settings-label-hint">
             仅在自建代理时需要填写
           </small>
         </label>
@@ -203,19 +227,18 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
 
         <div className="settings-actions">
           <button
-            className="ghost-btn"
+            className="settings-action-btn settings-action-btn--outline"
             onClick={handleTest}
             disabled={testState.kind === "loading"}
-            style={{ color: 'var(--accent)', borderColor: 'var(--accent)' }}
           >
             {testState.kind === "loading" ? "测试中..." : "测试可用"}
           </button>
           {editing || !isSaved ? (
-            <button className="primary-btn" onClick={handleSave} style={{ marginTop: 0 }}>
+            <button className="settings-action-btn settings-action-btn--primary" onClick={handleSave}>
               保存
             </button>
           ) : (
-            <button className="ghost-btn" onClick={handleEdit}>
+            <button className="settings-action-btn settings-action-btn--outline" onClick={handleEdit}>
               修改
             </button>
           )}
