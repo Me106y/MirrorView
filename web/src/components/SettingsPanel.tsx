@@ -1,38 +1,93 @@
 import { useEffect, useRef, useState } from "react";
 import { useModelSettings } from "../context/ModelSettingsContext";
 
+type Provider = 'deepseek' | 'openai';
+
+const PROVIDER_CONFIG: Record<Provider, { baseUrl: string; model: string }> = {
+  deepseek: { baseUrl: 'https://api.deepseek.com', model: 'deepseek-chat' },
+  openai:   { baseUrl: 'https://api.openai.com',   model: 'gpt-4o-mini'   },
+};
+
+function detectProvider(baseUrl: string): Provider {
+  if (baseUrl.toLowerCase().includes('openai')) return 'openai';
+  return 'deepseek';
+}
+
+const SETTINGS_STATUS_KEY = "mirrorview:web:settings:test-status";
+
+interface PersistedTestStatus {
+  success: boolean;
+  model: string;
+  balance?: string;
+  testedAt: number;
+}
+
 type TestState =
   | { kind: "idle" }
   | { kind: "loading" }
   | { kind: "success"; message: string; balance?: string }
   | { kind: "error"; message: string };
 
+function loadPersistedStatus(): PersistedTestStatus | null {
+  try {
+    const raw = localStorage.getItem(SETTINGS_STATUS_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as PersistedTestStatus;
+    if (parsed && parsed.success && parsed.model) return parsed;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function persistStatus(status: PersistedTestStatus | null): void {
+  try {
+    if (!status) {
+      localStorage.removeItem(SETTINGS_STATUS_KEY);
+    } else {
+      localStorage.setItem(SETTINGS_STATUS_KEY, JSON.stringify(status));
+    }
+  } catch {
+    // ignore
+  }
+}
+
 export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { settings, updateSettings } = useModelSettings();
   const panelRef = useRef<HTMLElement | null>(null);
 
-  // Local draft state for editing
   const [draftModel, setDraftModel] = useState(settings.model);
   const [draftApiKey, setDraftApiKey] = useState(settings.apiKey);
   const [draftBaseUrl, setDraftBaseUrl] = useState(settings.baseUrl);
-  const [editing, setEditing] = useState(false);
+  const [provider, setProvider] = useState<Provider>(() => detectProvider(settings.baseUrl));
   const [testState, setTestState] = useState<TestState>({ kind: "idle" });
+  const [persistedStatus, setPersistedStatus] = useState<PersistedTestStatus | null>(() => loadPersistedStatus());
+  const [saveFlash, setSaveFlash] = useState(false);
+
+  function selectProvider(p: Provider) {
+    setProvider(p);
+    setDraftBaseUrl(PROVIDER_CONFIG[p].baseUrl);
+    setDraftModel(PROVIDER_CONFIG[p].model);
+  }
 
   // Sync draft when settings change externally
   useEffect(() => {
     setDraftModel(settings.model);
     setDraftApiKey(settings.apiKey);
     setDraftBaseUrl(settings.baseUrl);
+    setProvider(detectProvider(settings.baseUrl));
   }, [settings.model, settings.apiKey, settings.baseUrl]);
 
-  // Reset test state when panel opens/closes
+  // Reset transient state when panel opens/closes
   useEffect(() => {
     if (open) {
       setTestState({ kind: "idle" });
-      setEditing(false);
+      setSaveFlash(false);
+      setPersistedStatus(loadPersistedStatus());
     }
   }, [open]);
 
+  // Focus trap + Escape
   useEffect(() => {
     if (!open) return;
     const panel = panelRef.current;
@@ -75,12 +130,22 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
       apiKey: draftApiKey,
       baseUrl: draftBaseUrl,
     });
-    setEditing(false);
-    setTestState({ kind: "idle" });
+    setSaveFlash(true);
+    window.setTimeout(() => setSaveFlash(false), 1400);
   };
 
-  const handleEdit = () => {
-    setEditing(true);
+  const handleClear = () => {
+    updateSettings({
+      model: "deepseek-chat",
+      apiKey: "",
+      baseUrl: "",
+    });
+    setDraftModel("deepseek-chat");
+    setDraftApiKey("");
+    setDraftBaseUrl("");
+    setTestState({ kind: "idle" });
+    setPersistedStatus(null);
+    persistStatus(null);
   };
 
   const handleTest = async () => {
@@ -90,7 +155,6 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
     }
     setTestState({ kind: "loading" });
     try {
-      // Build the base URL for direct LLM API call
       const rawBase = draftBaseUrl.trim() || "https://api.deepseek.com";
       const normalizedBase = rawBase.endsWith("/v1") || rawBase.endsWith("/v1/")
         ? rawBase.replace(/\/+$/, "")
@@ -124,19 +188,25 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
         throw new Error(errMsg);
       }
 
-      setTestState({
-        kind: "success",
-        message: "连接成功，API 可用。",
-      });
+      const modelName = draftModel.trim() || "deepseek-chat";
+      const next: PersistedTestStatus = {
+        success: true,
+        model: modelName,
+        testedAt: Date.now(),
+      };
+      setPersistedStatus(next);
+      persistStatus(next);
+      setTestState({ kind: "success", message: "连接成功，API 可用。" });
     } catch (err) {
       setTestState({ kind: "error", message: (err as Error).message || "连接失败，请检查配置。" });
     }
   };
 
-  const isSaved =
-    draftModel === settings.model &&
-    draftApiKey === settings.apiKey &&
-    draftBaseUrl === settings.baseUrl;
+  // Show persisted status bar only when there is no active inline test feedback
+  const showStatusBar =
+    persistedStatus?.success &&
+    testState.kind !== "loading" &&
+    testState.kind !== "error";
 
   return (
     <div className="settings-overlay" onClick={onClose}>
@@ -147,8 +217,9 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
         aria-label="模型设置"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Head */}
         <div className="settings-modal-head">
-          <h2>模型设置</h2>
+          <h2>用你自己的模型</h2>
           <button className="settings-close-btn" onClick={onClose} aria-label="关闭设置">
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <line x1="1" y1="1" x2="13" y2="13" />
@@ -157,55 +228,87 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
           </button>
         </div>
 
-        <label htmlFor="sp-model" className="settings-label" title="模型标识符，如 deepseek-chat、gpt-4o。">
-          <span className="settings-label-text">Model</span>
-          <input
-            id="sp-model"
-            value={draftModel}
-            onChange={(e) => setDraftModel(e.target.value)}
-            placeholder="deepseek-chat"
-            disabled={!editing}
-          />
-          <small className="settings-label-hint">
-            如 deepseek-chat、gpt-4o
-          </small>
-        </label>
+        {/* Description */}
+        <p className="settings-description">
+          兼容任意 OpenAI 接口（OpenAI / OpenRouter / Groq / DeepSeek / 本地）。
+          Key 保存在你自己的浏览器里。调用时会经过我们的服务器中转一次去请求模型，但绝不落库、不写日志、用完即弃。
+        </p>
 
-        <label htmlFor="sp-apikey" className="settings-label" title="你的 API 密钥，仅存储在浏览器本地。">
-          <span className="settings-label-text">API Key</span>
+        {/* Warning */}
+        <p className="settings-warning">
+          <span className="settings-warning-icon" aria-hidden="true">🔒</span>
+          <span>介意的话，建议用一把临时 / 额度受限的 Key，用完即可吊销。</span>
+        </p>
+
+        {/* Provider segmented control */}
+        <div className="provider-selector">
+          <button
+            type="button"
+            className={`provider-btn${provider === 'deepseek' ? ' active' : ''}`}
+            onClick={() => selectProvider('deepseek')}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="12,2 22,12 12,22 2,12" />
+            </svg>
+            DeepSeek
+          </button>
+          <button
+            type="button"
+            className={`provider-btn${provider === 'openai' ? ' active' : ''}`}
+            onClick={() => selectProvider('openai')}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <circle cx="12" cy="12" r="4" />
+            </svg>
+            OpenAI
+          </button>
+        </div>
+
+        {/* Status bar (persisted) */}
+        {showStatusBar && (
+          <div className="settings-status-bar">
+            <span className="status-dot status-dot--green"></span>
+            <span className="status-model">{persistedStatus!.model}</span>
+            {persistedStatus!.balance && (
+              <span className="status-balance">余额: {persistedStatus!.balance}</span>
+            )}
+          </div>
+        )}
+
+        {/* Form fields */}
+        <div className="settings-field">
+          <label htmlFor="sp-baseurl">Base URL</label>
+          <input
+            id="sp-baseurl"
+            value={draftBaseUrl}
+            onChange={(e) => setDraftBaseUrl(e.target.value)}
+            placeholder="https://api.deepseek.com"
+          />
+        </div>
+
+        <div className="settings-field">
+          <label htmlFor="sp-apikey">API Key</label>
           <input
             id="sp-apikey"
             type="password"
             value={draftApiKey}
             onChange={(e) => setDraftApiKey(e.target.value)}
             placeholder="sk-..."
-            disabled={!editing}
           />
-          <small className="settings-label-hint">
-            仅存储在浏览器本地
-          </small>
-        </label>
+        </div>
 
-        <label htmlFor="sp-baseurl" className="settings-label" title="API 服务的根地址。仅在自建代理时需要填写。">
-          <span className="settings-label-text">Base URL <span className="settings-label-optional">(可选)</span></span>
+        <div className="settings-field">
+          <label htmlFor="sp-model">Model</label>
           <input
-            id="sp-baseurl"
-            value={draftBaseUrl}
-            onChange={(e) => setDraftBaseUrl(e.target.value)}
-            placeholder="https://api.deepseek.com/v1"
-            disabled={!editing}
+            id="sp-model"
+            value={draftModel}
+            onChange={(e) => setDraftModel(e.target.value)}
+            placeholder="deepseek-chat"
           />
-          <small className="settings-label-hint">
-            仅在自建代理时需要填写
-          </small>
-        </label>
+        </div>
 
-        {!hasApiKey && (
-          <p className="settings-hint" style={{ color: 'var(--error, #a33232)' }}>
-            请先在模型设置中配置你的 API 密钥
-          </p>
-        )}
-
+        {/* Inline test feedback */}
         {testState.kind === "loading" && (
           <div className="settings-test-result settings-test-result--success">
             正在测试连接...
@@ -214,9 +317,6 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
         {testState.kind === "success" && (
           <div className="settings-test-result settings-test-result--success">
             <span>✓ {testState.message}</span>
-            {testState.balance && (
-              <span className="settings-balance">余额: {testState.balance}</span>
-            )}
           </div>
         )}
         {testState.kind === "error" && (
@@ -225,23 +325,34 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
           </div>
         )}
 
+        {/* Save flash */}
+        {saveFlash && (
+          <div className="settings-test-result settings-test-result--success">
+            ✓ 已保存
+          </div>
+        )}
+
+        {/* Actions */}
         <div className="settings-actions">
           <button
-            className="settings-action-btn settings-action-btn--outline"
+            className="settings-action-btn settings-action-btn--accent"
             onClick={handleTest}
             disabled={testState.kind === "loading"}
           >
             {testState.kind === "loading" ? "测试中..." : "测试可用"}
           </button>
-          {editing || !isSaved ? (
-            <button className="settings-action-btn settings-action-btn--primary" onClick={handleSave}>
-              保存
-            </button>
-          ) : (
-            <button className="settings-action-btn settings-action-btn--outline" onClick={handleEdit}>
-              修改
-            </button>
-          )}
+          <button
+            className="settings-action-btn settings-action-btn--primary"
+            onClick={handleSave}
+          >
+            保存
+          </button>
+          <button
+            className="settings-action-btn settings-action-btn--ghost"
+            onClick={handleClear}
+          >
+            清除
+          </button>
         </div>
       </aside>
     </div>
