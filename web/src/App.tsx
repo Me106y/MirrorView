@@ -12,7 +12,7 @@ import { PrivacyPage } from "./pages/legal/PrivacyPage";
 import { TermsPage } from "./pages/legal/TermsPage";
 import { AiDisclaimerPage } from "./pages/legal/AiDisclaimerPage";
 import { ByokRiskPage } from "./pages/legal/ByokRiskPage";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Analytics } from "@vercel/analytics/react";
 
 function ProtectedShell({ onOpenSettings }: { onOpenSettings: () => void }) {
@@ -21,6 +21,12 @@ function ProtectedShell({ onOpenSettings }: { onOpenSettings: () => void }) {
 
 export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  useEffect(() => {
+    const handler = () => setSettingsOpen(true);
+    window.addEventListener("open-settings", handler);
+    return () => window.removeEventListener("open-settings", handler);
+  }, []);
 
   return (
     <>

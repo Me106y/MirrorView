@@ -1,7 +1,8 @@
-import { DragEvent, FormEvent, KeyboardEvent, SyntheticEvent, useMemo, useRef, useState } from "react";
+import { DragEvent, FormEvent, KeyboardEvent, SyntheticEvent, useEffect, useMemo, useRef, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { callCareerforgeSkillMultipart } from "../lib/api";
 import { useModelSettings } from "../context/ModelSettingsContext";
+import { gsap } from "gsap";
 
 type ResultState = {
   kind: "idle" | "report" | "error";
@@ -27,8 +28,10 @@ export function ResumeMatchPage() {
   const [loading, setLoading] = useState(false);
   const [frameHeight, setFrameHeight] = useState(980);
   const [showReport, setShowReport] = useState(false);
+  const [showNoModelWarning, setShowNoModelWarning] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const reportFrameRef = useRef<HTMLIFrameElement>(null);
+  const warningRef = useRef<HTMLDivElement>(null);
 
   const canSubmit = Boolean(targetRole.trim() && jdText.trim() && resumeFile) && !loading;
 
@@ -36,6 +39,15 @@ export function ResumeMatchPage() {
     () => result.kind === "report" && Boolean(result.reportHtml.trim()),
     [result]
   );
+
+  useEffect(() => {
+    if (showNoModelWarning && warningRef.current) {
+      gsap.fromTo(warningRef.current,
+        { x: -8 },
+        { x: 0, duration: 0.5, ease: 'elastic.out(1, 0.3)', yoyo: true, repeat: 3 }
+      );
+    }
+  }, [showNoModelWarning]);
 
   const setResume = (file: File | null) => {
     if (!file) {
@@ -69,6 +81,8 @@ export function ResumeMatchPage() {
     }
   };
 
+  const hasApiKey = settings.apiKey.trim().length > 0;
+
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!resumeFile) {
@@ -78,6 +92,11 @@ export function ResumeMatchPage() {
 
     if (!isPdfFile(resumeFile)) {
       setUploadHint("仅支持 PDF 文件。");
+      return;
+    }
+
+    if (!hasApiKey) {
+      setShowNoModelWarning(true);
       return;
     }
 
@@ -198,6 +217,11 @@ export function ResumeMatchPage() {
     }
   };
 
+  const openSettingsFromWarning = () => {
+    setShowNoModelWarning(false);
+    window.dispatchEvent(new CustomEvent("open-settings"));
+  };
+
   if (showReport && result.kind === "report") {
     return (
       <section className="resume-match-report-page">
@@ -210,10 +234,10 @@ export function ResumeMatchPage() {
         <div className="resume-match-report-head">
           <h2>匹配分析报告</h2>
           <div className="resume-match-report-actions">
-            <button className="ghost-btn" onClick={() => setShowReport(false)}>
+            <button className="report-ghost-btn" onClick={() => setShowReport(false)}>
               ← 返回修改
             </button>
-            <button className="export-btn export-btn--html" onClick={exportReport} title="导出 HTML">
+            <button className="report-outline-btn" onClick={exportReport} title="导出 HTML">
               <svg className="export-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                 <polyline points="7 10 12 15 17 10"/>
@@ -261,7 +285,7 @@ export function ResumeMatchPage() {
           </header>
 
           <label htmlFor="rm-role">目标岗位</label>
-          <input id="rm-role" value={targetRole} onChange={(e) => setTargetRole(e.target.value)} placeholder={'填写你正在申请的岗位名称，如“AI 产品经理”'} />
+          <input id="rm-role" value={targetRole} onChange={(e) => setTargetRole(e.target.value)} placeholder={'填写你正在申请的岗位名称，如"AI 产品经理"'} />
 
           <label htmlFor="rm-resume">上传简历（仅支持 PDF）</label>
           <div
@@ -334,6 +358,26 @@ export function ResumeMatchPage() {
           </section>
         ) : null}
       </div>
+
+      {showNoModelWarning && (
+        <div className="no-model-warning-overlay" onClick={() => setShowNoModelWarning(false)}>
+          <div className="no-model-warning" ref={warningRef} onClick={(e) => e.stopPropagation()}>
+            <h3>请先配置模型</h3>
+            <p>
+              使用 AI 分析功能需要填入你自己的 API 密钥。
+              点击右上角「模型设置」按钮进行配置，密钥仅保存在浏览器本地。
+            </p>
+            <div className="no-model-warning-actions">
+              <button className="report-outline-btn" onClick={() => setShowNoModelWarning(false)}>
+                知道了
+              </button>
+              <button className="export-btn export-btn--pdf" onClick={openSettingsFromWarning}>
+                打开设置
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
