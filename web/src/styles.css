@@ -18,6 +18,18 @@
   box-sizing: border-box;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 body {
   margin: 0;
   font-family: "Space Grotesk", "Sora", "Noto Sans SC", sans-serif;
@@ -669,13 +681,13 @@ a {
 
 .resume-craft-wizard-track {
   display: flex;
-  width: 600%;
+  width: 500%;
   transform: translateX(0%);
   align-items: flex-start;
 }
 
 .resume-craft-step-card {
-  width: calc(100% / 6);
+  width: calc(100% / 5);
   padding: 24px 24px 22px;
   display: flex;
   flex-direction: column;
@@ -1222,6 +1234,7 @@ a {
   left: 0;
   z-index: 25;
   width: 270px;
+  max-width: min(270px, calc(100vw - 32px));
   border: 1px solid rgba(180, 186, 192, 0.66);
   border-radius: 12px;
   background: #fff;
@@ -1265,6 +1278,8 @@ a {
 
 .resume-craft-month-cell {
   height: 32px;
+  min-height: 44px;
+  min-width: 44px;
   border: 1px solid rgba(182, 189, 195, 0.7);
   border-radius: 8px;
   background: #fafafa;
@@ -1323,6 +1338,7 @@ a {
   grid-column: 4 / 5;
   width: 100%;
   height: 40px;
+  min-height: 44px;
   margin-top: 0;
   padding: 0 10px;
 }
@@ -1364,9 +1380,13 @@ a {
   transform: translateY(0);
 }
 
-.resume-craft-step1-card .resume-craft-control input[aria-invalid=\"true\"],
-.resume-craft-step1-card .resume-craft-control textarea[aria-invalid=\"true\"],
-.resume-craft-step1-card .resume-craft-select-shell.is-invalid {
+.resume-craft-step1-card .resume-craft-control input[aria-invalid="true"],
+.resume-craft-step1-card .resume-craft-control textarea[aria-invalid="true"],
+.resume-craft-step1-card .resume-craft-select-shell.is-invalid,
+.resume-craft-step-card .resume-craft-control input[aria-invalid="true"],
+.resume-craft-step-card .resume-craft-control textarea[aria-invalid="true"],
+.resume-craft-form-grid .resume-craft-control input[aria-invalid="true"],
+.resume-craft-form-grid .resume-craft-control textarea[aria-invalid="true"] {
   border-color: #c08883;
   box-shadow: 0 0 0 3px rgba(192, 136, 131, 0.12);
 }
@@ -1459,12 +1479,13 @@ a {
 }
 
 .resume-craft-head-actions {
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   grid-auto-flow: column;
   grid-auto-columns: 120px;
   align-items: stretch;
   justify-content: flex-end;
-  gap: 8px;
 }
 
 .resume-craft-restart-btn {
@@ -1474,9 +1495,9 @@ a {
 
 .resume-craft-chat-nav-btn {
   width: 120px;
-  height: 42px;
+  height: 44px;
   min-width: 120px;
-  min-height: 42px;
+  min-height: 44px;
   margin-top: 0;
   padding: 0;
   display: inline-flex;
@@ -1497,7 +1518,7 @@ a {
 
 .resume-craft-next-btn.resume-craft-chat-nav-btn {
   min-width: 120px;
-  min-height: 42px;
+  min-height: 44px;
   box-shadow: none;
   margin-top: 0;
 }
@@ -1522,6 +1543,44 @@ a {
   font-size: 0.82rem;
   color: #4a4a4a;
   font-weight: 600;
+}
+
+.resume-craft-pill-btn {
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 0.82rem;
+  color: var(--muted);
+  cursor: pointer;
+  transition: border-color 150ms, background 150ms;
+  font: inherit;
+  font-weight: 600;
+}
+.resume-craft-pill-btn:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.resume-craft-pill-btn[aria-expanded="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.resume-craft-pill-panel {
+  padding: 10px 12px;
+  margin-top: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  animation: pillPanelIn 150ms ease-out;
+}
+.resume-craft-pill-panel select,
+.resume-craft-pill-panel input {
+  width: 100%;
+  min-height: 36px;
+}
+@keyframes pillPanelIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .resume-craft-pill.template {
@@ -1697,6 +1756,7 @@ a {
 
 .resume-craft-result-control select {
   height: 36px;
+  min-height: 44px;
   border-radius: 10px;
   border: 1px solid rgba(199, 192, 181, 0.75);
   padding: 0 10px;
@@ -1712,6 +1772,7 @@ a {
 
 .resume-craft-regenerate-btn {
   height: 36px;
+  min-height: 44px;
   padding: 0 14px;
   white-space: nowrap;
 }
@@ -1720,7 +1781,7 @@ a {
   min-height: 70vh;
 }
 
-/* Preview panel for Step 6 */
+/* Preview panel for Step 5 (backend step6) */
 .resume-craft-preview-panel {
   border: 1px solid rgba(111, 141, 168, 0.24);
   border-radius: 12px;
@@ -1747,7 +1808,8 @@ a {
 .resume-craft-preview-close {
   padding: 4px 8px;
   font-size: 0.8rem;
-  min-height: auto;
+  min-height: 44px;
+  min-width: 44px;
 }
 
 .resume-craft-preview-content {
@@ -1973,6 +2035,13 @@ textarea:focus {
   outline: none;
   border-color: rgba(111, 141, 168, 0.7);
   box-shadow: 0 0 0 3px rgba(111, 141, 168, 0.15);
+}
+
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 textarea {
@@ -2298,6 +2367,25 @@ textarea {
   }
 }
 
+@media (max-width: 768px) {
+  .resume-craft-edu-main-row {
+    grid-template-columns: 1fr 1fr;
+  }
+  .resume-craft-chat-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .resume-craft-head-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .resume-craft-head-actions > * {
+    flex: 1 1 auto;
+  }
+}
+
 @media (max-width: 620px) {
   .home-landing {
     min-height: auto;
@@ -2388,6 +2476,10 @@ textarea {
 
   .resume-craft-head-actions {
     width: 100%;
+  }
+
+  .resume-craft-head-actions > * {
+    flex: 1 1 45%;
   }
 
   .resume-craft-back-btn {
@@ -2501,8 +2593,10 @@ textarea {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
   padding: 0;
   border: 0;
   border-radius: 999px;
@@ -2520,8 +2614,8 @@ textarea {
 }
 
 .user-avatar {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   object-fit: cover;
   border: 0;
@@ -2531,8 +2625,8 @@ textarea {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   background: #111111;
   color: #ffffff;
@@ -2663,14 +2757,16 @@ textarea {
 .consent-banner-actions .ghost-btn {
   padding: 7px 12px;
   font-size: 0.84rem;
-  min-height: 32px;
+  min-height: 44px;
+  min-width: 44px;
   background: rgba(255, 255, 255, 0.7);
 }
 
 .consent-banner-actions .primary-btn {
   padding: 7px 14px;
   font-size: 0.84rem;
-  min-height: 32px;
+  min-height: 44px;
+  min-width: 44px;
   margin: 0;
 }
 
@@ -2681,6 +2777,25 @@ textarea {
 
 @media (prefers-reduced-motion: reduce) {
   .consent-banner { animation: none; }
+}
+
+@media (max-width: 400px) {
+  .resume-craft-step-card {
+    padding: 12px;
+  }
+  .resume-craft-edu-main-row {
+    grid-template-columns: 1fr;
+  }
+  .consent-banner {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .consent-banner-actions {
+    flex-direction: column;
+  }
+  .app-shell {
+    padding: 12px 8px;
+  }
 }
 
 @media (max-width: 620px) {

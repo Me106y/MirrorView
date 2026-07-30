@@ -8,8 +8,11 @@ import { ConsentModal } from "../components/ConsentModal";
 import { useConsent } from "../context/ConsentContext";
 
 type Msg = { role: "user" | "assistant"; content: string; timestamp: string };
-type StepNumber = 1 | 2 | 3 | 4 | 5 | 6;
-type ChatStep = 4 | 5 | 6;
+type StepNumber = 1 | 2 | 3 | 4 | 5;
+type ChatStep = 3 | 4 | 5;
+
+const UI_TO_BACKEND: Record<number, number> = { 1: 1, 2: 3, 3: 4, 4: 5, 5: 6 };
+function uiStepToBackendKey(step: number): string { return `step${UI_TO_BACKEND[step]}`; }
 
 type ResultState = {
   kind: "idle" | "report" | "error";
@@ -17,9 +20,9 @@ type ResultState = {
   message: string;
 };
 
-const STEPS: StepNumber[] = [1, 2, 3, 4, 5, 6];
-const CHAT_STEPS: ChatStep[] = [4, 5, 6];
-const STEP_SHIFT = 100 / 6;
+const STEPS: StepNumber[] = [1, 2, 3, 4, 5];
+const CHAT_STEPS: ChatStep[] = [3, 4, 5];
+const STEP_SHIFT = 100 / 5;
 
 const TEMPLATE_OPTIONS = [
   { value: "01", label: "杂志编辑风" },
@@ -38,18 +41,17 @@ const LANGUAGE_OPTIONS = [
 ];
 
 const STEP_PROMPTS: Record<ChatStep, string> = {
-  4: "我们进入 Step4（工作/项目经历）。请描述第一段经历的场景、职责、行动和结果。",
-  5: "我们进入 Step5（技能与证书）。请先列出与你目标岗位最相关的技能与证书。",
-  6: "我们进入 Step6（确认与偏好）。请确认最想突出项、语气偏好，以及是否可生成简历。",
+  3: "我们进入 Step3（工作/项目经历）。请描述第一段经历的场景、职责、行动和结果。",
+  4: "我们进入 Step4（技能与证书）。请先列出与你目标岗位最相关的技能与证书。",
+  5: "我们进入 Step5（确认与偏好）。请确认最想突出项、语气偏好，以及是否可生成简历。",
 };
 
 const STEP_TITLES: Record<StepNumber, string> = {
   1: "Step1 基础信息",
-  2: "Step2 个人信息",
-  3: "Step3 教育背景",
-  4: "Step4 工作/项目经历（Grill）",
-  5: "Step5 技能与证书（对话）",
-  6: "Step6 确认与偏好（对话）",
+  2: "Step2 个人信息与教育背景",
+  3: "Step3 工作/项目经历（Grill）",
+  4: "Step4 技能与证书（对话）",
+  5: "Step5 确认与偏好（对话）",
 };
 
 const EMPTY_PROFILE: Step1Profile = {
@@ -165,7 +167,7 @@ function fileToDataUrl(file: File) {
 }
 
 function stepKey(step: ChatStep) {
-  return `step${step}` as "step3" | "step4" | "step5" | "step6";
+  return uiStepToBackendKey(step) as "step3" | "step4" | "step5" | "step6";
 }
 
 function normalizeTemplateCodeForUI(value: string) {
@@ -183,8 +185,8 @@ function normalizeLanguageForUI(value: string) {
 
 function getStepReplyGuard(step: ChatStep, text: string) {
   const content = String(text || "");
-  if (step === 4) return content.trim().length > 0;
-  if (step === 5) return /技能|证书|工具|语言能力|熟练度/.test(content);
+  if (step === 3) return content.trim().length > 0;
+  if (step === 4) return /技能|证书|工具|语言能力|熟练度/.test(content);
   return /确认|偏好|语气|突出|生成/.test(content);
 }
 
@@ -232,14 +234,14 @@ export function ResumeCraftPage() {
 
   const [wizardState, setWizardState] = useState<ResumeCraftWizardState>(EMPTY_WIZARD);
   const [messagesByStep, setMessagesByStep] = useState<Record<ChatStep, Msg[]>>({
+    3: [{ role: "assistant", content: STEP_PROMPTS[3], timestamp: nowTimeLabel() }],
     4: [{ role: "assistant", content: STEP_PROMPTS[4], timestamp: nowTimeLabel() }],
     5: [{ role: "assistant", content: STEP_PROMPTS[5], timestamp: nowTimeLabel() }],
-    6: [{ role: "assistant", content: STEP_PROMPTS[6], timestamp: nowTimeLabel() }],
   });
   const [missingByStep, setMissingByStep] = useState<Record<ChatStep, string[]>>({
-    4: ["experience"],
-    5: ["skills"],
-    6: ["confirm"],
+    3: ["experience"],
+    4: ["skills"],
+    5: ["confirm"],
   });
 
   const [chatInput, setChatInput] = useState("");
@@ -254,11 +256,13 @@ export function ResumeCraftPage() {
   const [viewportHeight, setViewportHeight] = useState<number | null>(null);
   const [openMonthPicker, setOpenMonthPicker] = useState<{ index: number; part: "start" | "end" } | null>(null);
   const [monthPickerYear, setMonthPickerYear] = useState<number>(new Date().getFullYear());
+  const [expandedPill, setExpandedPill] = useState<string | null>(null);
+  const [touchedFields, setTouchedFields] = useState<Record<string, boolean>>({});
 
   const previewFrameRef = useRef<HTMLIFrameElement | null>(null);
   const photoInputRef = useRef<HTMLInputElement | null>(null);
   const wizardTrackRef = useRef<HTMLDivElement | null>(null);
-  const stepRefs = useRef<Record<StepNumber, HTMLElement | null>>({ 1: null, 2: null, 3: null, 4: null, 5: null, 6: null });
+  const stepRefs = useRef<Record<StepNumber, HTMLElement | null>>({ 1: null, 2: null, 3: null, 4: null, 5: null });
   const monthPickerWrapRef = useRef<HTMLDivElement | null>(null);
   const stepSnapshots = useRef<Record<number, {
     profile: Step1Profile;
@@ -279,22 +283,17 @@ export function ResumeCraftPage() {
     const hasName = profile.personal_info.name.trim().length > 0;
     const hasPhone = profile.personal_info.phone.trim().length > 0;
     const hasEmail = profile.personal_info.email.trim().length > 0;
-    return hasName && hasPhone && hasEmail;
-  }, [profile.personal_info]);
+    const hasEducation = profile.education.some(
+      (item) =>
+        item.school.trim().length > 0 &&
+        item.major.trim().length > 0 &&
+        item.degree.trim().length > 0 &&
+        item.period.trim().length > 0
+    );
+    return hasName && hasPhone && hasEmail && hasEducation;
+  }, [profile.personal_info, profile.education]);
 
-  const canStep3Next = useMemo(
-    () =>
-      profile.education.some(
-        (item) =>
-          item.school.trim().length > 0 &&
-          item.major.trim().length > 0 &&
-          item.degree.trim().length > 0 &&
-          item.period.trim().length > 0
-      ),
-    [profile.education]
-  );
-
-  const activeChatStep = step >= 4 ? (step as ChatStep) : null;
+  const activeChatStep = step >= 3 ? (step as ChatStep) : null;
   const activeMissing = activeChatStep ? missingByStep[activeChatStep] : [];
 
   const canGenerate = useMemo(() => {
@@ -333,8 +332,17 @@ export function ResumeCraftPage() {
       if (monthPickerWrapRef.current && target && monthPickerWrapRef.current.contains(target)) return;
       setOpenMonthPicker(null);
     };
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && openMonthPicker) {
+        setOpenMonthPicker(null);
+      }
+    };
     document.addEventListener("mousedown", onPointerDown);
-    return () => document.removeEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onEscape);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onEscape);
+    };
   }, [openMonthPicker]);
 
   const savePhotoFile = async (file: File | null) => {
@@ -386,8 +394,7 @@ export function ResumeCraftPage() {
   const goNext = () => {
     if (step === 1 && !canStep1Next) return;
     if (step === 2 && !canStep2Next) return;
-    if (step === 3 && !canStep3Next) return;
-    if (step < 6) {
+    if (step < 5) {
       stepSnapshots.current[step] = {
         profile: { ...profile },
         linksInput,
@@ -398,12 +405,14 @@ export function ResumeCraftPage() {
         ...profile,
         personal_info: { ...profile.personal_info, links: splitTags(linksInput) },
       });
+      setExpandedPill(null);
       setStep((prev) => (prev + 1) as StepNumber);
     }
   };
 
   const goPrev = () => {
     if (step > 1) {
+      setExpandedPill(null);
       const prevStep = (step - 1) as StepNumber;
       const snapshot = stepSnapshots.current[prevStep];
       if (snapshot) {
@@ -417,7 +426,7 @@ export function ResumeCraftPage() {
   };
 
   const onRestartCurrentChat = () => {
-    if (step === 3) {
+    if (step === 2) {
       setProfile((prev) => ({ ...prev, education: [{ ...EMPTY_EDUCATION }] }));
       setWizardState((prev) => ({
         ...prev,
@@ -428,12 +437,12 @@ export function ResumeCraftPage() {
     }
     if (!activeChatStep) return;
     setMessagesByStep((prev) => ({ ...prev, [activeChatStep]: [{ role: "assistant", content: STEP_PROMPTS[activeChatStep], timestamp: nowTimeLabel() }] }));
-    setMissingByStep((prev) => ({ ...prev, [activeChatStep]: [activeChatStep === 4 ? "experience" : activeChatStep === 5 ? "skills" : "confirm"] }));
+    setMissingByStep((prev) => ({ ...prev, [activeChatStep]: [activeChatStep === 3 ? "experience" : activeChatStep === 4 ? "skills" : "confirm"] }));
     setWizardState((prev) => {
       const next = JSON.parse(JSON.stringify(prev)) as ResumeCraftWizardState;
       const key = stepKey(activeChatStep);
       next.chat_history_by_step[key] = [];
-      if (activeChatStep === 4) {
+      if (activeChatStep === 3) {
         next.collected_by_step.experiences = [];
         next.step_states.step4 = {
           current_index: 1,
@@ -452,11 +461,11 @@ export function ResumeCraftPage() {
           },
         };
       }
-      if (activeChatStep === 5) {
+      if (activeChatStep === 4) {
         next.collected_by_step.skills_and_certs = [];
         next.step_states.step5 = { turn_count: 0, confirmed: false };
       }
-      if (activeChatStep === 6) {
+      if (activeChatStep === 5) {
         next.collected_by_step.final_preferences = "";
         next.collected_by_step.step6_confirmed = false;
         next.step_states.step6 = {
@@ -488,7 +497,7 @@ export function ResumeCraftPage() {
       const resp = (await callCareerforgeSkill(settings, "/careerforge/resume-craft/chat-turn", {
         message: userMessage.content,
         history: nextMessages,
-        current_step: activeChatStep,
+        current_step: UI_TO_BACKEND[activeChatStep],
         step1_profile: step1Profile,
         wizard_state: wizardState,
         step_profile: wizardState.collected_by_step,
@@ -506,9 +515,9 @@ export function ResumeCraftPage() {
             .filter(Boolean)
         : [];
       let safeReply = serverReply || STEP_PROMPTS[activeChatStep];
-      if (activeChatStep === 4) {
+      if (activeChatStep === 3) {
         safeReply = serverReply || STEP_PROMPTS[activeChatStep];
-      } else if (activeChatStep === 6) {
+      } else if (activeChatStep === 5) {
         if (!safeReply && step6PreviewMarkdown) {
           safeReply = `以下是准备生成的内容，请先确认：\n\n${step6PreviewMarkdown}`;
         }
@@ -516,7 +525,7 @@ export function ResumeCraftPage() {
         safeReply = getStepReplyGuard(activeChatStep, serverReply) ? serverReply : STEP_PROMPTS[activeChatStep];
       }
   
-      if (activeChatStep === 6 && step6PreviewMarkdown && !safeReply.includes(step6PreviewMarkdown)) {
+      if (activeChatStep === 5 && step6PreviewMarkdown && !safeReply.includes(step6PreviewMarkdown)) {
         const changeText = step6AppliedChanges.length
           ? `已应用修改：\n${step6AppliedChanges.map((item) => `- ${item}`).join("\n")}\n\n`
           : "";
@@ -534,15 +543,15 @@ export function ResumeCraftPage() {
         ...prev,
         [activeChatStep]: [...nextMessages, { role: "assistant", content: safeReply || STEP_PROMPTS[activeChatStep], timestamp: nowTimeLabel() }],
       }));
-      if (activeChatStep === 4 && action === "experience_done" && nextStepSuggestion === "next") {
+      if (activeChatStep === 3 && action === "experience_done" && nextStepSuggestion === "next") {
+        setStep(4);
+      }
+      if (activeChatStep === 4 && nextStepSuggestion === "next") {
         setStep(5);
       }
-      if (activeChatStep === 5 && nextStepSuggestion === "next") {
-        setStep(6);
-      }
-      if (activeChatStep === 6 && action === "step6_confirm") {
-        // Keep user in Step6 and enable render button only after explicit confirmation.
-        setStep(6);
+      if (activeChatStep === 5 && action === "step6_confirm") {
+        // Keep user in Step5 and enable render button only after explicit confirmation.
+        setStep(5);
       }
     } catch (err) {
       setMessagesByStep((prev) => ({
@@ -731,7 +740,7 @@ export function ResumeCraftPage() {
   };
 
   const stepCard = (stepNo: StepNumber, content: ReactNode) => (
-    <article className={`surface resume-craft-step-card ${stepNo <= 2 ? "resume-craft-step1-card" : "resume-craft-chat-step"}`} ref={(el) => (stepRefs.current[stepNo] = el)}>
+    <article className={`surface resume-craft-step-card ${stepNo <= 1 ? "resume-craft-step1-card" : "resume-craft-chat-step"}`} ref={(el) => (stepRefs.current[stepNo] = el)}>
       {content}
     </article>
   );
@@ -815,7 +824,7 @@ export function ResumeCraftPage() {
               <>
                 <header className="resume-craft-step-head">
                   <div className="resume-craft-step-title-row">
-                    <span className="resume-craft-step-tag">Step 1 / 6</span>
+                    <span className="resume-craft-step-tag">Step 1 / 5</span>
                     <span className="resume-craft-step-progress-note">基础信息填写</span>
                   </div>
                   <h2>{STEP_TITLES[1]}</h2>
@@ -825,11 +834,11 @@ export function ResumeCraftPage() {
                 <div className="resume-craft-soft-separator" aria-hidden="true" />
 
                 <div className="resume-craft-step-grid resume-craft-step1-select-section">
-                  <label className="resume-craft-control">
+                  <label className="resume-craft-control" htmlFor="rc-template">
                     <span className="resume-craft-control-label">模板</span>
                     <div className="resume-craft-select-shell">
                       <span className="resume-craft-select-icon" aria-hidden="true">TM</span>
-                      <select value={profile.template_code} onChange={(e) => setProfile((prev) => ({ ...prev, template_code: e.target.value }))}>
+                      <select id="rc-template" value={profile.template_code} onChange={(e) => setProfile((prev) => ({ ...prev, template_code: e.target.value }))}>
                         {TEMPLATE_OPTIONS.map((item) => (
                           <option key={item.value} value={item.value}>{item.label}</option>
                         ))}
@@ -837,11 +846,11 @@ export function ResumeCraftPage() {
                     </div>
                   </label>
 
-                  <label className="resume-craft-control">
+                  <label className="resume-craft-control" htmlFor="rc-language">
                     <span className="resume-craft-control-label">语言</span>
                     <div className="resume-craft-select-shell">
                       <span className="resume-craft-select-icon" aria-hidden="true">LG</span>
-                      <select value={profile.language} onChange={(e) => setProfile((prev) => ({ ...prev, language: e.target.value }))}>
+                      <select id="rc-language" value={profile.language} onChange={(e) => setProfile((prev) => ({ ...prev, language: e.target.value }))}>
                         {LANGUAGE_OPTIONS.map((item) => (
                           <option key={item.value} value={item.value}>{item.label}</option>
                         ))}
@@ -851,8 +860,9 @@ export function ResumeCraftPage() {
                 </div>
 
                 <div className="resume-craft-photo-box">
-                  <label className="resume-craft-photo-label">上传照片（可选，仅支持 PNG/JPG）</label>
+                  <label className="resume-craft-photo-label" htmlFor="rc-photo">上传照片（可选，仅支持 PNG/JPG）</label>
                   <input
+                    id="rc-photo"
                     ref={photoInputRef}
                     type="file"
                     accept=".png,.jpg,.jpeg,image/png,image/jpeg"
@@ -874,16 +884,16 @@ export function ResumeCraftPage() {
                 <div className="resume-craft-soft-separator" aria-hidden="true" />
 
                 <div className="resume-craft-form-grid resume-craft-step1-form-section">
-                  <label className="resume-craft-control">
+                  <label className="resume-craft-control" htmlFor="rc-target-role">
                     <span className="resume-craft-control-label">目标岗位 <em>*</em></span>
-                    <input value={profile.target_role} placeholder="例如：AI 应用开发工程师" onChange={(e) => setProfile((prev) => ({ ...prev, target_role: e.target.value }))} />
+                    <input id="rc-target-role" value={profile.target_role} placeholder="例如：AI 应用开发工程师" onChange={(e) => setProfile((prev) => ({ ...prev, target_role: e.target.value }))} />
                   </label>
                 </div>
 
                 <div className="resume-craft-form-grid resume-craft-step1-form-section">
-                  <label className="resume-craft-control">
+                  <label className="resume-craft-control" htmlFor="rc-jd-summary">
                     <span className="resume-craft-control-label">目标 JD 摘要</span>
-                    <textarea value={profile.jd_summary} placeholder="可粘贴核心职责、技术要求、业务场景关键词" onChange={(e) => setProfile((prev) => ({ ...prev, jd_summary: e.target.value }))} />
+                    <textarea id="rc-jd-summary" value={profile.jd_summary} placeholder="可粘贴核心职责、技术要求、业务场景关键词" onChange={(e) => setProfile((prev) => ({ ...prev, jd_summary: e.target.value }))} />
                   </label>
                 </div>
 
@@ -896,67 +906,74 @@ export function ResumeCraftPage() {
             {stepCard(
               2,
               <>
-                <header className="resume-craft-step-head">
-                  <div className="resume-craft-step-title-row">
-                    <span className="resume-craft-step-tag">Step 2 / 6</span>
-                    <span className="resume-craft-step-progress-note">个人信息填写</span>
-                  </div>
-                  <h2>{STEP_TITLES[2]}</h2>
-                  <p>填写姓名、联系方式、城市和个人链接。</p>
-                  <div className="resume-craft-head-divider" />
-                </header>
-
-                <div className="resume-craft-form-grid">
-                  <label className="resume-craft-control">
-                    <span className="resume-craft-control-label">姓名 <em>*</em></span>
-                    <input value={profile.personal_info.name} onChange={(e) => setProfile((prev) => ({ ...prev, personal_info: { ...prev.personal_info, name: e.target.value } }))} />
-                  </label>
-                  <label className="resume-craft-control">
-                    <span className="resume-craft-control-label">手机 <em>*</em></span>
-                    <input value={profile.personal_info.phone} onChange={(e) => setProfile((prev) => ({ ...prev, personal_info: { ...prev.personal_info, phone: e.target.value } }))} />
-                  </label>
-                  <label className="resume-craft-control">
-                    <span className="resume-craft-control-label">邮箱 <em>*</em></span>
-                    <input value={profile.personal_info.email} onChange={(e) => setProfile((prev) => ({ ...prev, personal_info: { ...prev.personal_info, email: e.target.value } }))} />
-                  </label>
-                  <label className="resume-craft-control">
-                    <span className="resume-craft-control-label">城市</span>
-                    <input value={profile.personal_info.city} onChange={(e) => setProfile((prev) => ({ ...prev, personal_info: { ...prev.personal_info, city: e.target.value } }))} />
-                  </label>
-                  <label className="resume-craft-control">
-                    <span className="resume-craft-control-label">链接（逗号分隔）</span>
-                    <input value={linksInput} placeholder="GitHub, LinkedIn" onChange={(e) => setLinksInput(e.target.value)} />
-                  </label>
-                </div>
-
-                <div className="resume-craft-step-actions resume-craft-step2-actions">
-                  <button type="button" className="ghost-btn resume-craft-back-btn resume-craft-step2-nav-btn" onClick={goPrev}>上一步</button>
-                  <button type="button" className="primary-btn resume-craft-next-btn resume-craft-step2-nav-btn" disabled={!canStep2Next} onClick={goNext}>下一步</button>
-                </div>
-              </>
-            )}
-
-            {stepCard(
-              3,
-              <>
                 <header className="resume-craft-chat-head">
                   <div className="resume-craft-chat-head-left">
-                    <span className="resume-craft-step-tag">Step 3 / 6</span>
-                    <h2>{STEP_TITLES[3]}</h2>
-                    <p>使用控件填写教育背景，至少完成一条学校、专业、学位、时间。</p>
+                    <span className="resume-craft-step-tag">Step 2 / 5</span>
+                    <h2>{STEP_TITLES[2]}</h2>
+                    <p>填写姓名、联系方式等个人信息，以及教育背景。</p>
                     <div className="resume-craft-head-divider" />
                   </div>
                   <div className="resume-craft-head-actions">
                     <button type="button" className="ghost-btn resume-craft-back-btn resume-craft-chat-nav-btn" onClick={goPrev}>上一步</button>
-                    <button type="button" className="primary-btn resume-craft-next-btn resume-craft-chat-nav-btn" onClick={goNext} disabled={!canStep3Next}>下一步</button>
+                    <button type="button" className="primary-btn resume-craft-next-btn resume-craft-chat-nav-btn" onClick={goNext} disabled={!canStep2Next}>下一步</button>
                   </div>
                 </header>
 
                 <div className="resume-craft-param-brief">
-                  <span className="resume-craft-pill template">模板 {profile.template_code}</span>
-                  <span className="resume-craft-pill language">{profile.language === "zh" ? "中文" : profile.language === "en" ? "英文" : "中英文双版"}</span>
-                  <span className="resume-craft-pill photo">{photoDataUrl ? "放照片" : "不放照片"}</span>
-                  <span className="resume-craft-pill">岗位 {profile.target_role || "未填写"}</span>
+                  <button type="button" className="resume-craft-pill-btn" aria-expanded={expandedPill === 'template'} onClick={() => setExpandedPill(expandedPill === 'template' ? null : 'template')}>模板 {profile.template_code}</button>
+                  <button type="button" className="resume-craft-pill-btn" aria-expanded={expandedPill === 'language'} onClick={() => setExpandedPill(expandedPill === 'language' ? null : 'language')}>{profile.language === "zh" ? "中文" : profile.language === "en" ? "英文" : "中英文双版"}</button>
+                  <button type="button" className="resume-craft-pill-btn" aria-expanded={expandedPill === 'photo'} onClick={() => setExpandedPill(expandedPill === 'photo' ? null : 'photo')}>{photoDataUrl ? "放照片" : "不放照片"}</button>
+                  <button type="button" className="resume-craft-pill-btn" aria-expanded={expandedPill === 'targetRole'} onClick={() => setExpandedPill(expandedPill === 'targetRole' ? null : 'targetRole')}>岗位 {profile.target_role || "未填写"}</button>
+                </div>
+                {expandedPill === 'template' && (
+                  <div className="resume-craft-pill-panel">
+                    <select value={profile.template_code} onChange={(e) => setProfile((prev) => ({ ...prev, template_code: e.target.value }))}>
+                      {TEMPLATE_OPTIONS.map((item) => (<option key={`pill-t-${item.value}`} value={item.value}>{item.label}</option>))}
+                    </select>
+                  </div>
+                )}
+                {expandedPill === 'language' && (
+                  <div className="resume-craft-pill-panel">
+                    <select value={profile.language} onChange={(e) => setProfile((prev) => ({ ...prev, language: e.target.value }))}>
+                      {LANGUAGE_OPTIONS.map((item) => (<option key={`pill-l-${item.value}`} value={item.value}>{item.label}</option>))}
+                    </select>
+                  </div>
+                )}
+                {expandedPill === 'photo' && (
+                  <div className="resume-craft-pill-panel">
+                    <button type="button" className="ghost-btn" onClick={() => photoInputRef.current?.click()}>选择照片</button>
+                  </div>
+                )}
+                {expandedPill === 'targetRole' && (
+                  <div className="resume-craft-pill-panel">
+                    <input value={profile.target_role} placeholder="目标岗位" onChange={(e) => setProfile((prev) => ({ ...prev, target_role: e.target.value }))} />
+                  </div>
+                )}
+
+                <div className="resume-craft-form-grid">
+                  <label className="resume-craft-control" htmlFor="rc-name">
+                    <span className="resume-craft-control-label">姓名 <em>*</em></span>
+                    <input id="rc-name" value={profile.personal_info.name} aria-invalid={touchedFields.name && !profile.personal_info.name.trim()} aria-describedby={touchedFields.name && !profile.personal_info.name.trim() ? "rc-name-error" : undefined} onBlur={() => setTouchedFields((prev) => ({ ...prev, name: true }))} onChange={(e) => setProfile((prev) => ({ ...prev, personal_info: { ...prev.personal_info, name: e.target.value } }))} />
+                    {touchedFields.name && !profile.personal_info.name.trim() ? <span id="rc-name-error" className="resume-craft-control-error">请填写姓名</span> : null}
+                  </label>
+                  <label className="resume-craft-control" htmlFor="rc-phone">
+                    <span className="resume-craft-control-label">手机 <em>*</em></span>
+                    <input id="rc-phone" value={profile.personal_info.phone} aria-invalid={touchedFields.phone && !profile.personal_info.phone.trim()} aria-describedby={touchedFields.phone && !profile.personal_info.phone.trim() ? "rc-phone-error" : undefined} onBlur={() => setTouchedFields((prev) => ({ ...prev, phone: true }))} onChange={(e) => setProfile((prev) => ({ ...prev, personal_info: { ...prev.personal_info, phone: e.target.value } }))} />
+                    {touchedFields.phone && !profile.personal_info.phone.trim() ? <span id="rc-phone-error" className="resume-craft-control-error">请填写手机号</span> : null}
+                  </label>
+                  <label className="resume-craft-control" htmlFor="rc-email">
+                    <span className="resume-craft-control-label">邮箱 <em>*</em></span>
+                    <input id="rc-email" value={profile.personal_info.email} aria-invalid={touchedFields.email && !profile.personal_info.email.trim()} aria-describedby={touchedFields.email && !profile.personal_info.email.trim() ? "rc-email-error" : undefined} onBlur={() => setTouchedFields((prev) => ({ ...prev, email: true }))} onChange={(e) => setProfile((prev) => ({ ...prev, personal_info: { ...prev.personal_info, email: e.target.value } }))} />
+                    {touchedFields.email && !profile.personal_info.email.trim() ? <span id="rc-email-error" className="resume-craft-control-error">请填写邮箱</span> : null}
+                  </label>
+                  <label className="resume-craft-control" htmlFor="rc-city">
+                    <span className="resume-craft-control-label">城市</span>
+                    <input id="rc-city" value={profile.personal_info.city} onChange={(e) => setProfile((prev) => ({ ...prev, personal_info: { ...prev.personal_info, city: e.target.value } }))} />
+                  </label>
+                  <label className="resume-craft-control" htmlFor="rc-links">
+                    <span className="resume-craft-control-label">链接（逗号分隔）</span>
+                    <input id="rc-links" value={linksInput} placeholder="GitHub, LinkedIn" onChange={(e) => setLinksInput(e.target.value)} />
+                  </label>
                 </div>
 
                   <section className="resume-craft-education-wrap">
@@ -1097,33 +1114,57 @@ export function ResumeCraftPage() {
               </>
             )}
 
-            {([4, 5, 6] as ChatStep[]).map((chatStep) =>
+            {([3, 4, 5] as ChatStep[]).map((chatStep) =>
               stepCard(
                 chatStep,
                 <>
                   <header className="resume-craft-chat-head">
                     <div className="resume-craft-chat-head-left">
-                      <span className="resume-craft-step-tag">Step {chatStep} / 6</span>
+                      <span className="resume-craft-step-tag">Step {chatStep} / 5</span>
                       <h2>{STEP_TITLES[chatStep]}</h2>
-                      <p>{chatStep === 4 ? "每段经历最多 Grill 2-3 轮，达上限自动完成该段。" : "当前步骤仅收集本步骤字段，不跨步提问。"}</p>
+                      <p>{chatStep === 3 ? "每段经历最多 Grill 2-3 轮，达上限自动完成该段。" : "当前步骤仅收集本步骤字段，不跨步提问。"}</p>
                       <div className="resume-craft-head-divider" />
                     </div>
                     <div className="resume-craft-head-actions">
                       <button type="button" className="ghost-btn resume-craft-back-btn resume-craft-chat-nav-btn" onClick={goPrev}>上一步</button>
                       <button type="button" className="ghost-btn resume-craft-restart-btn resume-craft-chat-nav-btn" onClick={onRestartCurrentChat} disabled={chatLoading || renderLoading || step !== chatStep}>重新开始</button>
-                      {chatStep < 6 ? (
+                      {chatStep < 5 ? (
                         <button type="button" className="primary-btn resume-craft-next-btn resume-craft-chat-nav-btn" onClick={goNext} disabled={step !== chatStep || activeMissing.length > 0}>下一步</button>
                       ) : null}
                     </div>
                   </header>
 
                   <div className="resume-craft-param-brief">
-                    <span className="resume-craft-pill template">模板 {profile.template_code}</span>
-                    <span className="resume-craft-pill language">{profile.language === "zh" ? "中文" : profile.language === "en" ? "英文" : "中英文双版"}</span>
-                    <span className="resume-craft-pill photo">{photoDataUrl ? "放照片" : "不放照片"}</span>
-                    <span className="resume-craft-pill">岗位 {profile.target_role || "未填写"}</span>
-                    {chatStep === 4 ? <span className="resume-craft-pill">经历进度 {wizardState.step_states.step4.finalized_experiences.length}/{profile.expected_experience_count}</span> : null}
+                    <button type="button" className="resume-craft-pill-btn" aria-expanded={expandedPill === 'template'} onClick={() => setExpandedPill(expandedPill === 'template' ? null : 'template')}>模板 {profile.template_code}</button>
+                    <button type="button" className="resume-craft-pill-btn" aria-expanded={expandedPill === 'language'} onClick={() => setExpandedPill(expandedPill === 'language' ? null : 'language')}>{profile.language === "zh" ? "中文" : profile.language === "en" ? "英文" : "中英文双版"}</button>
+                    <button type="button" className="resume-craft-pill-btn" aria-expanded={expandedPill === 'photo'} onClick={() => setExpandedPill(expandedPill === 'photo' ? null : 'photo')}>{photoDataUrl ? "放照片" : "不放照片"}</button>
+                    <button type="button" className="resume-craft-pill-btn" aria-expanded={expandedPill === 'targetRole'} onClick={() => setExpandedPill(expandedPill === 'targetRole' ? null : 'targetRole')}>岗位 {profile.target_role || "未填写"}</button>
+                    {chatStep === 3 ? <span className="resume-craft-pill">经历进度 {wizardState.step_states.step4.finalized_experiences.length}/{profile.expected_experience_count}</span> : null}
                   </div>
+                  {expandedPill === 'template' && (
+                    <div className="resume-craft-pill-panel">
+                      <select value={profile.template_code} onChange={(e) => setProfile((prev) => ({ ...prev, template_code: e.target.value }))}>
+                        {TEMPLATE_OPTIONS.map((item) => (<option key={`pill-ct-${item.value}`} value={item.value}>{item.label}</option>))}
+                      </select>
+                    </div>
+                  )}
+                  {expandedPill === 'language' && (
+                    <div className="resume-craft-pill-panel">
+                      <select value={profile.language} onChange={(e) => setProfile((prev) => ({ ...prev, language: e.target.value }))}>
+                        {LANGUAGE_OPTIONS.map((item) => (<option key={`pill-cl-${item.value}`} value={item.value}>{item.label}</option>))}
+                      </select>
+                    </div>
+                  )}
+                  {expandedPill === 'photo' && (
+                    <div className="resume-craft-pill-panel">
+                      <button type="button" className="ghost-btn" onClick={() => photoInputRef.current?.click()}>选择照片</button>
+                    </div>
+                  )}
+                  {expandedPill === 'targetRole' && (
+                    <div className="resume-craft-pill-panel">
+                      <input value={profile.target_role} placeholder="目标岗位" onChange={(e) => setProfile((prev) => ({ ...prev, target_role: e.target.value }))} />
+                    </div>
+                  )}
 
                   <div className="chat-log resume-craft-chat-log">
                     {(messagesByStep[chatStep] || []).map((msg, idx) => (
@@ -1151,6 +1192,7 @@ export function ResumeCraftPage() {
                       onChange={(e) => setChatInput(e.target.value)}
                       placeholder="输入当前步骤信息后发送"
                       disabled={step !== chatStep}
+                      aria-label="输入当前步骤信息"
                     />
                     <button className="primary-btn resume-craft-send-btn" disabled={step !== chatStep || !chatInput.trim() || chatLoading || renderLoading}>发送</button>
                   </form>
@@ -1163,7 +1205,7 @@ export function ResumeCraftPage() {
                     )}
                   </div>
 
-                  {chatStep === 6 && wizardState?.step_states?.step6?.preview_markdown ? (
+                  {chatStep === 5 && wizardState?.step_states?.step6?.preview_markdown ? (
                     <div className="resume-craft-preview-panel">
                       <div className="resume-craft-preview-header">
                         <span className="resume-craft-preview-title">草稿预览</span>
@@ -1188,7 +1230,7 @@ export function ResumeCraftPage() {
                     </div>
                   ) : null}
 
-                  {chatStep === 6 ? (
+                  {chatStep === 5 ? (
                     <div className="resume-craft-step-actions">
                       <button type="button" className="ghost-btn" disabled={renderLoading || chatLoading} onClick={generatePreview}>
                         预览草稿

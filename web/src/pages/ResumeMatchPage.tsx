@@ -157,10 +157,10 @@ export function ResumeMatchPage() {
             <p>上传简历与岗位 JD，AI 自动计算匹配度并给出优化建议。</p>
           </header>
 
-          <label>目标岗位</label>
-          <input value={targetRole} onChange={(e) => setTargetRole(e.target.value)} placeholder="例如：AI 产品经理" />
+          <label htmlFor="rm-role">目标岗位</label>
+          <input id="rm-role" value={targetRole} onChange={(e) => setTargetRole(e.target.value)} placeholder="例如：AI 产品经理" />
 
-          <label>上传简历（仅支持 PDF）</label>
+          <label htmlFor="rm-resume">上传简历（仅支持 PDF）</label>
           <div
             className={`resume-dropzone${isDragOver ? " is-dragover" : ""}${resumeFile ? " has-file" : ""}`}
             role="button"
@@ -206,8 +206,9 @@ export function ResumeMatchPage() {
           {uploadHint ? <p className="resume-form-error">{uploadHint}</p> : null}
           {!uploadHint && resumeFile ? <p className="resume-file-ok">✓ PDF 文件就绪</p> : null}
 
-          <label>岗位 JD</label>
+          <label htmlFor="rm-jd">岗位 JD</label>
           <textarea
+            id="rm-jd"
             rows={10}
             value={jdText}
             onChange={(e) => setJdText(e.target.value)}

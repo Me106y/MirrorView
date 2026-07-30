@@ -34,17 +34,17 @@ export function CoverLetterPage() {
     <section className="card-grid">
       <form className="surface" onSubmit={onSubmit}>
         <h2>Cover Letter</h2>
-        <label>公司名</label>
-        <input value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
-        <label>场景</label>
-        <select value={scenario} onChange={(e) => setScenario(e.target.value)}>
+        <label htmlFor="cl-company">公司名</label>
+        <input id="cl-company" value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
+        <label htmlFor="cl-scenario">场景</label>
+        <select id="cl-scenario" value={scenario} onChange={(e) => setScenario(e.target.value)}>
           <option value="email">email</option>
           <option value="chat">chat</option>
         </select>
-        <label>简历文本</label>
-        <textarea rows={8} value={resumeText} onChange={(e) => setResumeText(e.target.value)} />
-        <label>岗位 JD</label>
-        <textarea rows={8} value={jdText} onChange={(e) => setJdText(e.target.value)} />
+        <label htmlFor="cl-resume">简历文本</label>
+        <textarea id="cl-resume" rows={8} value={resumeText} onChange={(e) => setResumeText(e.target.value)} />
+        <label htmlFor="cl-jd">岗位 JD</label>
+        <textarea id="cl-jd" rows={8} value={jdText} onChange={(e) => setJdText(e.target.value)} />
         <button className="primary-btn" disabled={loading}>
           {loading ? "生成中..." : "生成求职信"}
         </button>

@@ -64,7 +64,7 @@ export function MockInterviewPage() {
     <section className="mock-shell">
       <article className="surface chat-panel">
         <h2>Mock Interview (文字版)</h2>
-        <div className="chat-log">
+        <div className="chat-log" role="log" aria-live="polite">
           {messages.length === 0 ? <p className="muted">输入第一条消息开始面试。</p> : null}
           {messages.map((m, idx) => (
             <div key={`${m.role}-${idx}`} className={`msg ${m.role}`}>
@@ -73,7 +73,7 @@ export function MockInterviewPage() {
           ))}
         </div>
         <form className="chat-input" onSubmit={send}>
-          <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="例如：我想面试 AI 产品经理岗位" />
+          <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="例如：我想面试 AI 产品经理岗位" aria-label="输入消息" />
           <button className="primary-btn" disabled={loading}>
             {loading ? "生成中..." : "发送"}
           </button>
