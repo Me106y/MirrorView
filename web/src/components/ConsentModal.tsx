@@ -1,5 +1,4 @@
 import { useEffect, useRef } from "react";
-import { Link } from "react-router-dom";
 import { useConsent } from "../context/ConsentContext";
 
 interface ConsentModalProps {
@@ -61,11 +60,8 @@ export function ConsentModal({ open, onClose }: ConsentModalProps) {
       >
         <h2 id="consent-modal-title">首次使用确认</h2>
         <p>
-          继续使用前，请确认你已阅读并同意下列文件：
-          <Link to="/legal/privacy">隐私政策</Link>、<Link to="/legal/terms">服务条款</Link>、
-          <Link to="/legal/ai-disclaimer">AI 免责声明</Link>、<Link to="/legal/byok-risk">BYOK 风险提示</Link>。
+          本产品涉及 AI 生成内容与 BYOK（自带密钥）使用。使用前请阅读隐私政策、服务条款、AI 免责声明、BYOK 风险提示。
         </p>
-        <p>本产品首版采用匿名即用与本地同意记录策略，不做账号登录。</p>
         <button className="primary-btn" onClick={handleAccept}>
           我已阅读并同意
         </button>

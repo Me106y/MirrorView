@@ -209,7 +209,7 @@ export function ResumeMatchPage() {
           <label htmlFor="rm-jd">岗位 JD</label>
           <textarea
             id="rm-jd"
-            rows={10}
+            rows={5}
             value={jdText}
             onChange={(e) => setJdText(e.target.value)}
             placeholder={"岗位职责：\n- 负责 AI 产品的需求分析与技术落地\n\n任职要求：\n- 3年以上后端开发经验\n- 熟悉 Python/TypeScript\n\n加分项：\n- 有 LLM/RAG 项目经验"}

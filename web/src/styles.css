@@ -53,7 +53,7 @@ a {
 .app-shell {
   max-width: 1180px;
   margin: 0 auto;
-  padding: 24px 20px 32px;
+  padding: 14px 20px 24px;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -64,8 +64,8 @@ a {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  min-height: 64px;
-  margin-bottom: 6px;
+  min-height: 48px;
+  margin-bottom: 2px;
 }
 
 .topbar p {
@@ -124,6 +124,29 @@ a {
   color: var(--ink);
 }
 
+.settings-btn {
+  border: 1px solid rgba(79, 123, 163, 0.3);
+  background: rgba(79, 123, 163, 0.07);
+  color: var(--accent-strong);
+  font-weight: 600;
+  gap: 6px;
+}
+
+.settings-btn-icon {
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+
+.settings-btn:hover {
+  background: rgba(79, 123, 163, 0.14);
+  border-color: rgba(79, 123, 163, 0.45);
+  box-shadow: 0 4px 12px rgba(79, 123, 163, 0.12);
+}
+
+.settings-btn:active {
+  transform: scale(0.97);
+}
+
 .github-login-btn {
   background: #111111;
   color: #ffffff;
@@ -148,7 +171,7 @@ a {
 
 .home-landing {
   max-width: 980px;
-  margin: 2px auto 0;
+  margin: 0 auto 0;
   min-height: 68vh;
   display: flex;
   flex-direction: column;
@@ -349,7 +372,7 @@ a {
 }
 
 .resume-match-page {
-  padding: 24px 0 84px;
+  padding: 10px 0 48px;
 }
 
 .resume-match-layout {
@@ -357,14 +380,14 @@ a {
   margin: 0 auto;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 28px;
+  gap: 18px;
   align-items: start;
 }
 
 .resume-match-form,
 .resume-match-result {
   border-radius: 14px;
-  padding: 24px;
+  padding: 16px 20px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.07);
   transition: border-color 180ms ease;
 }
@@ -372,21 +395,21 @@ a {
 .resume-match-form-head h2 {
   margin: 0;
   color: #121212;
-  font-size: 1.4rem;
+  font-size: 1.2rem;
   letter-spacing: 0.01em;
 }
 
 .resume-match-form-head p {
-  margin: 8px 0 2px;
+  margin: 4px 0 0;
   color: var(--text-muted);
-  line-height: 1.65;
-  font-size: 0.92rem;
+  line-height: 1.5;
+  font-size: 0.85rem;
 }
 
 .resume-match-form label {
-  margin: 14px 0 8px;
+  margin: 10px 0 5px;
   color: var(--text-body);
-  font-size: 0.92rem;
+  font-size: 0.88rem;
   font-weight: 600;
 }
 
@@ -417,7 +440,7 @@ a {
 }
 
 .resume-match-form textarea {
-  min-height: 190px;
+  min-height: 100px;
   resize: vertical;
 }
 
@@ -426,7 +449,7 @@ a {
   border: 1px dashed rgba(0, 0, 0, 0.22);
   border-radius: 10px;
   background: #fafaf9;
-  padding: 18px 14px;
+  padding: 12px 14px;
   text-align: center;
   cursor: pointer;
   transition: border-color 150ms ease, background-color 150ms ease, transform 150ms ease;
@@ -453,13 +476,13 @@ a {
 }
 
 .resume-dropzone-icon {
-  width: 32px;
-  height: 32px;
-  margin: 0 auto 8px;
-  border-radius: 10px;
+  width: 28px;
+  height: 28px;
+  margin: 0 auto 4px;
+  border-radius: 8px;
   display: grid;
   place-items: center;
-  font-size: 1.05rem;
+  font-size: 0.95rem;
   color: #4f7da6;
   background: rgba(79, 125, 166, 0.12);
 }
@@ -506,13 +529,14 @@ a {
 }
 
 .resume-submit-btn {
-  margin-top: 16px;
+  margin-top: 10px;
   border-radius: 8px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   width: 100%;
+  padding: 9px 16px;
 }
 
 .resume-submit-btn:hover:not(:disabled) {
@@ -2802,6 +2826,16 @@ textarea {
 
   .primary-btn { background: #e0e0e0; color: #111111; }
   .ghost-btn { background: transparent; color: var(--ink); border-color: var(--line); }
+
+  .settings-btn {
+    border-color: rgba(127, 179, 212, 0.35);
+    background: rgba(127, 179, 212, 0.1);
+    color: var(--accent);
+  }
+  .settings-btn:hover {
+    background: rgba(127, 179, 212, 0.18);
+    border-color: rgba(127, 179, 212, 0.5);
+  }
 
   .user-dropdown { background: var(--surface-raised); border-color: var(--line); }
 

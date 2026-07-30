@@ -42,7 +42,6 @@ export function HomePage() {
   return (
     <section className="home-landing">
       <header className="home-landing-hero">
-        <span className="home-landing-badge">AI 驱动的求职训练平台</span>
         <h2>智能求职助手</h2>
         <p className="home-landing-subline-primary">利用人工智能技术，为您的求职之路提供全方位支持。</p>
         <p className="home-landing-subline-secondary">从简历优化到模拟面试，让每一次投递更有把握。</p>
