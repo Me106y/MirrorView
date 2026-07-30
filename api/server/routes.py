@@ -364,11 +364,37 @@ def _session_sign(payload: str, secret: str) -> str:
     return hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
 
 
-def _session_create(user_id: int) -> str:
+def _build_session_identity(user: Optional[User] = None, payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    if payload is not None:
+        try:
+            uid = int(payload.get("uid") or 0)
+        except Exception:
+            uid = 0
+        return {
+            "uid": uid,
+            "username": str(payload.get("username") or "").strip(),
+            "github_id": str(payload.get("github_id") or "").strip(),
+            "avatar_url": str(payload.get("avatar_url") or "").strip(),
+        }
+
+    if user is None:
+        raise ValueError("user or payload is required")
+
+    return {
+        "uid": int(user.id),
+        "username": (user.username or "").strip(),
+        "github_id": str(user.github_id or "").strip(),
+        "avatar_url": str(user.avatar_url or "").strip(),
+    }
+
+
+def _session_create(identity: Dict[str, Any]) -> str:
     """Create a signed session token: base64(json) + '.' + hmac_hex."""
     import json as _json
+
+    session_identity = _build_session_identity(payload=identity)
     payload = _json.dumps({
-        "uid": user_id,
+        **session_identity,
         "exp": int(time.time()) + Config.SESSION_MAX_AGE_SECONDS,
     })
     payload_b64 = base64.urlsafe_b64encode(payload.encode()).decode().rstrip("=")
@@ -376,8 +402,8 @@ def _session_create(user_id: int) -> str:
     return f"{payload_b64}.{sig}"
 
 
-def _session_verify(token: str) -> Optional[int]:
-    """Verify session token and return user_id, or None."""
+def _session_verify(token: str) -> Optional[Dict[str, Any]]:
+    """Verify session token and return identity payload, or None."""
     import json as _json
     if not token or "." not in token:
         return None
@@ -391,7 +417,7 @@ def _session_verify(token: str) -> Optional[int]:
         data = _json.loads(base64.urlsafe_b64decode(padded))
         if data.get("exp", 0) < time.time():
             return None
-        return int(data["uid"])
+        return _build_session_identity(payload=data)
     except Exception:
         return None
 
@@ -464,11 +490,12 @@ def _is_allowed_return_origin(origin: str) -> bool:
     return host.endswith(".vercel.app") and host.startswith("mirror-view-")
 
 
-def _create_login_handoff_token(user_id: int, return_to: str) -> str:
+def _create_login_handoff_token(user: User, return_to: str) -> str:
     import json as _json
 
+    session_identity = _build_session_identity(user=user)
     payload = _json.dumps({
-        "uid": user_id,
+        **session_identity,
         "exp": int(time.time()) + 120,
         "return_to": _normalize_absolute_url(return_to),
         "kind": "oauth_handoff",
@@ -506,7 +533,13 @@ def _verify_login_handoff_token(token: str) -> Optional[Dict[str, Any]]:
     except Exception:
         return None
 
-    return {"uid": uid, "return_to": return_to}
+    return {
+        "uid": uid,
+        "return_to": return_to,
+        "username": str(data.get("username") or "").strip(),
+        "github_id": str(data.get("github_id") or "").strip(),
+        "avatar_url": str(data.get("avatar_url") or "").strip(),
+    }
 
 
 def _redirect_to_canonical_public_origin() -> Optional[Response]:
@@ -665,7 +698,7 @@ def _build_oauth_success_response(user: User, return_to: str, response_mode: str
     target_origin = _normalize_absolute_url(return_to) or _normalize_absolute_url(_get_public_base_url())
 
     if callback_origin and target_origin and callback_origin != target_origin:
-        handoff_token = _create_login_handoff_token(user.id, target_origin)
+        handoff_token = _create_login_handoff_token(user, target_origin)
         target_url = f"{target_origin}/auth/finalize?token={quote(handoff_token, safe='')}"
         if response_mode == "json":
             resp = make_response(jsonify({"ok": True, "redirect_to": target_url}))
@@ -674,7 +707,7 @@ def _build_oauth_success_response(user: User, return_to: str, response_mode: str
         _clear_oauth_flow_cookies(resp)
         return resp
 
-    session_token = _session_create(user.id)
+    session_token = _session_create(_build_session_identity(user=user))
     if response_mode == "json":
         resp = make_response(jsonify({"ok": True, "redirect_to": "/"}))
     else:
@@ -705,13 +738,22 @@ def _clear_session_cookie(response):
     response.delete_cookie(Config.SESSION_COOKIE_NAME, path="/")
 
 
-def _get_current_user() -> Optional[User]:
-    """Read session cookie and return User or None."""
+def _get_current_user() -> Optional[Dict[str, Any]]:
+    """Read session cookie and return current identity, with DB fallback when available."""
     token = request.cookies.get(Config.SESSION_COOKIE_NAME, "")
-    uid = _session_verify(token)
-    if uid is None:
+    identity = _session_verify(token)
+    if identity is None:
         return None
-    return db.session.get(User, uid)
+
+    uid = int(identity.get("uid") or 0)
+    if uid:
+        user = db.session.get(User, uid)
+        if user:
+            return _build_session_identity(user=user)
+
+    if identity.get("username") or identity.get("github_id") or identity.get("avatar_url"):
+        return identity
+    return None
 
 
 # ──────────────────────────────────────────────────────
@@ -855,7 +897,7 @@ def auth_complete():
     if not payload:
         return jsonify({"error": "invalid_handoff_token", "message": "Invalid or expired login completion token."}), 400
 
-    session_token = _session_create(payload["uid"])
+    session_token = _session_create(payload)
     resp = make_response(redirect("/"))
     _set_session_cookie(resp, session_token)
     return resp
@@ -868,7 +910,7 @@ def auth_complete_path(token: str):
     if not payload:
         return jsonify({"error": "invalid_handoff_token", "message": "Invalid or expired login completion token."}), 400
 
-    session_token = _session_create(payload["uid"])
+    session_token = _session_create(payload)
     resp = make_response(redirect("/"))
     _set_session_cookie(resp, session_token)
     return resp
@@ -884,7 +926,7 @@ def auth_finalize():
     if not payload:
         return jsonify({"error": "invalid_handoff_token", "message": "Invalid or expired login completion token."}), 400
 
-    session_token = _session_create(payload["uid"])
+    session_token = _session_create(payload)
     resp = make_response(redirect("/"))
     _set_session_cookie(resp, session_token)
     return resp
@@ -898,10 +940,10 @@ def auth_me():
         return jsonify({"authenticated": False}), 401
     return jsonify({
         "authenticated": True,
-        "user_id": user.id,
-        "username": user.username,
-        "github_id": user.github_id,
-        "avatar_url": user.avatar_url,
+        "user_id": user["uid"],
+        "username": user["username"],
+        "github_id": user["github_id"] or None,
+        "avatar_url": user["avatar_url"] or None,
     }), 200
 
 
