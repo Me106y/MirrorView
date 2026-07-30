@@ -2281,6 +2281,143 @@ textarea {
   color: var(--accent);
 }
 
+/* ─── Back Home ─── */
+.back-home-bar {
+  padding: 6px 24px 0;
+  max-width: 1120px;
+  margin: 0 auto;
+}
+.back-home-btn, .back-home-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  text-decoration: none;
+  padding: 6px 0;
+  transition: color 150ms, transform 150ms;
+}
+.back-home-btn:hover, .back-home-link:hover {
+  color: var(--accent);
+  transform: translateX(-2px);
+}
+.card-grid > .back-home-btn {
+  grid-column: 1 / -1;
+}
+
+/* ─── Export Buttons ─── */
+.export-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 150ms, box-shadow 150ms, border-color 150ms;
+  font-family: inherit;
+}
+.export-btn--html {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+.export-btn--html:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.export-btn--pdf {
+  background: var(--ink);
+  color: var(--surface);
+  border: none;
+}
+.export-btn--pdf:hover {
+  opacity: 0.88;
+}
+.export-btn-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+/* ─── ResumeMatch Report View ─── */
+.resume-match-report-page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 10px 48px;
+  animation: reportSlideIn 300ms ease-out;
+}
+.resume-match-report-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+.resume-match-report-head h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 1.2rem;
+  color: var(--ink);
+}
+.resume-match-report-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.resume-match-report-body {
+  background: var(--surface-raised, #ffffff);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.resume-match-report-body .resume-report-frame {
+  width: 100%;
+  border: none;
+  display: block;
+}
+
+@keyframes reportSlideIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .resume-match-report-page { animation: none; }
+}
+
+@media (max-width: 940px) {
+  .resume-match-report-page {
+    padding: 10px 24px;
+  }
+  .resume-match-report-head {
+    flex-wrap: wrap;
+  }
+  .resume-match-report-actions {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+}
+
+@media (max-width: 620px) {
+  .resume-match-report-page {
+    padding: 10px 12px;
+  }
+  .resume-match-report-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .resume-match-report-actions {
+    width: 100%;
+  }
+  .export-btn {
+    flex: 1;
+    justify-content: center;
+  }
+}
+
 @keyframes rise {
   from {
     opacity: 0;
@@ -2845,4 +2982,28 @@ textarea {
   .resume-craft-preview-panel { background: var(--surface-raised); border-color: var(--line); }
 
   .resume-craft-pill-btn { border-color: var(--line); color: var(--text-muted); }
+
+  .back-home-btn, .back-home-link {
+    color: var(--text-muted);
+  }
+  .back-home-btn:hover, .back-home-link:hover {
+    color: var(--accent);
+  }
+
+  .resume-match-report-page { background: var(--bg); }
+  .resume-match-report-body { background: var(--surface); border-color: var(--line); }
+
+  .export-btn--html {
+    border-color: var(--line);
+    color: var(--ink);
+  }
+  .export-btn--html:hover {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .export-btn--pdf {
+    background: var(--ink);
+    color: var(--surface);
+  }
 }

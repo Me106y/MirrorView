@@ -99,6 +99,17 @@ export function Shell({ onOpenSettings }: { onOpenSettings: () => void }) {
         </div>
       </header>
 
+      {!isHome && (
+        <div className="back-home-bar">
+          <NavLink to="/" className="back-home-link">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 12H5M12 19l-7-7 7-7"/>
+            </svg>
+            返回首页
+          </NavLink>
+        </div>
+      )}
+
       <main className="page-main">
         <Outlet />
       </main>

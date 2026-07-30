@@ -1,4 +1,5 @@
 import { FormEvent, useMemo, useState } from "react";
+import { NavLink } from "react-router-dom";
 import { callCareerforgeSkill } from "../lib/api";
 import { useModelSettings } from "../context/ModelSettingsContext";
 
@@ -63,6 +64,12 @@ export function MockInterviewPage() {
 
   return (
     <section className="mock-shell">
+      <NavLink to="/" className="back-home-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M19 12H5M12 19l-7-7 7-7"/>
+        </svg>
+        返回首页
+      </NavLink>
       <article className="surface chat-panel">
         <h2>Mock Interview (文字版)</h2>
         <div className="chat-log" role="log" aria-live="polite">

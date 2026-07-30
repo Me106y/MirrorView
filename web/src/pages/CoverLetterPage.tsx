@@ -1,4 +1,5 @@
 import { FormEvent, useState } from "react";
+import { NavLink } from "react-router-dom";
 import { callCareerforgeSkill } from "../lib/api";
 import { useModelSettings } from "../context/ModelSettingsContext";
 
@@ -32,6 +33,12 @@ export function CoverLetterPage() {
 
   return (
     <section className="card-grid">
+      <NavLink to="/" className="back-home-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M19 12H5M12 19l-7-7 7-7"/>
+        </svg>
+        返回首页
+      </NavLink>
       <form className="surface" onSubmit={onSubmit}>
         <h2>Cover Letter</h2>
         <label htmlFor="cl-company">公司名</label>

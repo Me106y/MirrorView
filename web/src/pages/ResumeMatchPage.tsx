@@ -1,4 +1,5 @@
 import { DragEvent, FormEvent, KeyboardEvent, SyntheticEvent, useMemo, useRef, useState } from "react";
+import { NavLink } from "react-router-dom";
 import { callCareerforgeSkillMultipart } from "../lib/api";
 import { useModelSettings } from "../context/ModelSettingsContext";
 
@@ -25,7 +26,9 @@ export function ResumeMatchPage() {
   const [isDragOver, setIsDragOver] = useState(false);
   const [loading, setLoading] = useState(false);
   const [frameHeight, setFrameHeight] = useState(980);
+  const [showReport, setShowReport] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const reportFrameRef = useRef<HTMLIFrameElement>(null);
 
   const canSubmit = Boolean(targetRole.trim() && jdText.trim() && resumeFile) && !loading;
 
@@ -111,6 +114,7 @@ export function ResumeMatchPage() {
         setResult({ kind: "error", reportHtml: "", message });
       } else {
         setResult({ kind: "report", reportHtml, message: "" });
+        setShowReport(true);
       }
     } catch (err) {
       setResult({ kind: "error", reportHtml: "", message: (err as Error).message });
@@ -132,6 +136,13 @@ export function ResumeMatchPage() {
     URL.revokeObjectURL(url);
   };
 
+  function exportPdf() {
+    const frame = reportFrameRef.current;
+    if (!frame?.contentWindow) return;
+    frame.contentWindow.focus();
+    frame.contentWindow.print();
+  }
+
   const onReportFrameLoad = (e: SyntheticEvent<HTMLIFrameElement>) => {
     try {
       const frame = e.currentTarget;
@@ -148,8 +159,61 @@ export function ResumeMatchPage() {
     }
   };
 
+  if (showReport && result.kind === "report") {
+    return (
+      <section className="resume-match-report-page">
+        <NavLink to="/" className="back-home-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+          返回首页
+        </NavLink>
+        <div className="resume-match-report-head">
+          <h2>匹配分析报告</h2>
+          <div className="resume-match-report-actions">
+            <button className="ghost-btn" onClick={() => setShowReport(false)}>
+              ← 返回修改
+            </button>
+            <button className="export-btn export-btn--html" onClick={exportReport} title="导出 HTML">
+              <svg className="export-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              导出 HTML
+            </button>
+            <button className="export-btn export-btn--pdf" onClick={exportPdf} title="请在打印对话框中选择'另存为 PDF'">
+              <svg className="export-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              导出 PDF
+            </button>
+          </div>
+        </div>
+        <div className="resume-match-report-body">
+          <iframe
+            ref={reportFrameRef}
+            className="resume-report-frame"
+            srcDoc={result.reportHtml}
+            onLoad={onReportFrameLoad}
+            title="匹配分析报告"
+            style={{ height: frameHeight + "px" }}
+          />
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="resume-match-page">
+      <NavLink to="/" className="back-home-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M19 12H5M12 19l-7-7 7-7"/>
+        </svg>
+        返回首页
+      </NavLink>
       <div className="resume-match-layout">
         <form className="surface resume-match-form" onSubmit={onSubmit}>
           <header className="resume-match-form-head">
@@ -158,7 +222,7 @@ export function ResumeMatchPage() {
           </header>
 
           <label htmlFor="rm-role">目标岗位</label>
-          <input id="rm-role" value={targetRole} onChange={(e) => setTargetRole(e.target.value)} placeholder="填写你正在申请的岗位名称，如“AI 产品经理”" />
+          <input id="rm-role" value={targetRole} onChange={(e) => setTargetRole(e.target.value)} placeholder={'填写你正在申请的岗位名称，如“AI 产品经理”'} />
 
           <label htmlFor="rm-resume">上传简历（仅支持 PDF）</label>
           <div
@@ -222,37 +286,12 @@ export function ResumeMatchPage() {
           {!canSubmit && !loading ? <p className="resume-form-tip">请填写完整信息后提交分析。</p> : null}
         </form>
 
-        {result.kind !== "idle" ? (
+        {result.kind === "error" ? (
           <section className="resume-match-result-inline" aria-live="polite">
-            {result.kind === "report" ? (
-              <>
-                <header className="resume-result-head">
-                  <h3>结果</h3>
-                  <span>AI 匹配分析报告</span>
-                </header>
-
-                <div className="resume-result-body has-report">
-                  <iframe
-                    title="Resume Match HTML Report"
-                    className="resume-report-frame"
-                    srcDoc={result.reportHtml}
-                    onLoad={onReportFrameLoad}
-                    style={{ height: `${frameHeight}px` }}
-                  />
-                </div>
-
-                <div className="resume-result-actions">
-                  <button type="button" className="ghost-btn" onClick={exportReport} disabled={!canUseReportActions}>
-                    导出 HTML
-                  </button>
-                </div>
-              </>
-            ) : (
-              <div className="resume-match-result-error">
-                <p className="resume-result-error">{result.message}</p>
-                <button type="button" className="ghost-btn" onClick={() => void onSubmit({ preventDefault: () => {} } as FormEvent)}>重试</button>
-              </div>
-            )}
+            <div className="resume-match-result-error">
+              <p className="resume-result-error">{result.message}</p>
+              <button type="button" className="ghost-btn" onClick={() => void onSubmit({ preventDefault: () => {} } as FormEvent)}>重试</button>
+            </div>
           </section>
         ) : null}
       </div>
