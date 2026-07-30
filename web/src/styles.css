@@ -4,14 +4,22 @@
   --bg: #f7f3ea;
   --ink: #111111;
   --muted: #555555;
-  --subtle: #888888;
-  --accent: #6f8da8;
+  --subtle: #6e6e6e;
+  --accent: #4f7ba3;
   --accent-strong: #56758f;
   --accent-soft: #dbe6f0;
   --warm-line: rgba(214, 201, 174, 0.42);
   --surface: #ffffff;
   --line: rgba(136, 121, 89, 0.14);
-  --shadow: 0 16px 36px rgba(41, 50, 57, 0.09), 0 3px 12px rgba(149, 130, 95, 0.07);
+  --shadow: 0 4px 12px rgba(41, 50, 57, 0.09);
+  --text-heading: #111111;
+  --text-body: #333333;
+  --text-muted: #5c5c5c;
+  --text-subtle: #6e6e6e;
+  --border-default: rgba(0,0,0,0.14);
+  --border-focus: #4f7ba3;
+  --surface-raised: #ffffff;
+  --error: #a33232;
 }
 
 * {
@@ -35,12 +43,6 @@ body {
   font-family: "Space Grotesk", "Sora", "Noto Sans SC", sans-serif;
   color: var(--ink);
   background-color: var(--bg);
-  background-image:
-    radial-gradient(circle at 1px 1px, rgba(0, 0, 0, 0.014) 1px, transparent 0),
-    radial-gradient(circle at 12% -16%, rgba(255, 255, 255, 0.62) 0%, transparent 46%),
-    linear-gradient(180deg, rgba(248, 242, 229, 0.88) 0%, rgba(247, 243, 234, 1) 72%);
-  background-size: 18px 18px, auto, 100% 100%;
-  background-attachment: fixed, fixed, fixed;
   min-height: 100vh;
 }
 
@@ -84,7 +86,7 @@ a {
 .topbar-brand-link {
   text-decoration: none;
   font-family: "Sora", sans-serif;
-  color: #111111;
+  color: var(--ink);
   font-size: 0.98rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -119,7 +121,7 @@ a {
 .ghost-btn.topbar-action-btn {
   border: 1px solid rgba(0, 0, 0, 0.18);
   background: #f5f5f5;
-  color: #111111;
+  color: var(--ink);
 }
 
 .github-login-btn {
@@ -135,7 +137,7 @@ a {
 }
 
 .github-login-btn:hover {
-  background: linear-gradient(145deg, #111111, #2a2a2a);
+  background: #2a2a2a;
   box-shadow: 0 6px 14px rgba(0, 0, 0, 0.2);
 }
 
@@ -173,7 +175,7 @@ a {
 
 .home-landing-login-note {
   margin: 0;
-  color: #777777;
+  color: var(--text-muted);
   font-size: 0.9rem;
 }
 
@@ -187,13 +189,12 @@ a {
   font-size: 0.74rem;
   font-weight: 600;
   letter-spacing: 0.03em;
-  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.65);
 }
 
 .home-landing-hero h2 {
   margin: 12px 0 10px;
   font-family: "Sora", sans-serif;
-  color: #111111;
+  color: var(--ink);
   font-size: clamp(2.2rem, 5vw, 3.25rem);
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -211,7 +212,7 @@ a {
 .home-landing-subline-secondary {
   margin: 8px auto 0;
   max-width: 560px;
-  color: #777777;
+  color: var(--text-muted);
   font-size: 0.96rem;
   line-height: 1.7;
 }
@@ -244,21 +245,7 @@ a {
   cursor: pointer;
 }
 
-.landing-card::after {
-  content: "";
-  position: absolute;
-  width: 160px;
-  height: 160px;
-  right: -62px;
-  top: -62px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(243, 243, 243, 0.95) 0%, rgba(243, 243, 243, 0) 70%);
-  pointer-events: none;
-}
-
 .landing-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.1);
   border-color: rgba(0, 0, 0, 0.24);
 }
 
@@ -278,34 +265,34 @@ a {
 }
 
 .landing-card-icon.tone-match {
-  background: linear-gradient(145deg, #6f8ca7, #5d7f9d);
+  background: #658da3;
 }
 
 .landing-card-icon.tone-craft {
-  background: linear-gradient(145deg, #6f9cb0, #5b8ba1);
+  background: #659aab;
 }
 
 .landing-card-icon.tone-letter {
-  background: linear-gradient(145deg, #7f8ead, #6c7fa0);
+  background: #7586a3;
 }
 
 .landing-card-icon.tone-interview {
-  background: linear-gradient(145deg, #7697b3, #6787a2);
+  background: #6e8faa;
 }
 
 .landing-card-icon.tone-job {
-  background: linear-gradient(145deg, #6c97a1, #5a848e);
+  background: #638d97;
 }
 
 .landing-card h3 {
   margin: 2px 0 8px;
-  color: #111111;
+  color: var(--ink);
   font-size: 1.22rem;
 }
 
 .landing-card p {
   margin: 0;
-  color: #555555;
+  color: var(--text-body);
   line-height: 1.55;
 }
 
@@ -344,7 +331,7 @@ a {
   width: 52px;
   height: 52px;
   border-radius: 14px;
-  background: linear-gradient(145deg, #efefef, #e2e2e2);
+  background: #e8e8e8;
   color: #696969;
   font-size: 1.45rem;
   font-weight: 500;
@@ -378,14 +365,8 @@ a {
 .resume-match-result {
   border-radius: 14px;
   padding: 24px;
-  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.07);
-  transition: transform 180ms ease, box-shadow 180ms ease;
-}
-
-.resume-match-form:hover,
-.resume-match-result:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 18px 34px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.07);
+  transition: border-color 180ms ease;
 }
 
 .resume-match-form-head h2 {
@@ -397,14 +378,14 @@ a {
 
 .resume-match-form-head p {
   margin: 8px 0 2px;
-  color: #777777;
+  color: var(--text-muted);
   line-height: 1.65;
   font-size: 0.92rem;
 }
 
 .resume-match-form label {
   margin: 14px 0 8px;
-  color: #333333;
+  color: var(--text-body);
   font-size: 0.92rem;
   font-weight: 600;
 }
@@ -414,7 +395,7 @@ a {
   border-radius: 8px;
   border: 1px solid rgba(0, 0, 0, 0.14);
   background: #ffffff;
-  color: #333333;
+  color: var(--text-body);
   transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
 }
 
@@ -426,8 +407,8 @@ a {
 .resume-match-form input:focus,
 .resume-match-form textarea:focus {
   outline: none;
-  border-color: #87a8c4;
-  box-shadow: 0 0 0 3px rgba(135, 168, 196, 0.2);
+  border-color: #4f7ba3;
+  box-shadow: 0 0 0 3px rgba(79, 123, 163, 0.2);
 }
 
 .resume-match-form input::placeholder,
@@ -444,7 +425,7 @@ a {
   position: relative;
   border: 1px dashed rgba(0, 0, 0, 0.22);
   border-radius: 10px;
-  background: linear-gradient(180deg, #fafaf9, #f7f7f6);
+  background: #fafaf9;
   padding: 18px 14px;
   text-align: center;
   cursor: pointer;
@@ -452,7 +433,7 @@ a {
 }
 
 .resume-dropzone:hover {
-  border-color: #87a8c4;
+  border-color: #4f7ba3;
   transform: translateY(-1px);
 }
 
@@ -491,7 +472,7 @@ a {
 
 .resume-dropzone-sub {
   margin: 6px 0 0;
-  color: #777777;
+  color: var(--text-muted);
   font-size: 0.88rem;
   word-break: break-all;
 }
@@ -502,7 +483,7 @@ a {
   border: 1px solid rgba(0, 0, 0, 0.16);
   border-radius: 999px;
   font-size: 0.84rem;
-  color: #333333;
+  color: var(--text-body);
   background: #f4f4f4;
   cursor: pointer;
 }
@@ -513,7 +494,7 @@ a {
 
 .resume-form-error {
   margin: 8px 0 0;
-  color: #ad3f3f;
+  color: var(--error);
   font-size: 0.88rem;
 }
 
@@ -560,7 +541,7 @@ a {
 
 .resume-form-tip {
   margin: 8px 0 0;
-  color: #777777;
+  color: var(--text-muted);
   font-size: 0.86rem;
 }
 
@@ -584,7 +565,7 @@ a {
 }
 
 .resume-result-head span {
-  color: #777777;
+  color: var(--text-muted);
   font-size: 0.84rem;
 }
 
@@ -604,7 +585,7 @@ a {
 
 .resume-result-empty {
   text-align: center;
-  color: #777777;
+  color: var(--text-muted);
   max-width: 300px;
   line-height: 1.6;
 }
@@ -623,7 +604,7 @@ a {
 
 .resume-result-error {
   margin: 0;
-  color: #ad3f3f;
+  color: var(--error);
   line-height: 1.6;
 }
 
@@ -644,7 +625,7 @@ a {
   border: 1px solid rgba(0, 0, 0, 0.14);
   border-radius: 9px;
   background: #f6f6f6;
-  color: #333333;
+  color: var(--text-body);
   padding: 10px 13px;
 }
 
@@ -659,7 +640,7 @@ a {
 
 .resume-result-note {
   margin: 9px 0 0;
-  color: #777777;
+  color: var(--text-muted);
   font-size: 0.84rem;
 }
 
@@ -684,6 +665,7 @@ a {
   width: 500%;
   transform: translateX(0%);
   align-items: flex-start;
+  transition: transform 450ms cubic-bezier(0.65, 0, 0.35, 1);
 }
 
 .resume-craft-step-card {
@@ -699,11 +681,8 @@ a {
 .resume-craft-step1-card {
   border-radius: 18px;
   border: 1px solid rgba(226, 216, 198, 0.7);
-  background: radial-gradient(circle at 52% 30%, #ffffff 0%, #fffaf2 100%);
-  box-shadow:
-    0 8px 24px rgba(140, 120, 90, 0.08),
-    0 2px 6px rgba(0, 0, 0, 0.03),
-    inset 0 0 24px rgba(255, 255, 255, 0.26);
+  background: var(--surface);
+  box-shadow: 0 4px 12px rgba(140, 120, 90, 0.08);
   padding: 32px 36px;
   gap: 12px;
 }
@@ -777,14 +756,14 @@ a {
 .resume-craft-soft-separator {
   height: 6px;
   border-radius: 999px;
-  background: linear-gradient(180deg, rgba(236, 227, 214, 0.35), rgba(255, 255, 255, 0));
+  background: rgba(236, 227, 214, 0.18);
 }
 
 .resume-craft-head-divider {
   margin-top: 12px;
   height: 1px;
   width: 100%;
-  background: linear-gradient(90deg, rgba(148, 159, 170, 0.28), rgba(148, 159, 170, 0.04));
+  background: rgba(148, 159, 170, 0.14);
 }
 
 .resume-craft-step-grid {
@@ -824,16 +803,16 @@ a {
 .resume-craft-control-label em {
   margin-left: 4px;
   font-style: normal;
-  color: #9a9a9a;
+  color: #6e6e6e;
   font-weight: 600;
 }
 
 .resume-craft-step1-card .resume-craft-control-label em {
-  color: #cf9768;
+  color: #9e6f3e;
 }
 
 .resume-craft-step-card:not(.resume-craft-step1-card) .resume-craft-control-label em {
-  color: #cf9768;
+  color: #9e6f3e;
 }
 
 .resume-craft-select-shell {
@@ -842,7 +821,7 @@ a {
   gap: 10px;
   border-radius: 12px;
   border: 1px solid rgba(170, 177, 182, 0.5);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(251, 251, 249, 0.98));
+  background: #fcfcfa;
   padding: 0 12px;
   min-height: 48px;
   transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
@@ -858,7 +837,7 @@ a {
 
 .resume-craft-select-shell:hover {
   border-color: rgba(113, 132, 150, 0.62);
-  background: linear-gradient(180deg, rgba(252, 254, 255, 0.98), rgba(246, 250, 253, 0.98));
+  background: #fbfdfd;
   transform: translateY(-1px);
 }
 
@@ -889,7 +868,7 @@ a {
   font-weight: 700;
   letter-spacing: 0.02em;
   color: #5f7387;
-  background: linear-gradient(150deg, #edf2f6, #dde7ef);
+  background: #e4ecf2;
   border: 1px solid rgba(111, 141, 168, 0.24);
 }
 
@@ -902,31 +881,31 @@ a {
 
 .resume-craft-step-grid .resume-craft-control:nth-child(1) .resume-craft-select-icon {
   color: #666666;
-  background: linear-gradient(145deg, #efefec, #e7e6e2);
+  background: #ebebe8;
   border-color: rgba(149, 149, 149, 0.24);
 }
 
 .resume-craft-step-grid .resume-craft-control:nth-child(2) .resume-craft-select-icon {
   color: #516d88;
-  background: linear-gradient(145deg, #e7f1fb, #dce9f6);
+  background: #e1ecf5;
   border-color: rgba(116, 146, 172, 0.28);
 }
 
 .resume-craft-step-grid .resume-craft-control:nth-child(3) .resume-craft-select-icon {
   color: #7e6547;
-  background: linear-gradient(145deg, #f2ebe1, #ebdfcf);
+  background: #efe5d8;
   border-color: rgba(168, 143, 108, 0.28);
 }
 
 .resume-craft-select-icon.tone {
   color: #536d88;
-  background: linear-gradient(145deg, #e9f2fb, #dce8f5);
+  background: #e2edf5;
   border-color: rgba(112, 143, 170, 0.28);
 }
 
 .resume-craft-select-icon.count {
   color: #6f6a5a;
-  background: linear-gradient(145deg, #f0ede5, #e8e4d8);
+  background: #eceae0;
   border-color: rgba(154, 146, 125, 0.26);
 }
 
@@ -952,7 +931,7 @@ a {
   margin-top: 6px;
   border-radius: 14px;
   border: 1px solid rgba(198, 204, 208, 0.36);
-  background: linear-gradient(180deg, rgba(249, 249, 246, 0.7), rgba(254, 254, 253, 0.95));
+  background: #fcfcfa;
   padding: 18px 16px;
   display: grid;
   place-items: center;
@@ -1011,7 +990,7 @@ a {
   border: 1px dashed rgba(153, 166, 178, 0.45);
   border-radius: 14px;
   padding: 13px 14px;
-  background: linear-gradient(180deg, rgba(252, 250, 245, 0.9), rgba(255, 255, 255, 0.97));
+  background: #fcfaf8;
   transition: border-color 220ms ease-out, box-shadow 220ms ease-out, background-color 220ms ease-out;
 }
 
@@ -1173,7 +1152,7 @@ a {
   font-weight: 700;
   color: #5b6f84;
   border: 1px solid rgba(111, 141, 168, 0.28);
-  background: linear-gradient(150deg, #edf3f8, #e2eaf2);
+  background: #e7eff3;
 }
 
 .resume-craft-edu-item {
@@ -1294,8 +1273,8 @@ a {
 }
 
 .resume-craft-month-cell.active {
-  background: #0a84ff;
-  border-color: rgba(10, 132, 255, 0.7);
+  background: #0070e0;
+  border-color: rgba(0, 112, 224, 0.7);
   color: #ffffff;
 }
 
@@ -1316,13 +1295,13 @@ a {
   justify-self: center;
   min-width: 180px;
   margin-top: 2px;
-  background: linear-gradient(145deg, #f4efe4, #ece6da);
+  background: #efe9df;
   color: #676767;
   border: 1px solid rgba(181, 173, 156, 0.44);
 }
 
 .resume-craft-education-wrap .ghost-btn:hover:not(:disabled) {
-  background: linear-gradient(145deg, #efe9dc, #e5dece);
+  background: #e8e1d4;
   color: #4a4a4a;
   border-color: rgba(158, 149, 132, 0.55);
 }
@@ -1347,11 +1326,11 @@ a {
   margin-top: 0;
   min-width: 156px;
   border-radius: 12px;
-  background: linear-gradient(145deg, #202020, #0f0f0f);
+  background: #111111;
 }
 
 .resume-craft-next-btn:hover:not(:disabled) {
-  background: linear-gradient(145deg, #2c3a47, #5f7890);
+  background: #466b85;
   box-shadow: 0 12px 22px rgba(53, 73, 91, 0.24);
   transform: translateY(-1px);
 }
@@ -1365,7 +1344,7 @@ a {
   min-width: 120px;
   min-height: 44px;
   border-radius: 12px;
-  background: linear-gradient(145deg, #5c5147, #4a3f36);
+  background: #534a41;
   color: #ffffff;
   transition: transform 220ms ease-out, box-shadow 220ms ease-out, filter 220ms ease-out, background-color 220ms ease-out;
 }
@@ -1395,40 +1374,6 @@ a {
   margin-top: 6px;
   font-size: 12px;
   color: #b2736f;
-}
-
-@media (prefers-color-scheme: dark) {
-  .resume-craft-step1-card {
-    border-color: rgba(95, 86, 74, 0.8);
-    background: radial-gradient(circle at 52% 30%, #2f2b27 0%, #27231f 100%);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.36), 0 2px 6px rgba(0, 0, 0, 0.26);
-  }
-
-  .resume-craft-step1-card .resume-craft-step-head h2 {
-    color: #f0e9de;
-  }
-
-  .resume-craft-step1-card .resume-craft-step-head p,
-  .resume-craft-step1-card .resume-craft-step-progress-note {
-    color: #c9c0b4;
-  }
-
-  .resume-craft-step1-card .resume-craft-control-label {
-    color: #dbd1c4;
-  }
-
-  .resume-craft-step1-card .resume-craft-select-shell,
-  .resume-craft-step1-card .resume-craft-form-grid .resume-craft-control input,
-  .resume-craft-step1-card .resume-craft-form-grid .resume-craft-control textarea {
-    background: #2a2520;
-    border-color: #5f5448;
-    color: #f5eee2;
-  }
-
-  .resume-craft-step1-card .resume-craft-form-grid .resume-craft-control input::placeholder,
-  .resume-craft-step1-card .resume-craft-form-grid .resume-craft-control textarea::placeholder {
-    color: #9d9284;
-  }
 }
 
 .resume-craft-next-btn.is-loading {
@@ -1511,7 +1456,7 @@ a {
 }
 
 .resume-craft-back-btn.resume-craft-chat-nav-btn {
-  background: linear-gradient(165deg, #f6f6f6, #ececec);
+  background: #f1f1f1;
   color: #2f2f2f;
   border: 1px solid rgba(0, 0, 0, 0.08);
 }
@@ -1524,7 +1469,7 @@ a {
 }
 
 .resume-craft-restart-btn.resume-craft-chat-nav-btn {
-  background: linear-gradient(165deg, #f6f0e7, #ece3d7);
+  background: #f0e9df;
   color: #5b4b3d;
   border: 1px solid rgba(132, 108, 84, 0.18);
 }
@@ -1538,7 +1483,7 @@ a {
 .resume-craft-pill {
   border-radius: 999px;
   border: 1px solid rgba(0, 0, 0, 0.08);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(246, 246, 244, 0.92));
+  background: #f5f5f3;
   padding: 6px 11px;
   font-size: 0.82rem;
   color: #4a4a4a;
@@ -1585,25 +1530,25 @@ a {
 
 .resume-craft-pill.template {
   border-color: rgba(136, 136, 136, 0.23);
-  background: linear-gradient(150deg, #f2f2f1, #e9e9e7);
-  color: #555555;
+  background: #eeece9;
+  color: var(--text-body);
 }
 
 .resume-craft-pill.language {
   border-color: rgba(111, 141, 168, 0.32);
-  background: linear-gradient(150deg, #e9f1f7, #dbe7f0);
+  background: #e2ecf3;
   color: #45647f;
 }
 
 .resume-craft-pill.photo {
   border-color: rgba(173, 149, 117, 0.28);
-  background: linear-gradient(150deg, #f3ede4, #ece1d2);
+  background: #efe6da;
   color: #7f6644;
 }
 
 .resume-craft-chat-log {
   border: 1px solid rgba(170, 181, 191, 0.3);
-  background: linear-gradient(180deg, rgba(253, 253, 251, 0.92), rgba(247, 247, 245, 0.9));
+  background: #f8f8f6;
   min-height: 360px;
   max-height: 58vh;
 }
@@ -1637,20 +1582,20 @@ a {
   font-size: 0.7rem;
   font-weight: 700;
   color: #4f6b84;
-  background: linear-gradient(150deg, #eaf2f7, #dbe7f0);
+  background: #e2ecf3;
   border: 1px solid rgba(111, 141, 168, 0.3);
 }
 
 .resume-craft-chat-log .msg.assistant span {
   background: #e9e9eb;
-  color: #111111;
+  color: var(--ink);
   border: 1px solid rgba(0, 0, 0, 0.06);
   border-bottom-left-radius: 8px;
 }
 
 .resume-craft-chat-log .msg.user span {
-  background: #0a84ff;
-  border: 1px solid rgba(10, 132, 255, 0.75);
+  background: #0070e0;
+  border: 1px solid rgba(0, 112, 224, 0.75);
   color: #ffffff;
   border-bottom-right-radius: 8px;
 }
@@ -1692,11 +1637,11 @@ a {
 }
 
 .resume-craft-send-btn:hover:not(:disabled) {
-  background: linear-gradient(145deg, #2d3d4d, #111111);
+  background: #1e2e3d;
 }
 
 .resume-craft-send-btn:disabled {
-  background: linear-gradient(145deg, #c5c5c4, #b4b4b3);
+  background: #bbbbb9;
   color: #ececec;
 }
 
@@ -1785,7 +1730,7 @@ a {
 .resume-craft-preview-panel {
   border: 1px solid rgba(111, 141, 168, 0.24);
   border-radius: 12px;
-  background: linear-gradient(180deg, rgba(240, 248, 255, 0.5), rgba(230, 242, 250, 0.3));
+  background: rgba(240, 248, 255, 0.4);
   padding: 14px;
   margin: 12px 0;
   display: flex;
@@ -1887,7 +1832,7 @@ a {
 .resume-craft-preview-placeholder {
   border-radius: 14px;
   border: 1px dashed rgba(111, 141, 168, 0.44);
-  background: linear-gradient(180deg, rgba(250, 250, 248, 0.86), rgba(255, 255, 255, 0.98));
+  background: #fcfcfb;
   padding: 18px;
   display: grid;
   place-items: center;
@@ -1944,7 +1889,7 @@ a {
 }
 
 .resume-craft-preview-head span {
-  color: #777777;
+  color: var(--text-muted);
   font-size: 0.84rem;
 }
 
@@ -1965,13 +1910,13 @@ a {
 .resume-craft-actions .ghost-btn {
   border: 1px solid rgba(111, 141, 168, 0.28);
   border-radius: 9px;
-  background: linear-gradient(180deg, #f7f9fb, #edf2f6);
+  background: #f3f6f9;
   color: #3c5369;
   padding: 10px 13px;
 }
 
 .resume-craft-actions .ghost-btn:hover:not(:disabled) {
-  background: linear-gradient(180deg, #f0f5f9, #dfeaf2);
+  background: #e8eff4;
 }
 
 .resume-craft-actions .ghost-btn:disabled {
@@ -1982,20 +1927,14 @@ a {
 .surface {
   border: 1px solid var(--warm-line);
   border-radius: 18px;
-  background:
-    radial-gradient(circle at 16% 0%, rgba(255, 249, 238, 0.92) 0%, rgba(255, 255, 255, 0.98) 46%),
-    radial-gradient(circle at 86% 92%, rgba(249, 245, 235, 0.68) 0%, rgba(255, 255, 255, 0.95) 52%),
-    var(--surface);
+  background: var(--surface);
   box-shadow: var(--shadow);
   padding: 18px;
-  backdrop-filter: blur(3px);
-  transition: box-shadow 180ms ease, transform 180ms ease, border-color 180ms ease;
+  transition: box-shadow 180ms ease, border-color 180ms ease;
 }
 
 .surface:hover {
-  box-shadow: 0 18px 40px rgba(41, 50, 57, 0.1), 0 4px 16px rgba(149, 130, 95, 0.08);
   border-color: rgba(214, 201, 174, 0.62);
-  transform: translateY(-2px);
 }
 
 .surface h2,
@@ -2060,25 +1999,25 @@ textarea {
 
 .primary-btn {
   margin-top: 12px;
-  background: linear-gradient(145deg, #171717, #0f0f0f);
+  background: #111111;
   color: white;
-  box-shadow: 0 8px 18px rgba(18, 24, 30, 0.2);
+  box-shadow: 0 4px 12px rgba(18, 24, 30, 0.15);
 }
 
 .ghost-btn {
-  background: linear-gradient(165deg, #fafafa, #efefef);
-  color: #111111;
+  background: transparent;
+  color: var(--ink);
   border: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 .primary-btn:hover:not(:disabled) {
-  background: linear-gradient(145deg, #304457, #6f8da8);
-  box-shadow: 0 10px 20px rgba(62, 89, 112, 0.24);
+  background: #3d556c;
+  box-shadow: 0 6px 14px rgba(62, 89, 112, 0.2);
   transform: translateY(-1px);
 }
 
 .ghost-btn:hover:not(:disabled) {
-  background: linear-gradient(165deg, #f4f8fb, #e7edf2);
+  background: #edf2f6;
   color: #3d556c;
   border-color: rgba(111, 141, 168, 0.3);
 }
@@ -2167,7 +2106,6 @@ textarea {
   position: fixed;
   inset: 0;
   background: rgba(8, 14, 20, 0.14);
-  backdrop-filter: blur(1px);
   z-index: 39;
 }
 
@@ -2216,7 +2154,7 @@ textarea {
 }
 
 .footer-links a:hover {
-  color: #111111;
+  color: var(--ink);
 }
 
 .footer-links a + a {
@@ -2228,7 +2166,7 @@ textarea {
   content: "·";
   position: absolute;
   left: 6px;
-  color: #9a9a9a;
+  color: #6e6e6e;
 }
 
 .mock-shell .chat-panel {
@@ -2508,10 +2446,7 @@ textarea {
   align-items: center;
   justify-content: center;
   min-height: 100vh;
-  background:
-    radial-gradient(circle at 20% 30%, rgba(135, 168, 196, 0.08) 0%, transparent 50%),
-    radial-gradient(circle at 80% 70%, rgba(111, 141, 168, 0.06) 0%, transparent 50%),
-    #fafaf9;
+  background: var(--bg);
 }
 
 .login-card {
@@ -2530,13 +2465,13 @@ textarea {
   font-family: "Sora", sans-serif;
   font-size: 2rem;
   font-weight: 700;
-  color: #111111;
+  color: var(--ink);
   letter-spacing: 0.04em;
 }
 
 .login-subtitle {
   margin: 0 0 32px;
-  color: #777777;
+  color: var(--text-muted);
   font-size: 0.96rem;
 }
 
@@ -2558,7 +2493,7 @@ textarea {
 }
 
 .github-oauth-btn:hover {
-  background: linear-gradient(145deg, #111111, #2a2a2a);
+  background: #2a2a2a;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
   transform: translateY(-1px);
 }
@@ -2578,7 +2513,7 @@ textarea {
 }
 
 .login-loading-text {
-  color: #777777;
+  color: var(--text-muted);
   font-size: 0.96rem;
 }
 
@@ -2643,9 +2578,8 @@ textarea {
   padding: 8px;
   border: 1px solid rgba(17, 17, 17, 0.1);
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.12);
-  backdrop-filter: blur(10px);
+  background: #ffffff;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.1);
   z-index: 20;
 }
 
@@ -2654,7 +2588,7 @@ textarea {
   border: 0;
   border-radius: 12px;
   background: transparent;
-  color: #111111;
+  color: var(--ink);
   font: inherit;
   font-size: 0.9rem;
   text-align: center;
@@ -2693,7 +2627,7 @@ textarea {
 
 .oauth-callback-card p {
   margin: 0;
-  color: #555555;
+  color: var(--text-body);
   line-height: 1.6;
 }
 
@@ -2702,7 +2636,7 @@ textarea {
   position: sticky;
   top: 0;
   z-index: 50;
-  background: linear-gradient(135deg, rgba(255, 245, 232, 0.97), rgba(255, 250, 240, 0.95));
+  background: var(--surface);
   border-bottom: 1px solid rgba(220, 190, 160, 0.5);
   padding: 12px 20px;
   display: flex;
@@ -2775,10 +2709,6 @@ textarea {
   to { opacity: 1; transform: translateY(0); }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .consent-banner { animation: none; }
-}
-
 @media (max-width: 400px) {
   .resume-craft-step-card {
     padding: 12px;
@@ -2810,4 +2740,75 @@ textarea {
   .consent-banner-actions button {
     flex: 1;
   }
+}
+
+/* ─── Reduced Motion ─── */
+@media (prefers-reduced-motion: reduce) {
+  .resume-craft-wizard-track { transition: none; }
+  .consent-banner { animation: none; }
+}
+
+/* ─── Dark Mode ─── */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1a1a1a;
+    --ink: #e8e8e8;
+    --muted: #b0b0b0;
+    --subtle: #8a8a8a;
+    --text-heading: #f0f0f0;
+    --text-body: #d4d4d4;
+    --text-muted: #a0a0a0;
+    --text-subtle: #8a8a8a;
+    --accent: #7fb3d4;
+    --accent-strong: #5a9bc4;
+    --accent-soft: rgba(127, 179, 212, 0.15);
+    --surface: #242424;
+    --surface-raised: #2a2a2a;
+    --line: #3a3a3a;
+    --border-default: rgba(255,255,255,0.12);
+    --border-focus: #7fb3d4;
+    --warm-line: #4a4a3a;
+    --shadow: rgba(0, 0, 0, 0.4);
+    --error: #e05555;
+  }
+
+  body { background-color: var(--bg); color: var(--ink); }
+
+  .surface { background: var(--surface); border-color: var(--line); }
+
+  .landing-card { background: var(--surface); border-color: var(--line); }
+
+  .resume-craft-step1-card,
+  .resume-craft-step-card { background: var(--surface); border-color: var(--line); }
+
+  .resume-craft-chat-log { background: var(--surface); }
+  .chat-log { background: var(--surface); }
+
+  .settings-panel { background: var(--surface); border-color: var(--line); }
+  .settings-backdrop { background: rgba(0, 0, 0, 0.6); }
+
+  .login-page { background: var(--bg); }
+
+  .consent-banner { background: var(--surface-raised); border-color: var(--line); }
+
+  .consent-overlay { background: rgba(0, 0, 0, 0.6); }
+  .consent-card { background: var(--surface); }
+
+  input, select, textarea {
+    background: var(--surface-raised);
+    border-color: var(--line);
+    color: var(--ink);
+  }
+
+  .primary-btn { background: #e0e0e0; color: #111111; }
+  .ghost-btn { background: transparent; color: var(--ink); border-color: var(--line); }
+
+  .user-dropdown { background: var(--surface-raised); border-color: var(--line); }
+
+  .login-card { background: var(--surface); border-color: var(--line); }
+  .oauth-callback-card { background: var(--surface); border-color: var(--line); }
+
+  .resume-craft-preview-panel { background: var(--surface-raised); border-color: var(--line); }
+
+  .resume-craft-pill-btn { border-color: var(--line); color: var(--text-muted); }
 }

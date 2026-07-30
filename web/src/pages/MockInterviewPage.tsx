@@ -34,9 +34,10 @@ export function MockInterviewPage() {
         history
       });
       const answer = resp.reply || "系统未返回内容，请稍后重试。";
-      for (let i = 1; i <= answer.length; i += 1) {
-        await sleep(12);
-        const partial = answer.slice(0, i);
+      const CHUNK = 16;
+      for (let i = CHUNK; i <= answer.length + CHUNK; i += CHUNK) {
+        await sleep(30);
+        const partial = answer.slice(0, Math.min(i, answer.length));
         setMessages((prev) => {
           const next = [...prev];
           const idx = next.length - 1;
@@ -51,7 +52,7 @@ export function MockInterviewPage() {
         const next = [...prev];
         const idx = next.length - 1;
         if (idx >= 0) {
-          next[idx] = { role: "assistant", content: (err as Error).message };
+          next[idx] = { role: "assistant", content: (err as Error).message + "\n\n请重试" };
         }
         return next;
       });
@@ -75,7 +76,7 @@ export function MockInterviewPage() {
         <form className="chat-input" onSubmit={send}>
           <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="例如：我想面试 AI 产品经理岗位" aria-label="输入消息" />
           <button className="primary-btn" disabled={loading}>
-            {loading ? "生成中..." : "发送"}
+            {loading ? "生成中..." : "开始面试模拟"}
           </button>
         </form>
       </article>

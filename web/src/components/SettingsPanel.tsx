@@ -55,7 +55,7 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
           </button>
         </div>
 
-        <label htmlFor="sp-model">
+        <label htmlFor="sp-model" title="模型标识符，如 deepseek-chat、gpt-4o。留空则使用默认模型。">
           Model
           <input
             id="sp-model"
@@ -63,9 +63,12 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
             onChange={(e) => updateSettings({ model: e.target.value })}
             placeholder="deepseek-chat"
           />
+          <small style={{ color: 'var(--text-subtle, #888)', fontSize: '0.75rem' }}>
+            如 deepseek-chat、gpt-4o
+          </small>
         </label>
 
-        <label htmlFor="sp-apikey">
+        <label htmlFor="sp-apikey" title="你的 API 密钥，仅存储在浏览器本地。留空则使用服务端默认密钥。">
           API Key
           <input
             id="sp-apikey"
@@ -74,9 +77,12 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
             onChange={(e) => updateSettings({ apiKey: e.target.value })}
             placeholder="留空则使用服务端默认 Key"
           />
+          <small style={{ color: 'var(--text-subtle, #888)', fontSize: '0.75rem' }}>
+            仅存储在浏览器本地
+          </small>
         </label>
 
-        <label htmlFor="sp-baseurl">
+        <label htmlFor="sp-baseurl" title="API 服务的根地址。仅在自建代理时需要填写。">
           Base URL (可选)
           <input
             id="sp-baseurl"
@@ -84,6 +90,9 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
             onChange={(e) => updateSettings({ baseUrl: e.target.value })}
             placeholder="https://api.deepseek.com/v1"
           />
+          <small style={{ color: 'var(--text-subtle, #888)', fontSize: '0.75rem' }}>
+            仅在自建代理时需要填写
+          </small>
         </label>
 
         <p className="settings-hint">默认使用平台 DeepSeek 模型；这里填写会覆盖本次请求参数。</p>

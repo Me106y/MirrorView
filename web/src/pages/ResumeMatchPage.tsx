@@ -158,7 +158,7 @@ export function ResumeMatchPage() {
           </header>
 
           <label htmlFor="rm-role">目标岗位</label>
-          <input id="rm-role" value={targetRole} onChange={(e) => setTargetRole(e.target.value)} placeholder="例如：AI 产品经理" />
+          <input id="rm-role" value={targetRole} onChange={(e) => setTargetRole(e.target.value)} placeholder="填写你正在申请的岗位名称，如“AI 产品经理”" />
 
           <label htmlFor="rm-resume">上传简历（仅支持 PDF）</label>
           <div
@@ -212,7 +212,7 @@ export function ResumeMatchPage() {
             rows={10}
             value={jdText}
             onChange={(e) => setJdText(e.target.value)}
-            placeholder="粘贴岗位描述，建议包含职责、要求与加分项"
+            placeholder={"岗位职责：\n- 负责 AI 产品的需求分析与技术落地\n\n任职要求：\n- 3年以上后端开发经验\n- 熟悉 Python/TypeScript\n\n加分项：\n- 有 LLM/RAG 项目经验"}
           />
 
           <button className="primary-btn resume-submit-btn" disabled={!canSubmit}>
@@ -248,7 +248,10 @@ export function ResumeMatchPage() {
                 </div>
               </>
             ) : (
-              <p className="resume-result-error">{result.message}</p>
+              <div className="resume-match-result-error">
+                <p className="resume-result-error">{result.message}</p>
+                <button type="button" className="ghost-btn" onClick={() => void onSubmit({ preventDefault: () => {} } as FormEvent)}>重试</button>
+              </div>
             )}
           </section>
         ) : null}

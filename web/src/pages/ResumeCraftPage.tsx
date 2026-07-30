@@ -1,5 +1,4 @@
 import { FormEvent, ReactNode, SyntheticEvent, useEffect, useMemo, useRef, useState } from "react";
-import { gsap } from "gsap";
 import { callCareerforgeSkill } from "../lib/api";
 import { useModelSettings } from "../context/ModelSettingsContext";
 import { loadResumeCraftDraft, saveResumeCraftDraft } from "../lib/storage";
@@ -264,6 +263,7 @@ export function ResumeCraftPage() {
   const wizardTrackRef = useRef<HTMLDivElement | null>(null);
   const stepRefs = useRef<Record<StepNumber, HTMLElement | null>>({ 1: null, 2: null, 3: null, 4: null, 5: null });
   const monthPickerWrapRef = useRef<HTMLDivElement | null>(null);
+  const rafRef = useRef<number>(0);
   const stepSnapshots = useRef<Record<number, {
     profile: Step1Profile;
     linksInput: string;
@@ -302,28 +302,26 @@ export function ResumeCraftPage() {
   }, [wizardState, renderLoading]);
 
   useEffect(() => {
-    const track = wizardTrackRef.current;
-    if (!track) return;
-    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    gsap.killTweensOf(track);
-    gsap.to(track, {
-      xPercent: -((step - 1) * STEP_SHIFT),
-      duration: prefersReducedMotion ? 0 : 0.45,
-      ease: "power2.inOut",
-    });
-    return () => gsap.killTweensOf(track);
-  }, [step]);
-
-  useEffect(() => {
     const card = stepRefs.current[step];
     if (!card) return;
-    const updateHeight = () => setViewportHeight(card.offsetHeight);
+
+    const updateHeight = () => {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        setViewportHeight(card.offsetHeight);
+      });
+    };
+
     updateHeight();
+
     if (typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(() => updateHeight());
+    const observer = new ResizeObserver(updateHeight);
     observer.observe(card);
-    return () => observer.disconnect();
-  }, [step, profile, photoHint, photoLoading, messagesByStep, wizardState, result.kind, chatLoading, renderLoading]);
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(rafRef.current);
+    };
+  }, [step]);
 
   useEffect(() => {
     const onPointerDown = (event: MouseEvent) => {
@@ -818,7 +816,7 @@ export function ResumeCraftPage() {
     <section className="resume-craft-page">
       <div className="resume-craft-layout">
         <div className="resume-craft-wizard-viewport" style={viewportHeight ? { height: `${viewportHeight}px` } : undefined}>
-          <div className="resume-craft-wizard-track" ref={wizardTrackRef}>
+          <div className="resume-craft-wizard-track" ref={wizardTrackRef} style={{ transform: `translateX(-${(step - 1) * STEP_SHIFT}%)` }}>
             {stepCard(
               1,
               <>
@@ -886,14 +884,14 @@ export function ResumeCraftPage() {
                 <div className="resume-craft-form-grid resume-craft-step1-form-section">
                   <label className="resume-craft-control" htmlFor="rc-target-role">
                     <span className="resume-craft-control-label">目标岗位 <em>*</em></span>
-                    <input id="rc-target-role" value={profile.target_role} placeholder="例如：AI 应用开发工程师" onChange={(e) => setProfile((prev) => ({ ...prev, target_role: e.target.value }))} />
+                    <input id="rc-target-role" value={profile.target_role} placeholder="填写你期望的岗位方向，帮助我们为你定制简历内容" onChange={(e) => setProfile((prev) => ({ ...prev, target_role: e.target.value }))} />
                   </label>
                 </div>
 
                 <div className="resume-craft-form-grid resume-craft-step1-form-section">
                   <label className="resume-craft-control" htmlFor="rc-jd-summary">
                     <span className="resume-craft-control-label">目标 JD 摘要</span>
-                    <textarea id="rc-jd-summary" value={profile.jd_summary} placeholder="可粘贴核心职责、技术要求、业务场景关键词" onChange={(e) => setProfile((prev) => ({ ...prev, jd_summary: e.target.value }))} />
+                    <textarea id="rc-jd-summary" value={profile.jd_summary} placeholder="示例：AI 应用开发工程师，要求 3 年 Python/TypeScript 经验，熟悉 LLM/RAG 技术栈，有分布式系统设计经验" onChange={(e) => setProfile((prev) => ({ ...prev, jd_summary: e.target.value }))} />
                   </label>
                 </div>
 
@@ -1247,8 +1245,9 @@ export function ResumeCraftPage() {
         </div>
 
         {result.kind === "error" ? (
-          <section className="surface resume-craft-output" style={{ marginTop: 14 }}>
+          <section className="surface resume-craft-output resume-craft-result-error" style={{ marginTop: 14 }}>
             <p className="resume-result-error">{result.message}</p>
+            <button type="button" className="ghost-btn" onClick={() => void renderResume()}>重试</button>
           </section>
         ) : null}
       </div>
