@@ -6,7 +6,7 @@ import { ResumeCraftPage } from "./pages/ResumeCraftPage";
 import { CoverLetterPage } from "./pages/CoverLetterPage";
 import { MockInterviewPage } from "./pages/MockInterviewPage";
 import { JobHuntPage } from "./pages/JobHuntPage";
-import { LoginPage } from "./pages/LoginPage";
+import { HomePage } from "./pages/HomePage";
 import { PrivacyPage } from "./pages/legal/PrivacyPage";
 import { TermsPage } from "./pages/legal/TermsPage";
 import { AiDisclaimerPage } from "./pages/legal/AiDisclaimerPage";
@@ -25,9 +25,9 @@ export default function App() {
   return (
     <>
       <Routes>
-        <Route path="/login" element={<Navigate to="/resume-match" replace />} />
+        <Route path="/login" element={<Navigate to="/" replace />} />
         <Route element={<ProtectedShell onOpenSettings={() => setSettingsOpen(true)} />}>
-          <Route path="/" element={<Navigate to="/resume-match" replace />} />
+          <Route path="/" element={<HomePage />} />
           <Route path="/resume-match" element={<ResumeMatchPage />} />
           <Route path="/resume-craft" element={<ResumeCraftPage />} />
           <Route path="/cover-letter" element={<CoverLetterPage />} />
