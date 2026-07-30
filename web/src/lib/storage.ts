@@ -10,17 +10,27 @@ export const defaultSettings: ModelSettings = {
   apiKey: "",
   baseUrl: "",
   turnstileToken: "",
-  apiBaseUrl: "/api"
+  apiBaseUrl: ""
 };
+
+function isLocalDevHost(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  const host = window.location.hostname.toLowerCase();
+  return host === "localhost" || host === "127.0.0.1";
+}
 
 function normalizeApiBaseUrl(value: unknown): string {
   const raw = String(value ?? "").trim();
   if (!raw) {
-    return "/api";
+    return isLocalDevHost() ? "/api" : "";
   }
 
-  // Keep same-origin default in production to avoid stale legacy endpoints
-  // stored in localStorage from older builds.
+  if (raw === "/api") {
+    return isLocalDevHost() ? "/api" : "";
+  }
+
   if (raw.startsWith("/")) {
     return raw;
   }
@@ -30,7 +40,7 @@ function normalizeApiBaseUrl(value: unknown): string {
     return raw;
   }
 
-  return "/api";
+  return isLocalDevHost() ? "/api" : "";
 }
 
 export function loadSettings(): ModelSettings {

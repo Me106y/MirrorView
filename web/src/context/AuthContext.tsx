@@ -33,7 +33,11 @@ export function useAuth() {
 }
 
 function resolveApiBase(): string {
-  return "/api";
+  const host = window.location.hostname.toLowerCase();
+  if (host === "localhost" || host === "127.0.0.1") {
+    return "/api";
+  }
+  return "";
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -60,8 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(() => {
     const base = resolveApiBase();
-    const returnTo = encodeURIComponent(window.location.origin);
-    window.location.href = `${base}/auth/github?return_to=${returnTo}`;
+    window.location.href = `${base}/auth/github`;
   }, []);
 
   const logout = useCallback(async () => {

@@ -454,11 +454,14 @@ def _is_allowed_return_origin(origin: str) -> bool:
     normalized = _normalize_absolute_url(origin)
     if not normalized:
         return False
+    host = urlsplit(normalized).netloc.lower()
     allowed = {
         _normalize_absolute_url(_get_public_base_url()),
         _normalize_absolute_url(_get_github_callback_base_url()),
     }
-    return normalized in allowed
+    if normalized in allowed:
+        return True
+    return host.endswith(".vercel.app") and host.startswith("mirror-view-")
 
 
 def _create_login_handoff_token(user_id: int, return_to: str) -> str:
@@ -529,12 +532,156 @@ def _redirect_to_github_callback_origin() -> Optional[Response]:
     if not callback_base_url or callback_base_url == request_base_url:
         return None
 
-    return_to = request.args.get("return_to", "").strip() or _get_public_base_url()
+    return_to = request.args.get("return_to", "").strip() or request_base_url
     if not _is_allowed_return_origin(return_to):
-        return_to = _get_public_base_url()
+        return_to = request_base_url
 
     target_url = f"{callback_base_url}{request.path}?return_to={quote(_normalize_absolute_url(return_to), safe='')}"
     return redirect(target_url, code=302)
+
+
+def _clear_oauth_flow_cookies(response):
+    response.delete_cookie("oauth_state", path="/")
+    response.delete_cookie("oauth_return_to", path="/")
+
+
+def _load_oauth_return_to() -> str:
+    return_to = unquote(request.cookies.get("oauth_return_to", "") or "").strip() or _get_request_base_url()
+    if not _is_allowed_return_origin(return_to):
+        return_to = _get_request_base_url()
+    return return_to
+
+
+def _decode_return_to_token(token: str) -> str:
+    raw = (token or "").strip()
+    if not raw:
+        return ""
+
+    try:
+        padded = raw + "=" * (-len(raw) % 4)
+        decoded = base64.urlsafe_b64decode(padded.encode("utf-8")).decode("utf-8")
+    except Exception:
+        return ""
+
+    return decoded.strip()
+
+
+def _exchange_github_code_for_user(code: str):
+    base_url = _get_github_callback_base_url()
+    logger.info("OAuth callback: exchanging code for token, base_url=%s", base_url)
+
+    try:
+        token_resp = requests.post(
+            Config.GITHUB_TOKEN_URL,
+            data={
+                "client_id": Config.GITHUB_CLIENT_ID,
+                "client_secret": Config.GITHUB_CLIENT_SECRET,
+                "code": code,
+                "redirect_uri": f"{base_url}/auth/github/callback",
+            },
+            headers={"Accept": "application/json"},
+            timeout=15,
+        )
+        token_data = token_resp.json()
+    except Exception as exc:
+        logger.error("GitHub token exchange request failed: %s", exc)
+        return jsonify({
+            "error": "token_exchange_failed",
+            "message": "Failed to reach GitHub token endpoint.",
+            "detail": str(exc),
+        }), 200
+
+    access_token = token_data.get("access_token")
+    if not access_token:
+        logger.error("GitHub token exchange failed: %s", token_data)
+        return jsonify({
+            "error": "token_exchange_failed",
+            "message": "Failed to obtain access token.",
+            "detail": token_data.get("error_description") or str(token_data),
+        }), 200
+
+    try:
+        user_resp = requests.get(
+            Config.GITHUB_USER_URL,
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Accept": "application/json",
+            },
+            timeout=15,
+        )
+        gh_user = user_resp.json()
+    except Exception as exc:
+        logger.error("GitHub user info request failed: %s", exc)
+        return jsonify({
+            "error": "github_user_failed",
+            "message": "Failed to fetch GitHub user info.",
+            "detail": str(exc),
+        }), 200
+
+    github_id = str(gh_user.get("id", ""))
+    if not github_id:
+        logger.error("GitHub user info missing id: %s", gh_user)
+        return jsonify({"error": "github_user_failed", "message": "GitHub user has no id."}), 200
+
+    logger.info("OAuth login: github_id=%s username=%s", github_id, gh_user.get("login"))
+
+    gh_username = gh_user.get("login", "") or f"github_{github_id}"
+    gh_avatar = gh_user.get("avatar_url", "")
+
+    try:
+        user = User.query.filter_by(github_id=github_id).first()
+        if not user:
+            base_name = gh_username
+            suffix = 1
+            while User.query.filter_by(username=gh_username).first():
+                gh_username = f"{base_name}_{suffix}"
+                suffix += 1
+            user = User(
+                username=gh_username,
+                github_id=github_id,
+                avatar_url=gh_avatar,
+            )
+            user.set_password(secrets.token_urlsafe(32))
+            db.session.add(user)
+        else:
+            user.avatar_url = gh_avatar
+            user.username = gh_username
+
+        user.last_login = datetime.utcnow()
+        db.session.commit()
+        return user
+    except Exception as exc:
+        db.session.rollback()
+        logger.error("Database error during OAuth login: %s", exc)
+        return jsonify({
+            "error": "db_error",
+            "message": "Failed to save user session.",
+            "detail": str(exc),
+        }), 200
+
+
+def _build_oauth_success_response(user: User, return_to: str, response_mode: str = "redirect"):
+    callback_origin = _normalize_absolute_url(_get_github_callback_base_url())
+    target_origin = _normalize_absolute_url(return_to) or _normalize_absolute_url(_get_public_base_url())
+
+    if callback_origin and target_origin and callback_origin != target_origin:
+        handoff_token = _create_login_handoff_token(user.id, target_origin)
+        target_url = f"{target_origin}/auth/finalize?token={quote(handoff_token, safe='')}"
+        if response_mode == "json":
+            resp = make_response(jsonify({"ok": True, "redirect_to": target_url}))
+        else:
+            resp = make_response(redirect(target_url))
+        _clear_oauth_flow_cookies(resp)
+        return resp
+
+    session_token = _session_create(user.id)
+    if response_mode == "json":
+        resp = make_response(jsonify({"ok": True, "redirect_to": "/"}))
+    else:
+        resp = make_response(redirect("/"))
+    _set_session_cookie(resp, session_token)
+    _clear_oauth_flow_cookies(resp)
+    return resp
 
 
 def _set_session_cookie(response, token: str):
@@ -571,6 +718,37 @@ def _get_current_user() -> Optional[User]:
 # GitHub OAuth2 Routes
 # ──────────────────────────────────────────────────────
 
+@api.route('/auth/github/start/<path:return_to_token>', methods=['GET'])
+def github_oauth_start_path(return_to_token: str):
+    if not Config.GITHUB_CLIENT_ID:
+        return jsonify({"error": "github_not_configured", "message": "GitHub OAuth not configured."}), 503
+
+    callback_base_url = _normalize_absolute_url(_get_github_callback_base_url())
+    request_base_url = _normalize_absolute_url(_get_request_base_url())
+    return_to = _decode_return_to_token(return_to_token) or _get_public_base_url()
+    if not _is_allowed_return_origin(return_to):
+        return_to = _get_public_base_url()
+
+    if callback_base_url and callback_base_url != request_base_url:
+        normalized_return_to = _normalize_absolute_url(return_to)
+        encoded_return_to = base64.urlsafe_b64encode(normalized_return_to.encode("utf-8")).decode("utf-8").rstrip("=")
+        return redirect(f"{callback_base_url}/auth/github/start/{encoded_return_to}", code=302)
+
+    state = secrets.token_urlsafe(32)
+    params = urlencode({
+        "client_id": Config.GITHUB_CLIENT_ID,
+        "redirect_uri": f"{_get_github_callback_base_url()}/auth/github/callback",
+        "scope": "read:user user:email",
+        "state": state,
+    })
+
+    redirect_url = f"{Config.GITHUB_AUTHORIZE_URL}?{params}"
+    resp = make_response(redirect(redirect_url))
+    is_secure = not ("localhost" in request.host or "127.0.0.1" in request.host)
+    resp.set_cookie("oauth_state", state, max_age=600, httponly=True, secure=is_secure, samesite="lax", path="/")
+    resp.set_cookie("oauth_return_to", quote(_normalize_absolute_url(return_to), safe=""), max_age=600, httponly=True, secure=is_secure, samesite="lax", path="/")
+    return resp
+
 @api.route('/auth/github', methods=['GET'])
 def github_oauth_start():
     """Step 1: Redirect user to GitHub authorize page."""
@@ -588,15 +766,15 @@ def github_oauth_start():
         if canonical_redirect is not None and callback_base_url == _normalize_absolute_url(_get_public_base_url()):
             return canonical_redirect
 
-    return_to = request.args.get("return_to", "").strip() or _get_public_base_url()
+    return_to = request.args.get("return_to", "").strip() or _normalize_absolute_url(_get_request_base_url())
     if not _is_allowed_return_origin(return_to):
-        return_to = _get_public_base_url()
+        return_to = _normalize_absolute_url(_get_request_base_url())
 
     state = secrets.token_urlsafe(32)
     base_url = _get_github_callback_base_url()
     params = urlencode({
         "client_id": Config.GITHUB_CLIENT_ID,
-        "redirect_uri": f"{base_url}/api/auth/github/callback",
+        "redirect_uri": f"{base_url}/auth/github/callback",
         "scope": "read:user user:email",
         "state": state,
     })
@@ -641,127 +819,67 @@ def _github_oauth_callback_inner():
     if not code:
         return jsonify({"error": "missing_code", "message": "No authorization code received."}), 400
 
-    return_to = unquote(request.cookies.get("oauth_return_to", "") or "").strip() or _get_public_base_url()
-    if not _is_allowed_return_origin(return_to):
-        return_to = _get_public_base_url()
+    return_to = _load_oauth_return_to()
+    user = _exchange_github_code_for_user(code)
+    if not isinstance(user, User):
+        return user
+    return _build_oauth_success_response(user, return_to, response_mode="redirect")
 
-    # Exchange code for access token
-    base_url = _get_github_callback_base_url()
-    logger.info("OAuth callback: exchanging code for token, base_url=%s", base_url)
 
-    try:
-        token_resp = requests.post(
-            Config.GITHUB_TOKEN_URL,
-            data={
-                "client_id": Config.GITHUB_CLIENT_ID,
-                "client_secret": Config.GITHUB_CLIENT_SECRET,
-                "code": code,
-                "redirect_uri": f"{base_url}/api/auth/github/callback",
-            },
-            headers={"Accept": "application/json"},
-            timeout=15,
-        )
-        token_data = token_resp.json()
-    except Exception as exc:
-        logger.error("GitHub token exchange request failed: %s", exc)
-        return jsonify({
-            "error": "token_exchange_failed",
-            "message": "Failed to reach GitHub token endpoint.",
-            "detail": str(exc),
-        }), 200
+@api.route('/auth/github/exchange', methods=['POST'])
+def github_oauth_exchange():
+    data = request.get_json(silent=True) or {}
+    state = str(data.get("state") or "").strip()
+    expected_state = request.cookies.get("oauth_state", "")
+    if not state or state != expected_state:
+        logger.warning("OAuth CSRF(exchange): state=%s expected=%s", state[:8] if state else None, expected_state[:8] if expected_state else None)
+        return jsonify({"error": "csrf_detected", "message": "Invalid OAuth state."}), 403
 
-    access_token = token_data.get("access_token")
-    if not access_token:
-        logger.error("GitHub token exchange failed: %s", token_data)
-        return jsonify({
-            "error": "token_exchange_failed",
-            "message": "Failed to obtain access token.",
-            "detail": token_data.get("error_description") or str(token_data),
-        }), 200
+    code = str(data.get("code") or "").strip()
+    if not code:
+        return jsonify({"error": "missing_code", "message": "No authorization code received."}), 400
 
-    # Fetch GitHub user info
-    try:
-        user_resp = requests.get(
-            Config.GITHUB_USER_URL,
-            headers={
-                "Authorization": f"Bearer {access_token}",
-                "Accept": "application/json",
-            },
-            timeout=15,
-        )
-        gh_user = user_resp.json()
-    except Exception as exc:
-        logger.error("GitHub user info request failed: %s", exc)
-        return jsonify({
-            "error": "github_user_failed",
-            "message": "Failed to fetch GitHub user info.",
-            "detail": str(exc),
-        }), 200
-
-    github_id = str(gh_user.get("id", ""))
-    if not github_id:
-        logger.error("GitHub user info missing id: %s", gh_user)
-        return jsonify({"error": "github_user_failed", "message": "GitHub user has no id."}), 200
-
-    logger.info("OAuth login: github_id=%s username=%s", github_id, gh_user.get("login"))
-
-    gh_username = gh_user.get("login", "") or f"github_{github_id}"
-    gh_avatar = gh_user.get("avatar_url", "")
-
-    # Find or create user (handle duplicate username gracefully)
-    try:
-        user = User.query.filter_by(github_id=github_id).first()
-        if not user:
-            # Ensure unique username
-            base_name = gh_username
-            suffix = 1
-            while User.query.filter_by(username=gh_username).first():
-                gh_username = f"{base_name}_{suffix}"
-                suffix += 1
-            user = User(
-                username=gh_username,
-                github_id=github_id,
-                avatar_url=gh_avatar,
-            )
-            user.set_password(secrets.token_urlsafe(32))
-            db.session.add(user)
-        else:
-            user.avatar_url = gh_avatar
-            user.username = gh_username
-
-        user.last_login = datetime.utcnow()
-        db.session.commit()
-    except Exception as exc:
-        db.session.rollback()
-        logger.error("Database error during OAuth login: %s", exc)
-        return jsonify({
-            "error": "db_error",
-            "message": "Failed to save user session.",
-            "detail": str(exc),
-        }), 200
-
-    callback_origin = _normalize_absolute_url(_get_github_callback_base_url())
-    public_origin = _normalize_absolute_url(_get_public_base_url())
-
-    if callback_origin and public_origin and callback_origin != public_origin:
-        handoff_token = _create_login_handoff_token(user.id, return_to)
-        target_url = f"{return_to}/api/auth/complete?token={quote(handoff_token, safe='')}"
-        resp = make_response(redirect(target_url))
-        resp.delete_cookie("oauth_state", path="/")
-        resp.delete_cookie("oauth_return_to", path="/")
-        return resp
-
-    session_token = _session_create(user.id)
-    resp = make_response(redirect("/"))
-    _set_session_cookie(resp, session_token)
-    resp.delete_cookie("oauth_state", path="/")
-    resp.delete_cookie("oauth_return_to", path="/")
-    return resp
+    return_to = _load_oauth_return_to()
+    user = _exchange_github_code_for_user(code)
+    if not isinstance(user, User):
+        return user
+    return _build_oauth_success_response(user, return_to, response_mode="json")
 
 
 @api.route('/auth/complete', methods=['GET'])
 def auth_complete():
     token = request.args.get("token", "").strip()
+    if not token:
+        return jsonify({"error": "missing_handoff_token", "message": "Missing login completion token."}), 400
+    payload = _verify_login_handoff_token(token)
+    if not payload:
+        return jsonify({"error": "invalid_handoff_token", "message": "Invalid or expired login completion token."}), 400
+
+    session_token = _session_create(payload["uid"])
+    resp = make_response(redirect("/"))
+    _set_session_cookie(resp, session_token)
+    return resp
+
+
+@api.route('/auth/complete/<path:token>', methods=['GET'])
+def auth_complete_path(token: str):
+    token = (token or "").strip()
+    payload = _verify_login_handoff_token(token)
+    if not payload:
+        return jsonify({"error": "invalid_handoff_token", "message": "Invalid or expired login completion token."}), 400
+
+    session_token = _session_create(payload["uid"])
+    resp = make_response(redirect("/"))
+    _set_session_cookie(resp, session_token)
+    return resp
+
+
+@api.route('/auth/finalize', methods=['GET'])
+def auth_finalize():
+    token = request.args.get("token", "").strip()
+    if not token:
+        return jsonify({"error": "missing_handoff_token", "message": "Missing login completion token."}), 400
+
     payload = _verify_login_handoff_token(token)
     if not payload:
         return jsonify({"error": "invalid_handoff_token", "message": "Invalid or expired login completion token."}), 400

@@ -8,11 +8,19 @@
       "includeFiles": "api/**"
     }
   },
-  "rewrites": [
+  "redirects": [
+    {
+      "source": "/api/auth/github/callback",
+      "destination": "/oauth/github/callback",
+      "permanent": false
+    },
     {
       "source": "/api/(.*)",
-      "destination": "/api/index.py"
-    },
+      "destination": "/$1",
+      "permanent": false
+    }
+  ],
+  "rewrites": [
     {
       "source": "/",
       "destination": "/index.html"

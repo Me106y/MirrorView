@@ -7,6 +7,7 @@ import { CoverLetterPage } from "./pages/CoverLetterPage";
 import { MockInterviewPage } from "./pages/MockInterviewPage";
 import { JobHuntPage } from "./pages/JobHuntPage";
 import { HomePage } from "./pages/HomePage";
+import { OAuthCallbackPage } from "./pages/OAuthCallbackPage";
 import { PrivacyPage } from "./pages/legal/PrivacyPage";
 import { TermsPage } from "./pages/legal/TermsPage";
 import { AiDisclaimerPage } from "./pages/legal/AiDisclaimerPage";
@@ -26,6 +27,7 @@ export default function App() {
     <>
       <Routes>
         <Route path="/login" element={<Navigate to="/" replace />} />
+        <Route path="/oauth/github/callback" element={<OAuthCallbackPage />} />
         <Route element={<ProtectedShell onOpenSettings={() => setSettingsOpen(true)} />}>
           <Route path="/" element={<HomePage />} />
           <Route path="/resume-match" element={<ResumeMatchPage />} />

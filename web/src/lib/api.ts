@@ -13,8 +13,13 @@ interface ApiEnvelope<T> {
 
 function normalizeApiBaseUrl(value: string): string {
   const raw = String(value || "").trim();
+  const host = typeof window === "undefined" ? "" : window.location.hostname.toLowerCase();
+  const localDev = host === "localhost" || host === "127.0.0.1";
   if (!raw) {
-    return "/api";
+    return localDev ? "/api" : "";
+  }
+  if (raw === "/api") {
+    return localDev ? "/api" : "";
   }
   if (raw.startsWith("/")) {
     return raw;
@@ -22,7 +27,7 @@ function normalizeApiBaseUrl(value: string): string {
   if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/.*)?$/i.test(raw)) {
     return raw;
   }
-  return "/api";
+  return localDev ? "/api" : "";
 }
 
 function buildRuntime(settings: ModelSettings) {
