@@ -154,6 +154,45 @@ export function ResumeMatchPage() {
       const htmlHeight = doc.documentElement?.scrollHeight ?? 0;
       const next = Math.max(720, bodyHeight, htmlHeight);
       setFrameHeight(next + 12);
+
+      // Inject styles for internal navigation links
+      const style = doc.createElement('style');
+      style.textContent = `
+        a[href*="resume-craft"], a[href*="cover-letter"], a[href*="mock-interview"], a[href*="resume-match"] {
+          color: #4f7ba3;
+          text-decoration: underline;
+          cursor: pointer;
+          transition: color 150ms;
+        }
+        a[href*="resume-craft"]:hover, a[href*="cover-letter"]:hover, a[href*="mock-interview"]:hover, a[href*="resume-match"]:hover {
+          color: #2d5a7b;
+        }
+      `;
+      doc.head.appendChild(style);
+
+      // Inject click handler for internal navigation
+      doc.addEventListener('click', (ev: MouseEvent) => {
+        const target = ev.target as HTMLElement;
+        const link = target.closest('a');
+        if (!link) return;
+        const href = link.getAttribute('href');
+        if (!href) return;
+
+        const internalRoutes: Record<string, string> = {
+          'resume-craft': '/resume-craft',
+          'cover-letter': '/cover-letter',
+          'mock-interview': '/mock-interview',
+          'resume-match': '/resume-match',
+        };
+
+        for (const [key, path] of Object.entries(internalRoutes)) {
+          if (href.includes(key)) {
+            ev.preventDefault();
+            window.location.href = path;
+            return;
+          }
+        }
+      });
     } catch {
       setFrameHeight(980);
     }
@@ -166,7 +205,7 @@ export function ResumeMatchPage() {
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M19 12H5M12 19l-7-7 7-7"/>
           </svg>
-          返回首页
+          返回
         </NavLink>
         <div className="resume-match-report-head">
           <h2>匹配分析报告</h2>
@@ -212,7 +251,7 @@ export function ResumeMatchPage() {
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M19 12H5M12 19l-7-7 7-7"/>
         </svg>
-        返回首页
+        返回
       </NavLink>
       <div className="resume-match-layout">
         <form className="surface resume-match-form" onSubmit={onSubmit}>
