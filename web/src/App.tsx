@@ -13,7 +13,6 @@ import { TermsPage } from "./pages/legal/TermsPage";
 import { AiDisclaimerPage } from "./pages/legal/AiDisclaimerPage";
 import { ByokRiskPage } from "./pages/legal/ByokRiskPage";
 import { useState } from "react";
-import { ConsentModal } from "./components/ConsentModal";
 import { Analytics } from "@vercel/analytics/react";
 
 function ProtectedShell({ onOpenSettings }: { onOpenSettings: () => void }) {
@@ -42,7 +41,6 @@ export default function App() {
         </Route>
       </Routes>
       <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
-      <ConsentModal />
       <Analytics />
     </>
   );

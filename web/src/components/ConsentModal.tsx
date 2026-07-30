@@ -1,12 +1,22 @@
 import { Link } from "react-router-dom";
 import { useConsent } from "../context/ConsentContext";
 
-export function ConsentModal() {
+interface ConsentModalProps {
+  open: boolean;
+  onClose?: () => void;
+}
+
+export function ConsentModal({ open, onClose }: ConsentModalProps) {
   const { accepted, accept } = useConsent();
 
-  if (accepted) {
+  if (!open || accepted) {
     return null;
   }
+
+  const handleAccept = () => {
+    accept();
+    onClose?.();
+  };
 
   return (
     <div className="consent-overlay">
@@ -18,7 +28,7 @@ export function ConsentModal() {
           <Link to="/legal/ai-disclaimer">AI 免责声明</Link>、<Link to="/legal/byok-risk">BYOK 风险提示</Link>。
         </p>
         <p>本产品首版采用匿名即用与本地同意记录策略，不做账号登录。</p>
-        <button className="primary-btn" onClick={accept}>
+        <button className="primary-btn" onClick={handleAccept}>
           我已阅读并同意
         </button>
       </div>

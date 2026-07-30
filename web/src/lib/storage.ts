@@ -1,7 +1,8 @@
-import type { ModelSettings } from "../types";
+import type { ModelSettings, Step1Profile } from "../types";
 
 export const MODEL_SETTINGS_KEY = "mirrorview:web:model-settings:v2";
 export const CONSENT_ACCEPTED_KEY = "mirrorview:web:consent:v1";
+export const RESUME_CRAFT_DRAFT_KEY = "mirrorview:web:resume-craft:draft:v1";
 
 export const defaultSettings: ModelSettings = {
   mode: "platform",
@@ -77,4 +78,22 @@ export function isConsentAccepted(): boolean {
 
 export function setConsentAccepted(): void {
   localStorage.setItem(CONSENT_ACCEPTED_KEY, "accepted");
+}
+
+export function saveResumeCraftDraft(profile: Step1Profile): void {
+  try {
+    localStorage.setItem(RESUME_CRAFT_DRAFT_KEY, JSON.stringify(profile));
+  } catch {
+    // ignore storage errors (quota exceeded, privacy mode, etc.)
+  }
+}
+
+export function loadResumeCraftDraft(): Step1Profile | null {
+  try {
+    const raw = localStorage.getItem(RESUME_CRAFT_DRAFT_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as Step1Profile;
+  } catch {
+    return null;
+  }
 }

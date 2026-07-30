@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { ConsentBanner } from "./ConsentBanner";
 
 export function Shell({ onOpenSettings }: { onOpenSettings: () => void }) {
   const location = useLocation();
@@ -44,6 +45,7 @@ export function Shell({ onOpenSettings }: { onOpenSettings: () => void }) {
 
   return (
     <div className="app-shell">
+      <ConsentBanner />
       <header className={`topbar${isHome ? " topbar-home" : ""}`}>
         <div className="topbar-brand-wrap">
           <NavLink to="/" className="topbar-brand-link">

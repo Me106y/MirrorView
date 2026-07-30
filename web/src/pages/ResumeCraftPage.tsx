@@ -2,7 +2,10 @@ import { FormEvent, ReactNode, SyntheticEvent, useEffect, useMemo, useRef, useSt
 import { gsap } from "gsap";
 import { callCareerforgeSkill } from "../lib/api";
 import { useModelSettings } from "../context/ModelSettingsContext";
+import { loadResumeCraftDraft, saveResumeCraftDraft } from "../lib/storage";
 import type { EducationItem, ResumeCraftWizardState, Step1Profile } from "../types";
+import { ConsentModal } from "../components/ConsentModal";
+import { useConsent } from "../context/ConsentContext";
 
 type Msg = { role: "user" | "assistant"; content: string; timestamp: string };
 type StepNumber = 1 | 2 | 3 | 4 | 5 | 6;
@@ -124,6 +127,20 @@ const EMPTY_EDUCATION: EducationItem = {
   highlights: "",
 };
 
+function simpleMarkdownToHtml(md: string): string {
+  return md
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/^- (.+)$/gm, '<li>$1</li>')
+    .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
+    .replace(/\n{2,}/g, '</p><p>')
+    .replace(/\n/g, '<br/>')
+    .replace(/^(?!<[huplo])((?!<).+)$/gm, '<p>$1</p>');
+}
+
 function splitTags(input: string) {
   return input
     .split(/[，,\n；;|]/)
@@ -201,10 +218,12 @@ function splitPeriod(period: string) {
 
 export function ResumeCraftPage() {
   const { settings } = useModelSettings();
+  const { accepted } = useConsent();
+  const [showConsentPrompt, setShowConsentPrompt] = useState(false);
 
   const [step, setStep] = useState<StepNumber>(1);
-  const [profile, setProfile] = useState<Step1Profile>(EMPTY_PROFILE);
-  const [linksInput, setLinksInput] = useState("");
+  const [profile, setProfile] = useState<Step1Profile>(() => loadResumeCraftDraft() ?? EMPTY_PROFILE);
+  const [linksInput, setLinksInput] = useState(() => profile.personal_info.links.join(", "));
 
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoDataUrl, setPhotoDataUrl] = useState("");
@@ -241,6 +260,12 @@ export function ResumeCraftPage() {
   const wizardTrackRef = useRef<HTMLDivElement | null>(null);
   const stepRefs = useRef<Record<StepNumber, HTMLElement | null>>({ 1: null, 2: null, 3: null, 4: null, 5: null, 6: null });
   const monthPickerWrapRef = useRef<HTMLDivElement | null>(null);
+  const stepSnapshots = useRef<Record<number, {
+    profile: Step1Profile;
+    linksInput: string;
+    photoDataUrl: string;
+    photoFile: File | null;
+  }>>({});
 
   const canStep1Next = useMemo(() => {
     const hasTemplate = TEMPLATE_OPTIONS.some((item) => item.value === profile.template_code);
@@ -362,11 +387,33 @@ export function ResumeCraftPage() {
     if (step === 1 && !canStep1Next) return;
     if (step === 2 && !canStep2Next) return;
     if (step === 3 && !canStep3Next) return;
-    if (step < 6) setStep((prev) => (prev + 1) as StepNumber);
+    if (step < 6) {
+      stepSnapshots.current[step] = {
+        profile: { ...profile },
+        linksInput,
+        photoDataUrl,
+        photoFile,
+      };
+      saveResumeCraftDraft({
+        ...profile,
+        personal_info: { ...profile.personal_info, links: splitTags(linksInput) },
+      });
+      setStep((prev) => (prev + 1) as StepNumber);
+    }
   };
 
   const goPrev = () => {
-    if (step > 1) setStep((prev) => (prev - 1) as StepNumber);
+    if (step > 1) {
+      const prevStep = (step - 1) as StepNumber;
+      const snapshot = stepSnapshots.current[prevStep];
+      if (snapshot) {
+        setProfile(snapshot.profile);
+        setLinksInput(snapshot.linksInput);
+        setPhotoDataUrl(snapshot.photoDataUrl);
+        setPhotoFile(snapshot.photoFile);
+      }
+      setStep(prevStep);
+    }
   };
 
   const onRestartCurrentChat = () => {
@@ -427,16 +474,15 @@ export function ResumeCraftPage() {
     setChatInput("");
   };
 
-  const onSendChat = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!activeChatStep || !chatInput.trim() || chatLoading) return;
-
-    const userMessage: Msg = { role: "user", content: chatInput.trim(), timestamp: nowTimeLabel() };
+  const sendChatMessage = async (messageText: string) => {
+    if (!activeChatStep || !messageText.trim() || chatLoading) return;
+  
+    const userMessage: Msg = { role: "user", content: messageText.trim(), timestamp: nowTimeLabel() };
     const nextMessages = [...messagesByStep[activeChatStep], userMessage];
     setMessagesByStep((prev) => ({ ...prev, [activeChatStep]: nextMessages }));
     setChatInput("");
     setChatLoading(true);
-
+  
     try {
       const step1Profile = buildProfilePayload();
       const resp = (await callCareerforgeSkill(settings, "/careerforge/resume-craft/chat-turn", {
@@ -451,7 +497,7 @@ export function ResumeCraftPage() {
         photo_pref: step1Profile.photo_pref,
         experience_state: wizardState.step_states.step4,
       })) as Record<string, unknown>;
-
+  
       const serverReply = String(resp.reply || "").trim();
       const step6PreviewMarkdown = String(resp.step6_preview_markdown || "").trim();
       const step6AppliedChanges = Array.isArray(resp.step6_applied_changes)
@@ -469,19 +515,19 @@ export function ResumeCraftPage() {
       } else {
         safeReply = getStepReplyGuard(activeChatStep, serverReply) ? serverReply : STEP_PROMPTS[activeChatStep];
       }
-
+  
       if (activeChatStep === 6 && step6PreviewMarkdown && !safeReply.includes(step6PreviewMarkdown)) {
         const changeText = step6AppliedChanges.length
           ? `已应用修改：\n${step6AppliedChanges.map((item) => `- ${item}`).join("\n")}\n\n`
           : "";
-        safeReply = `${changeText}以下是准备生成的内容，请先确认：\n\n${step6PreviewMarkdown}\n\n如无误请回复“确认生成”，或继续提出修改意见。`;
+        safeReply = `${changeText}以下是准备生成的内容，请先确认：\n\n${step6PreviewMarkdown}\n\n如无误请回复"确认生成"，或继续提出修改意见。`;
       }
-
+  
       const nextWizard = (resp.wizard_state as ResumeCraftWizardState | undefined) || wizardState;
       const missingFields = Array.isArray(resp.missing_fields) ? (resp.missing_fields as string[]) : [];
       const nextStepSuggestion = String(resp.next_step_suggestion || "stay");
       const action = String(resp.action || "");
-
+  
       setWizardState(nextWizard);
       setMissingByStep((prev) => ({ ...prev, [activeChatStep]: missingFields }));
       setMessagesByStep((prev) => ({
@@ -506,6 +552,16 @@ export function ResumeCraftPage() {
     } finally {
       setChatLoading(false);
     }
+  };
+  
+  const onSendChat = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!chatInput.trim()) return;
+    await sendChatMessage(chatInput.trim());
+  };
+  
+  const generatePreview = async () => {
+    await sendChatMessage("请生成简历预览");
   };
 
   const updateEducationField = (index: number, field: keyof EducationItem, value: string) => {
@@ -570,6 +626,10 @@ export function ResumeCraftPage() {
   }, [profile.education]);
 
   const renderResume = async (overrides?: { template_code?: string; language?: string }) => {
+    if (!accepted) {
+      setShowConsentPrompt(true);
+      return;
+    }
     if (!canGenerate) return;
     setRenderLoading(true);
     try {
@@ -740,6 +800,7 @@ export function ResumeCraftPage() {
             />
           </section>
         </div>
+        <ConsentModal open={showConsentPrompt} onClose={() => { setShowConsentPrompt(false); if (accepted) void renderResume(); }} />
       </section>
     );
   }
@@ -1102,10 +1163,38 @@ export function ResumeCraftPage() {
                     )}
                   </div>
 
+                  {chatStep === 6 && wizardState?.step_states?.step6?.preview_markdown ? (
+                    <div className="resume-craft-preview-panel">
+                      <div className="resume-craft-preview-header">
+                        <span className="resume-craft-preview-title">草稿预览</span>
+                        <button
+                          type="button"
+                          className="ghost-btn resume-craft-preview-close"
+                          onClick={() => setWizardState(prev => ({
+                            ...prev,
+                            step_states: {
+                              ...prev.step_states,
+                              step6: { ...prev.step_states.step6, preview_markdown: "" }
+                            }
+                          }))}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                      <div
+                        className="resume-craft-preview-content"
+                        dangerouslySetInnerHTML={{ __html: simpleMarkdownToHtml(wizardState.step_states.step6.preview_markdown) }}
+                      />
+                    </div>
+                  ) : null}
+
                   {chatStep === 6 ? (
                     <div className="resume-craft-step-actions">
+                      <button type="button" className="ghost-btn" disabled={renderLoading || chatLoading} onClick={generatePreview}>
+                        预览草稿
+                      </button>
                       <button type="button" className="primary-btn resume-craft-next-btn" disabled={!canGenerate} onClick={() => void renderResume()}>
-                        {renderLoading ? "生成中..." : "生成简历"}
+                        {renderLoading ? "生成中..." : wizardState?.step_states?.step6?.preview_ready ? "确认生成简历" : "生成简历"}
                       </button>
                     </div>
                   ) : null}
@@ -1121,6 +1210,7 @@ export function ResumeCraftPage() {
           </section>
         ) : null}
       </div>
+      <ConsentModal open={showConsentPrompt} onClose={() => { setShowConsentPrompt(false); if (accepted) void renderResume(); }} />
     </section>
   );
 }

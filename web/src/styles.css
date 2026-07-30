@@ -1720,6 +1720,73 @@ a {
   min-height: 70vh;
 }
 
+/* Preview panel for Step 6 */
+.resume-craft-preview-panel {
+  border: 1px solid rgba(111, 141, 168, 0.24);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(240, 248, 255, 0.5), rgba(230, 242, 250, 0.3));
+  padding: 14px;
+  margin: 12px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.resume-craft-preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.resume-craft-preview-title {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: #3c5369;
+}
+
+.resume-craft-preview-close {
+  padding: 4px 8px;
+  font-size: 0.8rem;
+  min-height: auto;
+}
+
+.resume-craft-preview-content {
+  max-height: 340px;
+  overflow-y: auto;
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.8);
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: #333;
+}
+
+.resume-craft-preview-content h1,
+.resume-craft-preview-content h2,
+.resume-craft-preview-content h3 {
+  margin: 0.5em 0 0.25em;
+}
+
+.resume-craft-preview-content ul {
+  padding-left: 1.5em;
+  margin: 0.5em 0;
+}
+
+.resume-craft-preview-content p {
+  margin: 0.4em 0;
+}
+
+@media (max-width: 620px) {
+  .resume-craft-preview-panel {
+    margin: 8px 0;
+    padding: 10px;
+  }
+  .resume-craft-preview-content {
+    max-height: 260px;
+    padding: 10px;
+  }
+}
+
 .resume-craft-readiness-note p {
   margin: 4px 0 0;
   color: #5b6c7b;
@@ -2534,4 +2601,98 @@ textarea {
   margin: 0;
   color: #555555;
   line-height: 1.6;
+}
+
+/* ─── Consent Banner ─── */
+.consent-banner {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: linear-gradient(135deg, rgba(255, 245, 232, 0.97), rgba(255, 250, 240, 0.95));
+  border-bottom: 1px solid rgba(220, 190, 160, 0.5);
+  padding: 12px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  font-size: 0.88rem;
+  color: #5d4a3a;
+  animation: consentSlideDown 300ms ease;
+}
+
+.consent-banner-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex: 1;
+}
+
+.consent-banner-icon {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(208, 144, 96, 0.2);
+  color: #a0691f;
+  font-weight: 700;
+  font-size: 0.75rem;
+}
+
+.consent-banner-text {
+  flex: 1;
+  line-height: 1.5;
+}
+
+.consent-banner-text p { margin: 0; }
+
+.consent-banner-text a {
+  color: #c47f3f;
+  text-decoration: underline;
+  margin: 0 3px;
+}
+
+.consent-banner-actions {
+  display: flex;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.consent-banner-actions .ghost-btn {
+  padding: 7px 12px;
+  font-size: 0.84rem;
+  min-height: 32px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.consent-banner-actions .primary-btn {
+  padding: 7px 14px;
+  font-size: 0.84rem;
+  min-height: 32px;
+  margin: 0;
+}
+
+@keyframes consentSlideDown {
+  from { opacity: 0; transform: translateY(-100%); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .consent-banner { animation: none; }
+}
+
+@media (max-width: 620px) {
+  .consent-banner {
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+  }
+  .consent-banner-actions {
+    width: 100%;
+  }
+  .consent-banner-actions button {
+    flex: 1;
+  }
 }
