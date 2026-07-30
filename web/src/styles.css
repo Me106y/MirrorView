@@ -2437,15 +2437,14 @@ textarea {
   width: 40px;
   height: 40px;
   padding: 0;
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  border: 0;
   border-radius: 999px;
-  background: #ffffff;
+  background: transparent;
   cursor: pointer;
-  transition: box-shadow 140ms ease, transform 140ms ease, border-color 140ms ease;
+  transition: box-shadow 140ms ease, transform 140ms ease;
 }
 
 .user-avatar-trigger:hover {
-  border-color: rgba(0, 0, 0, 0.2);
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
 }
 
@@ -2454,11 +2453,11 @@ textarea {
 }
 
 .user-avatar {
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   object-fit: cover;
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  border: 0;
 }
 
 .user-avatar-fallback {
@@ -2477,8 +2476,9 @@ textarea {
 .user-dropdown {
   position: absolute;
   top: calc(100% + 10px);
-  right: 0;
-  min-width: 144px;
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 108px;
   padding: 8px;
   border: 1px solid rgba(17, 17, 17, 0.1);
   border-radius: 16px;
@@ -2495,8 +2495,9 @@ textarea {
   background: transparent;
   color: #111111;
   font: inherit;
-  text-align: left;
-  padding: 10px 12px;
+  font-size: 0.9rem;
+  text-align: center;
+  padding: 9px 10px;
   cursor: pointer;
   transition: background 140ms ease;
 }
