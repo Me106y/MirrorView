@@ -12,3 +12,5 @@ langchain==1.2.10
 langchain-core==1.2.18
 langchain-community==0.4.1
 openai==2.26.0
+# Optional provider support for BYOK provider=anthropic.
+langchain-anthropic

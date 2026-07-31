@@ -61,4 +61,5 @@ test.pcm
 out.pcm
 .vercel
 .env*
+!.env.example
 /test-output/vercel-login-page.png

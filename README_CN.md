@@ -11,70 +11,50 @@
 
 </div>
 
----
+MirrorView 是一个面向求职者的 AI 求职工具网站，帮助用户完成从简历准备到面试练习的核心工作。网站采用 React + Vite 构建前端，Flask 提供后端接口，AI 能力由 CareerForge 工作流驱动，并支持部署到 Vercel。
 
-## 项目概述
+## 通过网站使用
 
-**MirrorView** 现在是一个 **面向 Vercel 部署的 Web 应用**，核心聚焦在 CareerForge 工作流：
+1. 打开已部署的 MirrorView 网站。
+2. 在“模型设置”中填写 DeepSeek API Key、Base URL 和模型名称，测试连接并保存。
+3. 从首页选择需要的求职工具，按页面提示输入简历、岗位 JD 或个人信息。
+4. 查看 AI 生成的分析、对话或文案结果，并在支持的页面导出 HTML / PDF。
 
-- `resume-match`
-- `resume-craft`
-- `cover-letter`
-- `mock-interview`
-- `job-hunt`
+模型 API Key 由浏览器端保存并用于请求模型。请使用临时或额度受限的 Key，并在不再使用时及时撤销。
 
-本次瘦身后，仓库已经移除了旧的：
+<!-- 截图占位：此处可补充首页、模型设置和主要功能页面截图。 -->
 
-- Qt 桌面端
-- CLI / TUI 终端端
-- Streamlit 页面
+## 网站功能
 
-当前保留并维护的主链路是：
+### 简历匹配分析
 
-- `web/`：React + Vite 前端
-- `server/`：Flask 后端源码
-- `api/`：Vercel 运行时镜像
+上传 PDF 简历并填写目标岗位和岗位 JD，获取匹配度分析、优势与差距、针对性的简历优化建议，以及可继续使用的结果报告。
 
-## 已移除内容
+### AI 简历生成
 
-仓库已不再包含：
+通过五步工作流逐步完善目标岗位、个人信息、教育背景、经历和项目内容。支持选择简历模板、中文 / 英文 / 中英文双版、可选证件照，并预览和导出 HTML / PDF 简历。
 
-- PyQt 桌面 UI
-- 终端/TUI 启动器与安装脚本
-- Streamlit 应用
-- Boson TTS 集成包
-- Docker + Nginx 自托管部署包
+### 求职信撰写
 
-`client/core/` 中仅保留少量 **纯 Python 报告生成模块**，因为后端仍会复用这些逻辑来生成 HTML 报告。
+输入公司、岗位 JD 和简历内容，生成针对具体投递场景的个性化求职信。目前支持邮件和聊天两种场景。
 
-## 当前目录结构
+### 文字模拟面试
 
-```text
-web/                 React 前端
-server/              Flask 后端源码（唯一真源）
-api/                 Vercel 运行时镜像
-skills/              CareerForge skill 定义
-scripts/sync_api_runtime.sh
-vercel.json
-requirements.txt
-```
+以对话方式进行 AI 面试练习。用户可以说明目标岗位并持续回答问题，系统会根据上下文进行多轮追问，适合用于面试表达和回答思路训练。
 
-## 技术栈
+### 岗位搜索
 
-- **前端**：React、TypeScript、Vite
-- **后端**：Flask、SQLAlchemy
-- **模型运行时**：DeepSeek / OpenAI 兼容接口 + LangChain
-- **部署平台**：Vercel
+岗位搜索页面已保留在网站导航中，目前处于功能占位阶段，后续再接入职位数据源和异步搜索流程。
 
-## 本地开发
+## 本地运行
 
-### 前置要求
+### 环境要求
 
 - Python 3.11+
 - Node.js 20+
 - npm 10+
 
-### 安装依赖
+### 安装
 
 ```bash
 pip install -r requirements.txt
@@ -83,98 +63,74 @@ npm install
 cd ..
 ```
 
-### 环境变量
+### 配置环境变量
 
-如有需要，可在仓库根目录创建 `.env`：
+复制唯一的环境变量模板，并填写本地需要的配置：
 
 ```bash
-DEEPSEEK_API_KEY=sk-...
-PLATFORM_PROVIDER=deepseek
-PLATFORM_MODEL=deepseek-chat
+cp .env.example .env
 ```
 
-生产环境建议直接在 Vercel 中配置环境变量。
+至少配置一个模型 API Key。默认配置使用 DeepSeek：
 
-### 本地启动
+```dotenv
+PLATFORM_PROVIDER=deepseek
+PLATFORM_MODEL=deepseek-chat
+DEEPSEEK_API_KEY=sk-...
+```
 
-启动后端：
+`.env.example` 同时列出了 OpenAI、Anthropic、GitHub OAuth、Session 和 Turnstile 等可选配置。真实密钥不要提交到 Git。
+
+### 启动服务
+
+在仓库根目录启动后端：
 
 ```bash
 python -m server.app
 ```
 
-启动前端：
+另开一个终端启动前端：
 
 ```bash
 cd web
 npm run dev
 ```
 
-默认本地地址：
+默认地址：
 
-- 前端：`http://localhost:5173`
-- 后端：`http://localhost:5001`
+- 网站前端：`http://localhost:5173`
+- Flask API：`http://localhost:5001`
 
-## Vercel 部署
+## 部署
 
-本仓库已经按 Vercel 方式组织完成：
+项目已按 Vercel 部署结构组织：
 
 - `web/` 构建前端静态资源
 - `api/index.py` 作为 Python Function 入口
-- `scripts/sync_api_runtime.sh` 把运行时依赖镜像到 `api/`
-- `vercel.json` 定义构建、重写与路由规则
+- `server/` 保存后端源码
+- `api/` 保存由脚本同步生成的运行时镜像
+- `vercel.json` 定义构建和路由规则
 
-### 部署命令
-
-在仓库根目录执行：
+部署前请在 Vercel 项目设置中配置模型 API Key 等环境变量，然后执行：
 
 ```bash
 npx vercel --prod
 ```
 
-也可以直接将 GitHub 仓库连接到 Vercel，让 `main` 分支推送自动触发生产部署。
-
-## 主要路由
-
-### 页面路由
-
-- `/`
-- `/resume-match`
-- `/resume-craft`
-- `/cover-letter`
-- `/mock-interview`
-- `/job-hunt`
-
-### 法务页面
-
-- `/legal/privacy`
-- `/legal/terms`
-- `/legal/ai-disclaimer`
-- `/legal/byok-risk`
-
-### 后端接口
-
-- `/careerforge/runtime/check`
-- `/careerforge/resume-match`
-- `/careerforge/resume-craft`
-- `/careerforge/resume-craft/chat-turn`
-- `/careerforge/resume-craft/render`
-- `/careerforge/cover-letter`
-- `/careerforge/agent/chat`
-
-## 开发说明
-
-- `server/` 是后端逻辑唯一真源。
-- `api/` 是通过 `scripts/sync_api_runtime.sh` 生成的 Vercel 运行时镜像。
-- 修改后端运行时代码后，请重新执行：
+修改后端运行时代码后，需要重新同步 Vercel 运行时文件：
 
 ```bash
 ./scripts/sync_api_runtime.sh
 ```
 
-## 部署前校验
+## 技术栈
 
-建议在部署前执行：
+- 前端：React、TypeScript、Vite
+- 后端：Flask、SQLAlchemy
+- AI：LangChain、DeepSeek / OpenAI 兼容模型接口
+- 部署：Vercel
+
+## 开发校验
 
 ```bash
 python -m py_compile server/app.py server/routes.py server/services/*.py

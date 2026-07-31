@@ -11,58 +11,44 @@
 
 </div>
 
----
+MirrorView is an AI career toolkit for job seekers. It helps users prepare resumes, compare a resume with a target job description, write application messages, and practice interviews through a web interface. The product uses a React + Vite frontend, a Flask API, and CareerForge workflows, and is ready for Vercel deployment.
 
-## Overview
+## Use It Through the Website
 
-**MirrorView** is now a **Vercel-first web application** focused on CareerForge workflows:
+1. Open a deployed MirrorView site.
+2. Open Model Settings and enter a DeepSeek API key, base URL, and model name. Test and save the connection.
+3. Choose a career tool from the home page and provide the requested resume, job description, or profile information.
+4. Review the generated analysis, conversation, or application content. Supported pages can export HTML or PDF files.
 
-- `resume-match`
-- `resume-craft`
-- `cover-letter`
-- `mock-interview`
-- `job-hunt`
+The model API key is kept in the browser and used for model requests. Use a temporary or usage-limited key and revoke it when it is no longer needed.
 
-This slimmed repository removes the old **Qt desktop client**, **CLI/TUI**, and **Streamlit** layers. The remaining codebase is optimized for:
+<!-- Screenshot placeholder: add the home page, model settings, and feature page screenshots here. -->
 
-- React + Vite frontend in `web/`
-- Flask API runtime in `server/`
-- Vercel runtime mirror in `api/`
+## Features
 
-## What Was Removed
+### Resume Match
 
-The repository no longer includes:
+Upload a PDF resume and provide a target role and job description. MirrorView returns a match analysis, strengths and gaps, targeted improvement suggestions, and a reusable report.
 
-- PyQt desktop UI
-- terminal/TUI launcher and installer scripts
-- Streamlit apps
-- Boson TTS integration bundle
-- Docker + Nginx self-host deployment bundle
+### AI Resume Craft
 
-A small subset of `client/core/` is intentionally kept because the server still reuses those pure-Python HTML report builders.
+Complete a five-step workflow covering the target role, personal details, education, experience, and projects. Choose a resume template, Chinese / English / bilingual output, and an optional photo, then preview and export the result as HTML or PDF.
 
-## Current Project Structure
+### Cover Letter
 
-```text
-web/                 React frontend
-server/              source-of-truth Flask backend
-api/                 Vercel runtime mirror
-skills/              CareerForge skill definitions
-scripts/sync_api_runtime.sh
-vercel.json
-requirements.txt
-```
+Provide a company, job description, and resume content to generate a tailored application letter. Email and chat scenarios are currently supported.
 
-## Tech Stack
+### Text Mock Interview
 
-- **Frontend**: React, TypeScript, Vite
-- **Backend**: Flask, SQLAlchemy
-- **LLM Runtime**: DeepSeek / OpenAI-compatible APIs via LangChain
-- **Deployment**: Vercel
+Practice with an AI interviewer in a conversational interface. The assistant uses the conversation history to ask follow-up questions, making it useful for practicing interview answers and structure.
 
-## Local Development
+### Job Search
 
-### Prerequisites
+The job search page is present in the navigation but is currently a placeholder. Job data sources and asynchronous search workflows will be added in a later phase.
+
+## Run Locally
+
+### Requirements
 
 - Python 3.11+
 - Node.js 20+
@@ -79,98 +65,72 @@ cd ..
 
 ### Configure Environment
 
-Create a local `.env` file at the repo root if needed:
+Copy the single environment template and fill in the values needed locally:
 
 ```bash
-DEEPSEEK_API_KEY=sk-...
-PLATFORM_PROVIDER=deepseek
-PLATFORM_MODEL=deepseek-chat
+cp .env.example .env
 ```
 
-You can also rely on Vercel environment variables in production.
+At least one model API key is required. The default configuration uses DeepSeek:
 
-### Run Locally
+```dotenv
+PLATFORM_PROVIDER=deepseek
+PLATFORM_MODEL=deepseek-chat
+DEEPSEEK_API_KEY=sk-...
+```
 
-Start the backend:
+`.env.example` also lists optional OpenAI, Anthropic, GitHub OAuth, session, and Turnstile settings. Never commit real credentials.
+
+### Start the Services
+
+Start the backend from the repository root:
 
 ```bash
 python -m server.app
 ```
 
-Start the frontend:
+In another terminal, start the frontend:
 
 ```bash
 cd web
 npm run dev
 ```
 
-Default local URLs:
+Default URLs:
 
 - Frontend: `http://localhost:5173`
-- Backend: `http://localhost:5001`
+- Flask API: `http://localhost:5001`
 
-## Vercel Deployment
+## Deployment
 
-This repo is configured to deploy directly on Vercel.
+The project is structured for Vercel:
 
-### Required runtime pieces
+- `web/` builds the frontend assets
+- `api/index.py` is the Python Function entrypoint
+- `server/` contains the backend source of truth
+- `api/` contains the generated runtime mirror
+- `vercel.json` defines the build and routing behavior
 
-- `web/` is built into static assets
-- `api/index.py` is the Python function entrypoint
-- `scripts/sync_api_runtime.sh` mirrors runtime files into `api/`
-- `vercel.json` defines routes, rewrites, and build behavior
-
-### Deploy
-
-From the repository root:
+Configure model API keys and other required environment variables in the Vercel project settings, then deploy with:
 
 ```bash
 npx vercel --prod
 ```
 
-Or connect the GitHub repository to Vercel and let pushes to `main` trigger production deploys.
-
-## Key Routes
-
-### App pages
-
-- `/`
-- `/resume-match`
-- `/resume-craft`
-- `/cover-letter`
-- `/mock-interview`
-- `/job-hunt`
-
-### Legal
-
-- `/legal/privacy`
-- `/legal/terms`
-- `/legal/ai-disclaimer`
-- `/legal/byok-risk`
-
-### Backend
-
-- `/careerforge/runtime/check`
-- `/careerforge/resume-match`
-- `/careerforge/resume-craft`
-- `/careerforge/resume-craft/chat-turn`
-- `/careerforge/resume-craft/render`
-- `/careerforge/cover-letter`
-- `/careerforge/agent/chat`
-
-## Development Notes
-
-- `server/` is the source of truth for backend logic.
-- `api/` should be treated as the Vercel runtime mirror generated by `scripts/sync_api_runtime.sh`.
-- If you change backend runtime files, re-run:
+After changing backend runtime code, regenerate the Vercel runtime mirror:
 
 ```bash
 ./scripts/sync_api_runtime.sh
 ```
 
-## Validation
+## Tech Stack
 
-Recommended checks before deploying:
+- Frontend: React, TypeScript, Vite
+- Backend: Flask, SQLAlchemy
+- AI: LangChain with DeepSeek / OpenAI-compatible model APIs
+- Deployment: Vercel
+
+## Validation
 
 ```bash
 python -m py_compile server/app.py server/routes.py server/services/*.py
