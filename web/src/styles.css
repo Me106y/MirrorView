@@ -3437,3 +3437,14 @@ textarea {
   color: #6b7280 !important;
   font-size: 0.95rem;
 }
+
+.feature-guard-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.feature-guard-btn {
+  min-width: 120px;
+}

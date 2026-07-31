@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { gsap } from "gsap";
 import type { ModelSettings } from "../types";
 import { testCareerforgeRuntime } from "../lib/api";
@@ -13,6 +14,7 @@ type GuardState =
 export function useCareerFeatureGuard(settings: ModelSettings, featureLabel: string) {
   const [state, setState] = useState<GuardState>({ kind: "checking", message: "正在校验模型连接…" });
   const modalRef = useRef<HTMLDivElement | null>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     let cancelled = false;
@@ -87,6 +89,24 @@ export function useCareerFeatureGuard(settings: ModelSettings, featureLabel: str
         <h3>{state.kind === "checking" ? "正在校验模型" : "请先完成模型配置"}</h3>
         <p>{state.message}</p>
         <p className="feature-guard-hint">请使用右上角「模型设置」配置你自己的 API Key；连接通过后即可继续。</p>
+        {state.kind !== "checking" ? (
+          <div className="feature-guard-actions">
+            <button
+              type="button"
+              className="primary-btn feature-guard-btn"
+              onClick={() => window.dispatchEvent(new Event("open-settings"))}
+            >
+              去设置
+            </button>
+            <button
+              type="button"
+              className="ghost-btn feature-guard-btn"
+              onClick={() => navigate("/")}
+            >
+              返回首页
+            </button>
+          </div>
+        ) : null}
       </div>
     </div>
   );

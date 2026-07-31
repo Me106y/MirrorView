@@ -85,11 +85,19 @@ class AIService:
             provider = provider or "deepseek"
             model_name = model_name or Config.DEEPSEEK_MODEL
 
-        kwargs: Dict[str, Any] = {"temperature": 0.3, "max_tokens": 2200, "streaming": False}
+        kwargs: Dict[str, Any] = {
+            "temperature": 0.2,
+            "max_tokens": 1100,
+            "streaming": False,
+            "timeout": 45,
+            "max_retries": 1,
+        }
 
         if provider == "deepseek":
             kwargs["api_key"] = api_key or Config.DEEPSEEK_API_KEY
             kwargs["base_url"] = base_url or Config.DEEPSEEK_BASE_URL
+            kwargs["extra_body"] = {"thinking": {"type": "disabled"}}
+            kwargs["response_format"] = {"type": "json_object"}
         elif provider == "openai":
             kwargs["api_key"] = api_key or Config.OPENAI_API_KEY
             if base_url:
@@ -406,7 +414,7 @@ class AIService:
             llm = agent.llm
             if llm is None:
                 raise RuntimeError(agent.llm_error or "模型初始化失败。")
-            _ = llm.invoke([HumanMessage(content="ping")])
+            _ = llm.invoke([HumanMessage(content='Return a minimal json object like {"ok": true}.')])
             return {
                 "ok": True,
                 "provider": provider,
