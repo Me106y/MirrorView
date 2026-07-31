@@ -2609,14 +2609,26 @@ def careerforge_resume_match():
     if not jd_text:
         return jsonify({'message': 'Please provide jd_text.'}), 400
 
-    result = ai_service.run_resume_match(
-        {
-            "resume_text": resume_text[:20000],
-            "jd_text": jd_text[:12000],
-            "target_role": target_role,
-        },
-        runtime=runtime,
-    )
+    try:
+        result = ai_service.run_resume_match(
+            {
+                "resume_text": resume_text[:20000],
+                "jd_text": jd_text[:12000],
+                "target_role": target_role,
+            },
+            runtime=runtime,
+        )
+    except RuntimeError as e:
+        return jsonify(
+            {
+                "skill": "resume-match",
+                "error": str(e),
+                "report_html": "",
+                "report_name": "",
+                "result": None,
+                "meta": meta,
+            }
+        ), 200
 
     report_name = ""
     report_html = ""

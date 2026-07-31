@@ -128,8 +128,9 @@ export function ResumeMatchPage() {
       if (!reportHtml.trim()) {
         const payload = (resp.result ?? resp) as Record<string, unknown>;
         const message =
+          (typeof payload.error === "string" && payload.error) ||
           (typeof payload.message === "string" && payload.message) ||
-          "报告 HTML 生成失败，请重试。";
+          "分析失败，请检查模型配置后重试。";
         setResult({ kind: "error", reportHtml: "", message });
       } else {
         setResult({ kind: "report", reportHtml, message: "" });
