@@ -2750,11 +2750,22 @@ def careerforge_resume_match():
     try:
         raw_result = ai_service.run_resume_match(skill_payload, runtime=runtime)
     except RuntimeError as e:
+        message = str(e)
+        error_code = "resume_match_failed"
+        error_message = message
+        if ":" in message:
+            maybe_code, maybe_message = message.split(":", 1)
+            maybe_code = maybe_code.strip()
+            maybe_message = maybe_message.strip()
+            if maybe_code:
+                error_code = maybe_code
+            if maybe_message:
+                error_message = maybe_message
         return jsonify(
             {
                 "skill": "resume-match",
-                "error": "resume_match_failed",
-                "message": str(e),
+                "error": error_code,
+                "message": error_message,
                 "report_html": "",
                 "report_name": "",
                 "result": None,

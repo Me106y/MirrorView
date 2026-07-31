@@ -86,6 +86,48 @@ class CareerForgeAgent:
                 return None
         return None
 
+    def _repair_json_output(self, skill_name: str, raw: str, schema_json: str) -> Optional[dict]:
+        if self.llm is None:
+            return None
+
+        repair_prompt = ChatPromptTemplate.from_template(
+            """
+You are fixing a model response into STRICT JSON.
+
+[Skill Name]
+{skill_name}
+
+[Target JSON Schema]
+{schema_json}
+
+[Broken Output]
+{raw_output}
+
+[Instructions]
+- Convert the broken output into one valid JSON object matching the schema.
+- Preserve the original meaning as much as possible.
+- Output JSON only.
+- Do not add markdown fences or explanations.
+"""
+        )
+
+        try:
+            repaired_raw = (repair_prompt | self.llm | StrOutputParser()).invoke(
+                {
+                    "skill_name": skill_name,
+                    "schema_json": schema_json,
+                    "raw_output": (raw or "")[:12000],
+                }
+            )
+        except Exception as e:
+            logger.warning("Skill %s JSON repair failed: %s", skill_name, e)
+            return None
+
+        repaired = self._safe_json_loads(repaired_raw)
+        if isinstance(repaired, dict):
+            return repaired
+        return None
+
     def _invoke_json_skill(self, skill_name: str, payload: dict, schema: dict) -> dict:
         if self.llm is None:
             return {
@@ -134,19 +176,16 @@ You MUST follow the provided Skill specification to process user input.
                 }
             )
             parsed = self._safe_json_loads(raw)
-            if parsed is None:
+            if parsed is None or not isinstance(parsed, dict):
+                repaired = self._repair_json_output(skill_name, raw, schema_json)
+                if repaired is not None:
+                    return repaired
                 logger.warning("Skill %s returned non-JSON output", skill_name)
                 return {
                     "error": "invalid_skill_output",
                     "message": "Model returned non-JSON output.",
                     "raw_text": raw.strip(),
                     "assumptions": ["model_output_not_json"],
-                }
-            if not isinstance(parsed, dict):
-                return {
-                    "error": "invalid_skill_output",
-                    "message": "Model output must be a JSON object.",
-                    "assumptions": ["model_output_not_object"],
                 }
             return parsed
         except Exception as e:

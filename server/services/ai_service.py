@@ -85,7 +85,7 @@ class AIService:
             provider = provider or "deepseek"
             model_name = model_name or Config.DEEPSEEK_MODEL
 
-        kwargs: Dict[str, Any] = {"temperature": 0.35}
+        kwargs: Dict[str, Any] = {"temperature": 0.35, "max_tokens": 4096, "streaming": False}
 
         if provider == "deepseek":
             kwargs["api_key"] = api_key or Config.DEEPSEEK_API_KEY
@@ -426,7 +426,9 @@ class AIService:
             result = agent.run_resume_match(payload)
 
             if isinstance(result, dict) and result.get("error"):
-                raise RuntimeError(str(result.get("message") or result.get("error") or "模型调用失败"))
+                error_code = str(result.get("error") or "resume_match_failed").strip()
+                error_message = str(result.get("message") or error_code or "模型调用失败").strip()
+                raise RuntimeError(f"{error_code}: {error_message}")
             if not isinstance(result, dict):
                 raise RuntimeError("模型未返回有效 JSON 对象。")
 
