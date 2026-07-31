@@ -260,6 +260,46 @@ You MUST follow the provided Skill specification to process user input.
                 ensure_ascii=False,
             )
 
+    def _normalize_resume_match_result(self, result: dict, schema: dict) -> Optional[dict]:
+        if self.llm is None or not isinstance(result, dict):
+            return None
+
+        normalize_prompt = ChatPromptTemplate.from_template(
+            """
+You are normalizing a resume-match analysis result into the required STRICT JSON schema.
+
+[Original Result JSON]
+{result_json}
+
+[Required JSON Schema]
+{schema_json}
+
+[Instructions]
+- Map synonymous field names into the target schema.
+- Keep the original semantics.
+- Fill missing optional lists with empty arrays.
+- If a dimension item lacks gap/advice, infer concise practical text from the existing analysis.
+- Output one JSON object only.
+- Do not use markdown fences or explanations.
+"""
+        )
+
+        try:
+            normalized_raw = (normalize_prompt | self.llm | StrOutputParser()).invoke(
+                {
+                    "result_json": json.dumps(result, ensure_ascii=False, indent=2)[:14000],
+                    "schema_json": json.dumps(schema, ensure_ascii=False, indent=2),
+                }
+            )
+        except Exception as e:
+            logger.warning("resume-match normalization failed: %s", e)
+            return None
+
+        parsed = self._safe_json_loads(normalized_raw)
+        if isinstance(parsed, dict):
+            return parsed
+        return None
+
     def run_resume_match(self, payload: dict) -> dict:
         schema = {
             "overall_score": 0,
@@ -280,7 +320,12 @@ You MUST follow the provided Skill specification to process user input.
             "optimized_resume_markdown": "string",
             "assumptions": ["string"],
         }
-        return self._invoke_json_skill("resume-match", payload, schema)
+        result = self._invoke_json_skill("resume-match", payload, schema)
+        if isinstance(result, dict) and not result.get("error"):
+            normalized = self._normalize_resume_match_result(result, schema)
+            if isinstance(normalized, dict) and not normalized.get("error"):
+                return normalized
+        return result
 
     def stream_resume_match(self, payload: dict) -> Generator[str, None, None]:
         schema = {
