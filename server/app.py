@@ -24,9 +24,7 @@ def _load_runtime_env_files():
     """
     root = Path(__file__).resolve().parents[1]
     candidates = [
-        root / ".env_tts",
         root / ".env",
-        Path.home() / ".mirrorview-tui" / ".env",
     ]
     for path in candidates:
         if not path.exists() or not path.is_file():
@@ -141,23 +139,6 @@ def create_app():
         if index_file.exists():
             return send_from_directory(str(frontend_dist), "index.html")
         abort(404)
-
-    # --- TTS Integration ---
-    # Register TTS API routes (Boson.ai Higgs Audio v3)
-    try:
-        from server.services.tts_service import HiggsAudioTTS
-        from tts_integration.server.routes_tts import tts_bp
-
-        app.config['TTS_SERVICE'] = HiggsAudioTTS(
-            voice=os.environ.get('BOSON_TTS_VOICE', 'default'),
-        )
-        app.register_blueprint(tts_bp)
-        logger.info("TTS service registered successfully")
-    except ImportError as e:
-        logger.warning(f"TTS integration not available: {e}")
-    except Exception as e:
-        logger.warning(f"TTS service init skipped: {e}")
-    # --- End TTS Integration ---
 
     with app.app_context():
         # Create tables

@@ -3,11 +3,9 @@
 <div align="center">
 
 [![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
-[![PyQt5](https://img.shields.io/badge/PyQt-5-41CD52?style=for-the-badge&logo=qt&logoColor=white)](https://pypi.org/project/PyQt5/)
-[![Flask](https://img.shields.io/badge/Flask-2.0-000000?style=for-the-badge&logo=flask&logoColor=white)](https://flask.palletsprojects.com/)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
-
-**An AI-Powered Mock Interview Platform with Real-time Observation**
+[![Flask](https://img.shields.io/badge/Flask-3.1-000000?style=for-the-badge&logo=flask&logoColor=white)](https://flask.palletsprojects.com/)
+[![React](https://img.shields.io/badge/React-18-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://react.dev/)
+[![Vercel](https://img.shields.io/badge/Vercel-Production-000000?style=for-the-badge&logo=vercel&logoColor=white)](https://vercel.com/)
 
 [English](README.md) | [中文](README_CN.md)
 
@@ -15,175 +13,171 @@
 
 ---
 
-## 📖 Introduction
+## Overview
 
-**MirrorView** is an intelligent mock interview application designed to help job seekers improve their interview skills through realistic simulations and AI-driven feedback. It combines a desktop client (PyQt5) with a robust backend server (Flask) to deliver a seamless experience.
+**MirrorView** is now a **Vercel-first web application** focused on CareerForge workflows:
 
-Key features include **AI Interviewer** interactions, **Real-time Video Streaming**, and a unique **Observer Mode** that allows mentors or peers to watch live interviews and provide guidance.
+- `resume-match`
+- `resume-craft`
+- `cover-letter`
+- `mock-interview`
+- `job-hunt`
 
-## ✨ Key Features
+This slimmed repository removes the old **Qt desktop client**, **CLI/TUI**, and **Streamlit** layers. The remaining codebase is optimized for:
 
-### 🤖 AI Mock Interview
-- **Personalized Questions**: Generates tailored interview questions based on your job intention and resume.
-- **Voice Interaction**: Supports speech-to-text input (offline fallback available) for natural conversation.
-- **Smart Feedback**: Provides comprehensive AI analysis, scoring, and improvement suggestions after each session.
+- React + Vite frontend in `web/`
+- Flask API runtime in `server/`
+- Vercel runtime mirror in `api/`
 
-### 👀 Observer Mode (Mirror View)
-- **Live Streaming**: Broadcast your interview session via RTMP to allowed observers.
-- **Real-time Transcript**: Observers see the synchronized chat history as the interview progresses.
-- **Join via Code**: Simple invite code system for mentors to join sessions securely.
+## What Was Removed
 
-### 👤 User Profile
-- **Resume Parsing**: Automatically extracts skills and project experience from uploaded resumes.
-- **Job Intention Management**: Set and update your target role and experience level.
-- **Interview History**: Review past performance, scores, and detailed feedback at any time.
+The repository no longer includes:
 
-## 🛠️ Technology Stack
+- PyQt desktop UI
+- terminal/TUI launcher and installer scripts
+- Streamlit apps
+- Boson TTS integration bundle
+- Docker + Nginx self-host deployment bundle
 
-- **Client**: Python, PyQt5, OpenCV, SpeechRecognition, PyAudio
-- **Server**: Flask, SQLAlchemy, OpenAI/LangChain (for AI logic)
-- **Streaming**: RTMP (Real-Time Messaging Protocol), FFmpeg
-- **Database**: SQLite (default), extensible to PostgreSQL/MySQL
+A small subset of `client/core/` is intentionally kept because the server still reuses those pure-Python HTML report builders.
 
-## 🚀 Getting Started
+## Current Project Structure
+
+```text
+web/                 React frontend
+server/              source-of-truth Flask backend
+api/                 Vercel runtime mirror
+skills/              CareerForge skill definitions
+scripts/sync_api_runtime.sh
+vercel.json
+requirements.txt
+```
+
+## Tech Stack
+
+- **Frontend**: React, TypeScript, Vite
+- **Backend**: Flask, SQLAlchemy
+- **LLM Runtime**: DeepSeek / OpenAI-compatible APIs via LangChain
+- **Deployment**: Vercel
+
+## Local Development
 
 ### Prerequisites
-- Python 3.11
-- FFmpeg (for video streaming)
 
-### Installation
+- Python 3.11+
+- Node.js 20+
+- npm 10+
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/yourusername/MirrorView.git
-   cd MirrorView
-   ```
+### Install
 
-2. **Install dependencies (Web/API baseline)**
-   ```bash
-   pip install -r requirements.txt
-   ```
-   For desktop/PyQt + RTMP + Streamlit legacy flows, also install:
-   ```bash
-   pip install -r requirements-desktop.txt
-   ```
-
-3. **Create local config from example**
-   ```bash
-   cp server/config.json.example server/config.json
-   ```
-   Then edit `server/config.json` and set your `DEEPSEEK_API_KEY`.
-   Environment variable `DEEPSEEK_API_KEY` still takes higher priority if both are set.
-
-   On Windows (PowerShell):
-   ```powershell
-   Copy-Item server\config.json.example server\config.json
-   ```
-
-### Running the Application
-
-1. **Start the Server**
-   ```bash
-   python -m server.app
-   ```
-   The server will start at `http://localhost:5001`.
-
-2. **Start the Client**
-   ```bash
-   python client/main.py
-   ```
-
-3. **Start the TUI Client (Optional)**
-   ```bash
-   python client/tui_main.py
-   ```
-   The TUI startup will try to render the MirrorView logo via:
-   `npx oh-my-logo "MirrorView" purple --filled --block-font block`
-
-### Web MVP (Phase A Week 1)
-
-- New frontend workspace: `web/` (React + TypeScript + Vite)
-- Main routes:
-  - `/resume-match`
-  - `/resume-craft`
-  - `/cover-letter`
-  - `/mock-interview`
-  - `/job-hunt` (Phase B placeholder)
-- Legal routes:
-  - `/legal/privacy`
-  - `/legal/terms`
-  - `/legal/ai-disclaimer`
-  - `/legal/byok-risk`
-
-Run locally:
 ```bash
+pip install -r requirements.txt
 cd web
 npm install
+cd ..
+```
+
+### Configure Environment
+
+Create a local `.env` file at the repo root if needed:
+
+```bash
+DEEPSEEK_API_KEY=sk-...
+PLATFORM_PROVIDER=deepseek
+PLATFORM_MODEL=deepseek-chat
+```
+
+You can also rely on Vercel environment variables in production.
+
+### Run Locally
+
+Start the backend:
+
+```bash
+python -m server.app
+```
+
+Start the frontend:
+
+```bash
+cd web
 npm run dev
 ```
 
-Backend runtime extension:
-- CareerForge endpoints now support optional request fields:
-  - `runtime` (platform / byok provider config)
-  - `turnstile_token` (for anti-abuse checks when enabled)
-- Responses include safe `meta` runtime info.
+Default local URLs:
 
-### Deploy on Vercel (Web + API)
+- Frontend: `http://localhost:5173`
+- Backend: `http://localhost:5001`
 
-This repository now includes:
-- `vercel.json` (build `web/` + route `/api/*` to Python function)
-- `api/index.py` (Flask entrypoint for Vercel)
-- `.vercelignore` (exclude large local folders like `.conda`)
+## Vercel Deployment
 
-Before redeploy:
+This repo is configured to deploy directly on Vercel.
+
+### Required runtime pieces
+
+- `web/` is built into static assets
+- `api/index.py` is the Python function entrypoint
+- `scripts/sync_api_runtime.sh` mirrors runtime files into `api/`
+- `vercel.json` defines routes, rewrites, and build behavior
+
+### Deploy
+
+From the repository root:
+
 ```bash
-rm -rf web/node_modules web/dist
+npx vercel --prod
 ```
-Then redeploy from Vercel dashboard or CLI.
 
-### One-Click Install (Prebuilt TUI App)
+Or connect the GitHub repository to Vercel and let pushes to `main` trigger production deploys.
 
-- macOS / Linux:
-  ```bash
-  curl -fsSL https://raw.githubusercontent.com/Zhuanz/MirrorView/main/install.sh | bash
-  ```
-- Windows:
-  ```powershell
-  powershell -ExecutionPolicy Bypass -File .\install.ps1
-  ```
+## Key Routes
 
-After install, set `DEEPSEEK_API_KEY` in `~/.mirrorview-tui/.env` (Windows: `%USERPROFILE%\.mirrorview-tui\.env`).
+### App pages
 
-### CareerForge TUI Agent
+- `/`
+- `/resume-match`
+- `/resume-craft`
+- `/cover-letter`
+- `/mock-interview`
+- `/job-hunt`
 
-- New chat endpoint: `POST /api/careerforge/agent/chat`
-- Routing strategy: `/command` first, then keyword rules, then DeepSeek intent fallback
-- Supported commands:
-  - `/help`
-  - `/login` `/register` `/logout`
-  - `/profile` `/edit-profile`
-  - `/resume-match` `/resume-craft` `/cover-letter` `/mock-interview` `/job-hunt`
-  - `/skill <name>` `/cancel` `/exit`
-- File artifacts (for example resume-match HTML report) are shown in TUI with clickable link + `[O]` one-key browser open.
+### Legal
 
-## 📸 Screenshots
+- `/legal/privacy`
+- `/legal/terms`
+- `/legal/ai-disclaimer`
+- `/legal/byok-risk`
 
-<img src="assets/977afdf9d507b57dd8664dd5f484d50e.png" alt="977afdf9d507b57dd8664dd5f484d50e" style="zoom:50%;" />
+### Backend
 
-<img src="assets/image-20260313190052517.png" alt="image-20260313190052517" style="zoom:50%;" />
+- `/careerforge/runtime/check`
+- `/careerforge/resume-match`
+- `/careerforge/resume-craft`
+- `/careerforge/resume-craft/chat-turn`
+- `/careerforge/resume-craft/render`
+- `/careerforge/cover-letter`
+- `/careerforge/agent/chat`
 
-<img src="assets/ca2fb451e05b52ff2a91ba86df86b8f7.png" alt="ca2fb451e05b52ff2a91ba86df86b8f7" style="zoom:50%;" />
+## Development Notes
 
-<img src="assets/3fa85f67424a527096be5cfcc45b6dcd.png" alt="3fa85f67424a527096be5cfcc45b6dcd" style="zoom:50%;" />
+- `server/` is the source of truth for backend logic.
+- `api/` should be treated as the Vercel runtime mirror generated by `scripts/sync_api_runtime.sh`.
+- If you change backend runtime files, re-run:
 
-<img src="assets/e55b799fb85dbd53451fc97d3df587fb.png" alt="e55b799fb85dbd53451fc97d3df587fb" style="zoom:50%;" />
+```bash
+./scripts/sync_api_runtime.sh
+```
 
-<img src="assets/image-20260313190303870.png" alt="image-20260313190303870" style="zoom:50%;" />
+## Validation
 
-## 🤝 贡献指南
+Recommended checks before deploying:
 
-Welcome to submit Pull Requests or Issues to help improve this project!
+```bash
+python -m py_compile server/app.py server/routes.py server/services/*.py
+cd web && npm run build
+cd .. && ./scripts/sync_api_runtime.sh
+```
 
-## 📄 License
+## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License. See `LICENSE` for details.

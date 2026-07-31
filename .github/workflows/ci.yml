@@ -10,8 +10,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  python-ci:
-    name: Python CI
+  verify:
+    name: Verify Web + API Build
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -26,16 +26,27 @@ jobs:
           cache: pip
           cache-dependency-path: requirements.txt
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
       - name: Upgrade pip
         run: python -m pip install --upgrade pip
 
-      # Keep CI stable and fast: install only deps needed by current CI checks.
-      - name: Install minimal test dependencies
+      - name: Install minimal Python dependencies
         run: python -m pip install requests
 
-      - name: Syntax check (compileall)
-        run: python -m compileall server client tts_integration utils
+      - name: Python syntax check
+        run: python -m compileall server api client utils
 
-      # Runs unit tests that do not require BOSON_API_KEY / audio hardware.
-      - name: Run unit tests
-        run: python -m unittest tts_integration.tests.test_tts_service -v
+      - name: Install frontend dependencies
+        run: npm --prefix web ci
+
+      - name: Build frontend
+        run: npm --prefix web run build
+
+      - name: Sync Vercel runtime mirror
+        run: bash scripts/sync_api_runtime.sh

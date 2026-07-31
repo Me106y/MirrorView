@@ -25,7 +25,7 @@ from utils.logger_handler import logger
 
 class CareerForgeCommandAgent:
     """
-    CareerForge command + NL router for TUI chat.
+    CareerForge command + NL router for web chat.
 
     Routing order (hybrid):
     1) Slash command
@@ -248,7 +248,7 @@ class CareerForgeCommandAgent:
                 reply=(
                     "可以，我们来修改资料。\n"
                     f"{self._profile_summary(profile)}\n"
-                    "我会在 TUI 里打开编辑流程。"
+                    "我会为你打开编辑流程。"
                 ),
                 intent=intent,
                 action="client_edit_profile",
@@ -346,7 +346,7 @@ class CareerForgeCommandAgent:
         session: Dict[str, Any],
     ) -> Tuple[Optional[Dict[str, Any]], bool]:
         """
-        Shared prefill decision gate for TUI/Streamlit parity:
+        Shared prefill decision gate for web skill flows:
         ask user whether to use saved profile info before auto-filling slots.
         """
         if intent not in self.PREFILL_CONFIRMED_INTENTS:
@@ -445,7 +445,7 @@ class CareerForgeCommandAgent:
 
         if cmd in {"exit", "quit"}:
             return self._resp(
-                reply="好的，正在退出 MirrorView TUI。",
+                reply="好的，已结束当前对话流程。",
                 intent="exit",
                 action="exit_app",
                 missing_fields=[],
@@ -509,7 +509,7 @@ class CareerForgeCommandAgent:
                 reply=(
                     "好的，我们来修改个人资料。\n"
                     f"{self._profile_summary(profile)}\n"
-                    "请按 TUI 提示完成编辑。"
+                    "请按页面提示完成编辑。"
                 ),
                 intent="profile-edit",
                 action="client_edit_profile",
@@ -782,7 +782,7 @@ class CareerForgeCommandAgent:
         roots = [
             Path(Config.RESUME_UPLOAD_FOLDER),
             Path(__file__).resolve().parents[2] / "server" / "uploads" / "resumes",
-            Path.home() / ".mirrorview-tui" / "data" / "uploads" / "resumes",
+            Path(__file__).resolve().parents[2] / "uploads" / "resumes",
         ]
         for root in roots:
             candidates.append(root / predicted_name)
@@ -947,7 +947,7 @@ class CareerForgeCommandAgent:
                             "path": str(out_path),
                         }
                     )
-                    reply += "\n\n已生成 HTML 报告，可在 TUI 中点击或按 O 打开浏览器。"
+                    reply += "\n\n已生成 HTML 报告，可直接在页面中预览或导出。"
                 except Exception as e:
                     logger.warning("Failed to build resume-match html artifact: %s", e)
             return result, reply, "skill_executed", artifacts
@@ -981,7 +981,7 @@ class CareerForgeCommandAgent:
                             "path": str(out_path),
                         }
                     )
-                    reply += "\n\n已生成 HTML 简历，可在 TUI 中点击或按 O 打开浏览器。"
+                    reply += "\n\n已生成 HTML 简历，可直接在页面中预览或导出。"
                 except Exception as e:
                     logger.warning("Failed to build resume-craft html artifact: %s", e)
             return result, reply, "skill_executed", artifacts
