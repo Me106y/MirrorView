@@ -523,6 +523,7 @@ You MUST follow the provided Skill specification when answering.
 6. 只返回本轮必要的 wizard_state 最小 JSON 补丁，不要重复输出完整历史、聊天记录或未变化的经历内容。运行时会把补丁合并到已有状态；本轮确认过的新事实写入对应的 collected_by_step / step_states。
 7. Step6 的修改必须基于当前 draft_json；只有用户明确确认当前预览时才设置 step6_confirmed=true、render_ready=true。
 8. next_step_suggestion=next 只表示你判断当前阶段已完成；不要依赖页面自动跳转，应在 reply 中自然引导用户自行点击“下一步”。不要为了满足固定流程而强行推进。
+9. 结束工作/项目经历时，必须在语义上确认用户已经没有更多补充或当前信息已经足够：将事实边界内的一段简洁摘要写入 step_states.step4.finalized_experiences，设置 step_states.step4.active_focus.stage=done，并记录仍缺失的核心维度（如有）。reply 要说明本段经历已完成；若还未达到用户计划的经历数量，邀请用户继续描述下一段，否则引导用户点击“下一步”。结束后不得再次提出已经回答过的问题。
 
 [Required JSON Schema]
 {schema_json}

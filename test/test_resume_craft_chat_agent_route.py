@@ -221,6 +221,41 @@ def test_agent_prompt_prevents_repeating_answered_grill_questions():
     assert "没有其他补充" in prompt
 
 
+def test_agent_closes_experience_when_user_has_no_more_to_add():
+    model = _JsonModel(
+        '{"reply":"这段经历已整理完成。若还有其他经历可以继续描述；如果没有，请点击“下一步”进入技能与证书。",'
+        '"action":"advance","next_step_suggestion":"next","render_ready":false,'
+        '"missing_fields":[],"wizard_state":{"collected_by_step":{"experiences":['
+        '"独立开发 AI 面试官，负责 RAG、性能优化和实时旁听。"]},"step_states":{"step4":{'
+        '"finalized_experiences":["独立开发 AI 面试官，负责 RAG、性能优化和实时旁听。"],'
+        '"missing_fields":[],"active_focus":{"stage":"done"}}}},'
+        '"step6_preview_markdown":"","step6_waiting_confirm":false,"step6_applied_changes":[]}'
+    )
+    agent = CareerForgeAgent(llm=model)
+
+    result = agent.run_resume_craft_chat_turn(
+        {
+            "message": "没有更多了",
+            "current_step": 4,
+            "step1_profile": _profile(),
+            "wizard_state": {
+                "current_step": 4,
+                "collected_by_step": {"experiences": []},
+                "step_states": {"step4": {"finalized_experiences": [], "active_focus": {"stage": "validation"}}},
+            },
+            "history": [
+                {"role": "user", "content": "我负责独立开发 AI 面试官，完成 RAG、性能优化和实时旁听。"},
+                {"role": "assistant", "content": "还需要补充其他内容吗？"},
+            ],
+        }
+    )
+
+    assert result["wizard_state"]["step_states"]["step4"]["active_focus"]["stage"] == "done"
+    assert result["wizard_state"]["step_states"]["step4"]["finalized_experiences"]
+    assert "finalized_experiences" in str(model.prompt)
+    assert "结束当前经历" in str(model.prompt)
+
+
 def test_agent_exposes_invalid_json_without_repair_retry():
     model = _JsonModel("```json\n{\"reply\": \"需要修复\"}\n```")
     agent = CareerForgeAgent(llm=model)
