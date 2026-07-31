@@ -1059,10 +1059,87 @@ def _normalize_resume_match_list(value: Any) -> List[str]:
     if isinstance(value, list):
         items = [str(item or "").strip() for item in value]
         return [item for item in items if item]
+    if isinstance(value, dict):
+        items = []
+        for key, item in value.items():
+            text = str(item or "").strip()
+            if text:
+                items.append(f"{key}: {text}" if str(key).strip() else text)
+        return items
     if isinstance(value, str):
         items = [line.strip(" -\t") for line in value.splitlines() if line.strip()]
         return [item for item in items if item]
     return []
+
+
+def _first_text(result: Dict[str, Any], *keys: str) -> str:
+    for key in keys:
+        value = result.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
+
+def _normalize_match_level(raw_level: Any, score: int) -> str:
+    text = str(raw_level or "").strip()
+    upper = text.upper()
+    if upper.startswith("A") or "STRONG" in upper or text.startswith("高度匹配"):
+        return "A. Strong Fit"
+    if upper.startswith("B") or "STRETCH" in upper or text.startswith("部分匹配") or text.startswith("较匹配"):
+        return "B. Stretch Fit"
+    if upper.startswith("C") or "POOR" in upper or text.startswith("匹配较低") or text.startswith("不匹配"):
+        return "C. Poor Fit"
+    if score >= 75:
+        return "A. Strong Fit"
+    if score >= 50:
+        return "B. Stretch Fit"
+    return "C. Poor Fit"
+
+
+def _extract_dimension_items(result: Dict[str, Any]) -> List[Dict[str, Any]]:
+    raw_dimensions = result.get("dimension_scores")
+    if isinstance(raw_dimensions, list):
+        return [item for item in raw_dimensions if isinstance(item, dict)]
+
+    for key in ("dimensions", "scores", "dimension_details", "score_breakdown"):
+        value = result.get(key)
+        if isinstance(value, list):
+            return [item for item in value if isinstance(item, dict)]
+        if isinstance(value, dict):
+            items = []
+            for name, payload in value.items():
+                if isinstance(payload, dict):
+                    items.append({"name": name, **payload})
+                else:
+                    items.append({"name": name, "score": payload})
+            return items
+    return []
+
+
+def _normalize_dimension_item(item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    name = str(item.get("name") or item.get("dimension") or item.get("title") or item.get("label") or "").strip()
+    dim_score = _to_score_int(item.get("score") if item.get("score") is not None else item.get("value"))
+    highlight = str(item.get("highlight") or item.get("strength") or item.get("matched") or item.get("优势") or item.get("亮点") or "").strip()
+    gap = str(item.get("gap") or item.get("weakness") or item.get("missing") or item.get("不足") or item.get("差距") or "").strip()
+    advice = str(item.get("advice") or item.get("suggestion") or item.get("recommendation") or item.get("建议") or "").strip()
+
+    details = _normalize_resume_match_list(item.get("details"))
+    if not highlight and details:
+        highlight = details[0]
+    if not gap:
+        gap = "暂无明显差距，建议结合 JD 继续补充量化证据。"
+    if not advice:
+        advice = "结合该维度补充更贴近 JD 的事实描述与成果量化。"
+
+    if not name or dim_score is None:
+        return None
+    return {
+        "name": name,
+        "score": dim_score,
+        "highlight": highlight or "已识别到相关匹配点。",
+        "gap": gap,
+        "advice": advice,
+    }
 
 
 def _validate_resume_match_result(result: Any) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
@@ -1074,51 +1151,40 @@ def _validate_resume_match_result(result: Any) -> Tuple[Optional[Dict[str, Any]]
 
     score = _to_score_int(result.get("overall_score"))
     if score is None:
+        score = _to_score_int(result.get("score"))
+    if score is None:
+        score = _to_score_int(result.get("total_score"))
+    if score is None:
         return None, "匹配分析结果缺少有效的 overall_score。"
 
-    match_level = str(result.get("match_level") or "").strip()
-    if not match_level:
-        return None, "匹配分析结果缺少有效的 match_level。"
-
-    summary = str(result.get("summary") or "").strip()
+    summary = _first_text(result, "summary", "overview", "one_line_summary", "match_summary", "结论", "一句话总结")
     if not summary:
-        return None, "匹配分析结果缺少有效的 summary。"
+        summary = "已完成简历与岗位 JD 的匹配分析，建议结合下方维度结果继续优化。"
 
-    raw_dimensions = result.get("dimension_scores")
-    if not isinstance(raw_dimensions, list):
-        return None, "匹配分析结果缺少有效的 dimension_scores。"
-
+    raw_items = _extract_dimension_items(result)
     normalized_dimensions: List[Dict[str, Any]] = []
-    for item in raw_dimensions:
-        if not isinstance(item, dict):
-            continue
-        name = str(item.get("name") or "").strip()
-        dim_score = _to_score_int(item.get("score"))
-        highlight = str(item.get("highlight") or "").strip()
-        gap = str(item.get("gap") or "").strip()
-        advice = str(item.get("advice") or "").strip()
-        if not name or dim_score is None or not highlight or not gap or not advice:
-            continue
-        normalized_dimensions.append({
-            "name": name,
-            "score": dim_score,
-            "highlight": highlight,
-            "gap": gap,
-            "advice": advice,
-        })
+    for item in raw_items:
+        normalized = _normalize_dimension_item(item)
+        if normalized:
+            normalized_dimensions.append(normalized)
 
     if not normalized_dimensions:
         return None, "匹配分析结果缺少可渲染的维度评分内容。"
+
+    match_level = _normalize_match_level(
+        result.get("match_level") or result.get("level") or result.get("grade") or result.get("评级"),
+        score,
+    )
 
     return {
         "overall_score": score,
         "match_level": match_level,
         "summary": summary,
         "dimension_scores": normalized_dimensions,
-        "critical_missing": _normalize_resume_match_list(result.get("critical_missing")),
-        "extra_advantages": _normalize_resume_match_list(result.get("extra_advantages")),
-        "optimization_suggestions": _normalize_resume_match_list(result.get("optimization_suggestions")),
-        "optimized_resume_markdown": str(result.get("optimized_resume_markdown") or "").strip(),
+        "critical_missing": _normalize_resume_match_list(result.get("critical_missing") or result.get("missing_items") or result.get("gaps")),
+        "extra_advantages": _normalize_resume_match_list(result.get("extra_advantages") or result.get("advantages") or result.get("strengths")),
+        "optimization_suggestions": _normalize_resume_match_list(result.get("optimization_suggestions") or result.get("suggestions") or result.get("recommendations")),
+        "optimized_resume_markdown": str(result.get("optimized_resume_markdown") or result.get("resume_markdown") or result.get("optimized_resume") or "").strip(),
         "assumptions": _normalize_resume_match_list(result.get("assumptions")),
     }, None
 
