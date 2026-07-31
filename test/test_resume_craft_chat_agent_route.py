@@ -4,6 +4,7 @@ from flask import Flask
 
 from server import routes
 from server.config import Config
+from server.factories.llm_factory import ModelFactory
 from server.services.careerforge_agent import CareerForgeAgent
 from server.services.ai_service import AIService
 
@@ -38,6 +39,28 @@ def test_ai_service_defers_platform_llm_configuration_error(monkeypatch):
     assert service.llm is None
     with pytest.raises(RuntimeError, match=error):
         service.run_resume_craft_chat_turn({"message": "继续"})
+
+
+def test_resume_craft_runtime_allows_long_structured_agent_response(monkeypatch):
+    captured = {}
+
+    def fake_model(provider, model_name, **kwargs):
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setattr(ModelFactory, "get_model", fake_model)
+    service = object.__new__(AIService)
+
+    service._build_runtime_agent(
+        {
+            "mode": "byok",
+            "provider": "deepseek",
+            "model": "deepseek-chat",
+            "api_key": "test-key",
+        }
+    )
+
+    assert captured["max_tokens"] >= 3000
 
 
 def test_chat_turn_delegates_semantic_decision_to_agent(monkeypatch):

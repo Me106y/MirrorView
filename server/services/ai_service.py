@@ -82,7 +82,9 @@ class AIService:
 
         kwargs: Dict[str, Any] = {
             "temperature": 0.2,
-            "max_tokens": 1100,
+            # The agent returns the full wizard state in the same JSON object.
+            # Detailed experience evidence can otherwise truncate that object.
+            "max_tokens": 3000,
             "streaming": False,
             "timeout": 45,
             "max_retries": 0,
