@@ -85,7 +85,7 @@ class AIService:
             provider = provider or "deepseek"
             model_name = model_name or Config.DEEPSEEK_MODEL
 
-        kwargs: Dict[str, Any] = {"temperature": 0.35, "max_tokens": 4096, "streaming": False}
+        kwargs: Dict[str, Any] = {"temperature": 0.3, "max_tokens": 2200, "streaming": False}
 
         if provider == "deepseek":
             kwargs["api_key"] = api_key or Config.DEEPSEEK_API_KEY
