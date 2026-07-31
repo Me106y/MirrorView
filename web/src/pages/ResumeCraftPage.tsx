@@ -41,11 +41,7 @@ const LANGUAGE_OPTIONS = [
   { value: "both", label: "中英文双版" },
 ];
 
-const STEP_PROMPTS: Record<ChatStep, string> = {
-  3: "我们进入 Step3（工作/项目经历）。请描述第一段经历的场景、职责、行动和结果。",
-  4: "我们进入 Step4（技能与证书）。请先列出与你目标岗位最相关的技能与证书。",
-  5: "我们进入 Step5（确认与偏好）。请确认最想突出项、语气偏好，以及是否可生成简历。",
-};
+const INITIAL_CHAT_MESSAGE = "你可以直接描述任何想写入或修改的内容，AI 会结合上下文追问、整理或推进。";
 
 const STEP_TITLES: Record<StepNumber, string> = {
   1: "Step1 基础信息",
@@ -184,13 +180,6 @@ function normalizeLanguageForUI(value: string) {
   return "zh";
 }
 
-function getStepReplyGuard(step: ChatStep, text: string) {
-  const content = String(text || "");
-  if (step === 3) return content.trim().length > 0;
-  if (step === 4) return /技能|证书|工具|语言能力|熟练度/.test(content);
-  return /确认|偏好|语气|突出|生成/.test(content);
-}
-
 function nowTimeLabel() {
   return new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
 }
@@ -236,19 +225,15 @@ export function ResumeCraftPage() {
 
   const [wizardState, setWizardState] = useState<ResumeCraftWizardState>(EMPTY_WIZARD);
   const [messagesByStep, setMessagesByStep] = useState<Record<ChatStep, Msg[]>>({
-    3: [{ role: "assistant", content: STEP_PROMPTS[3], timestamp: nowTimeLabel() }],
-    4: [{ role: "assistant", content: STEP_PROMPTS[4], timestamp: nowTimeLabel() }],
-    5: [{ role: "assistant", content: STEP_PROMPTS[5], timestamp: nowTimeLabel() }],
-  });
-  const [missingByStep, setMissingByStep] = useState<Record<ChatStep, string[]>>({
-    3: ["experience"],
-    4: ["skills"],
-    5: ["confirm"],
+    3: [{ role: "assistant", content: INITIAL_CHAT_MESSAGE, timestamp: nowTimeLabel() }],
+    4: [{ role: "assistant", content: INITIAL_CHAT_MESSAGE, timestamp: nowTimeLabel() }],
+    5: [{ role: "assistant", content: INITIAL_CHAT_MESSAGE, timestamp: nowTimeLabel() }],
   });
 
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const [renderLoading, setRenderLoading] = useState(false);
+  const [agentRenderReady, setAgentRenderReady] = useState(false);
   const [result, setResult] = useState<ResultState>({ kind: "idle", reportHtml: "", message: "" });
   const [showFinalPreview, setShowFinalPreview] = useState(false);
   const [reportName, setReportName] = useState("resume-craft-report.html");
@@ -297,12 +282,12 @@ export function ResumeCraftPage() {
   }, [profile.personal_info, profile.education]);
 
   const activeChatStep = step >= 3 ? (step as ChatStep) : null;
-  const activeMissing = activeChatStep ? missingByStep[activeChatStep] : [];
 
   const canGenerate = useMemo(() => {
-    const hasExperience = wizardState.step_states.step4.finalized_experiences.length > 0;
-    return wizardState.collected_by_step.step6_confirmed && hasExperience && !renderLoading;
-  }, [wizardState, renderLoading]);
+    const draft = wizardState.step_states.step6?.draft_json;
+    const hasDraft = Boolean(draft && Object.keys(draft).length > 0);
+    return agentRenderReady && hasDraft && !renderLoading;
+  }, [agentRenderReady, wizardState, renderLoading]);
 
   useEffect(() => {
     const card = stepRefs.current[step];
@@ -428,6 +413,7 @@ export function ResumeCraftPage() {
 
   const onRestartCurrentChat = () => {
     if (step === 2) {
+      setAgentRenderReady(false);
       setProfile((prev) => ({ ...prev, education: [{ ...EMPTY_EDUCATION }] }));
       setWizardState((prev) => ({
         ...prev,
@@ -437,8 +423,7 @@ export function ResumeCraftPage() {
       return;
     }
     if (!activeChatStep) return;
-    setMessagesByStep((prev) => ({ ...prev, [activeChatStep]: [{ role: "assistant", content: STEP_PROMPTS[activeChatStep], timestamp: nowTimeLabel() }] }));
-    setMissingByStep((prev) => ({ ...prev, [activeChatStep]: [activeChatStep === 3 ? "experience" : activeChatStep === 4 ? "skills" : "confirm"] }));
+    setMessagesByStep((prev) => ({ ...prev, [activeChatStep]: [{ role: "assistant", content: INITIAL_CHAT_MESSAGE, timestamp: nowTimeLabel() }] }));
     setWizardState((prev) => {
       const next = JSON.parse(JSON.stringify(prev)) as ResumeCraftWizardState;
       const key = stepKey(activeChatStep);
@@ -466,7 +451,7 @@ export function ResumeCraftPage() {
         next.collected_by_step.skills_and_certs = [];
         next.step_states.step5 = { turn_count: 0, confirmed: false };
       }
-      if (activeChatStep === 5) {
+    if (activeChatStep === 5) {
         next.collected_by_step.final_preferences = "";
         next.collected_by_step.step6_confirmed = false;
         next.step_states.step6 = {
@@ -501,58 +486,35 @@ export function ResumeCraftPage() {
         current_step: UI_TO_BACKEND[activeChatStep],
         step1_profile: step1Profile,
         wizard_state: wizardState,
-        step_profile: wizardState.collected_by_step,
         template_code: step1Profile.template_code,
         language: step1Profile.language,
         photo_pref: step1Profile.photo_pref,
-        experience_state: wizardState.step_states.step4,
       })) as Record<string, unknown>;
   
       const serverReply = String(resp.reply || "").trim();
       const step6PreviewMarkdown = String(resp.step6_preview_markdown || "").trim();
-      const step6AppliedChanges = Array.isArray(resp.step6_applied_changes)
-        ? (resp.step6_applied_changes as unknown[])
-            .map((item) => String(item || "").trim())
-            .filter(Boolean)
-        : [];
-      let safeReply = serverReply || STEP_PROMPTS[activeChatStep];
-      if (activeChatStep === 3) {
-        safeReply = serverReply || STEP_PROMPTS[activeChatStep];
-      } else if (activeChatStep === 5) {
-        if (!safeReply && step6PreviewMarkdown) {
-          safeReply = `以下是准备生成的内容，请先确认：\n\n${step6PreviewMarkdown}`;
-        }
-      } else {
-        safeReply = getStepReplyGuard(activeChatStep, serverReply) ? serverReply : STEP_PROMPTS[activeChatStep];
+      if (!serverReply && !step6PreviewMarkdown) {
+        throw new Error("Agent response missing reply");
       }
-  
-      if (activeChatStep === 5 && step6PreviewMarkdown && !safeReply.includes(step6PreviewMarkdown)) {
-        const changeText = step6AppliedChanges.length
-          ? `已应用修改：\n${step6AppliedChanges.map((item) => `- ${item}`).join("\n")}\n\n`
-          : "";
-        safeReply = `${changeText}以下是准备生成的内容，请先确认：\n\n${step6PreviewMarkdown}\n\n如无误请回复"确认生成"，或继续提出修改意见。`;
+      const assistantReply = serverReply || step6PreviewMarkdown;
+
+      if (!resp.wizard_state || typeof resp.wizard_state !== "object") {
+        throw new Error("Agent response missing wizard_state");
       }
-  
-      const nextWizard = (resp.wizard_state as ResumeCraftWizardState | undefined) || wizardState;
-      const missingFields = Array.isArray(resp.missing_fields) ? (resp.missing_fields as string[]) : [];
-      const nextStepSuggestion = String(resp.next_step_suggestion || "stay");
-      const action = String(resp.action || "");
+      if (resp.next_step_suggestion !== "stay" && resp.next_step_suggestion !== "next") {
+        throw new Error("Agent response has invalid next_step_suggestion");
+      }
+      const nextWizard = resp.wizard_state as ResumeCraftWizardState;
+      const nextStepSuggestion = resp.next_step_suggestion;
   
       setWizardState(nextWizard);
-      setMissingByStep((prev) => ({ ...prev, [activeChatStep]: missingFields }));
+      setAgentRenderReady(resp.render_ready === true);
       setMessagesByStep((prev) => ({
         ...prev,
-        [activeChatStep]: [...nextMessages, { role: "assistant", content: safeReply || STEP_PROMPTS[activeChatStep], timestamp: nowTimeLabel() }],
+        [activeChatStep]: [...nextMessages, { role: "assistant", content: assistantReply, timestamp: nowTimeLabel() }],
       }));
-      if (activeChatStep === 3 && action === "experience_done" && nextStepSuggestion === "next") {
-        setStep(4);
-      }
-      if (activeChatStep === 4 && nextStepSuggestion === "next") {
-        setStep(5);
-      }
-      if (activeChatStep === 5 && action === "step6_confirm") {
-        // Keep user in Step5 and enable render button only after explicit confirmation.
-        setStep(5);
+      if (nextStepSuggestion === "next" && activeChatStep < 5) {
+        setStep((prev) => Math.min(prev + 1, 5) as StepNumber);
       }
     } catch (err) {
       setMessagesByStep((prev) => ({
@@ -631,7 +593,10 @@ export function ResumeCraftPage() {
     setWizardState((prev) => ({
       ...prev,
       collected_by_step: { ...prev.collected_by_step, education: compact },
-      step_states: { ...prev.step_states, step3: { turn_count: compact.length, confirmed: compact.length > 0 } },
+      step_states: {
+        ...prev.step_states,
+        step3: { ...prev.step_states.step3, confirmed: compact.length > 0 },
+      },
     }));
   }, [profile.education]);
 
@@ -654,8 +619,6 @@ export function ResumeCraftPage() {
         history,
         step1_profile: step1Profile,
         wizard_state: wizardState,
-        finalized_step_data: wizardState.collected_by_step,
-        finalized_experiences: wizardState.step_states.step4.finalized_experiences,
         template_code: step1Profile.template_code,
         language: step1Profile.language,
         photo_pref: step1Profile.photo_pref,
@@ -1137,14 +1100,14 @@ export function ResumeCraftPage() {
                     <div className="resume-craft-chat-head-left">
                       <span className="resume-craft-step-tag">Step {chatStep} / 5</span>
                       <h2>{STEP_TITLES[chatStep]}</h2>
-                      <p>{chatStep === 3 ? "每段经历最多 Grill 2-3 轮，达上限自动完成该段。" : "当前步骤仅收集本步骤字段，不跨步提问。"}</p>
+                      <p>你可以自由补充信息，AI 会根据目标岗位和完整上下文决定追问、整理或推进。</p>
                       <div className="resume-craft-head-divider" />
                     </div>
                     <div className="resume-craft-head-actions">
                       <button type="button" className="ghost-btn resume-craft-back-btn resume-craft-chat-nav-btn" onClick={goPrev}>上一步</button>
                       <button type="button" className="ghost-btn resume-craft-restart-btn resume-craft-chat-nav-btn" onClick={onRestartCurrentChat} disabled={chatLoading || renderLoading || step !== chatStep}>重新开始</button>
                       {chatStep < 5 ? (
-                        <button type="button" className="primary-btn resume-craft-next-btn resume-craft-chat-nav-btn" onClick={goNext} disabled={step !== chatStep || activeMissing.length > 0}>下一步</button>
+                        <button type="button" className="primary-btn resume-craft-next-btn resume-craft-chat-nav-btn" onClick={goNext} disabled={step !== chatStep}>下一步</button>
                       ) : null}
                     </div>
                   </header>
@@ -1205,7 +1168,7 @@ export function ResumeCraftPage() {
                     <input
                       value={step === chatStep ? chatInput : ""}
                       onChange={(e) => setChatInput(e.target.value)}
-                      placeholder="输入当前步骤信息后发送"
+                      placeholder="自由补充信息，AI 会结合上下文追问或推进"
                       disabled={step !== chatStep}
                       aria-label="输入当前步骤信息"
                     />
@@ -1213,11 +1176,7 @@ export function ResumeCraftPage() {
                   </form>
 
                   <div className="resume-craft-readiness-note">
-                    {step === chatStep ? (
-                      activeMissing.length ? <p>请继续补充当前步骤信息。</p> : <p>当前步骤信息已满足最小完整度，可进入下一步。</p>
-                    ) : (
-                      <p>切换到本步骤后可继续对话。</p>
-                    )}
+                    {step === chatStep ? <p>对话状态由 Agent 根据语义和已确认内容维护。</p> : <p>切换到本步骤后可继续对话。</p>}
                   </div>
 
                   {chatStep === 5 && wizardState?.step_states?.step6?.preview_markdown ? (

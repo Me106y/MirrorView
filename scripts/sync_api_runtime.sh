@@ -16,7 +16,6 @@ mkdir -p api/client
 cp client/__init__.py api/client/__init__.py
 mkdir -p api/client/core
 cp client/core/__init__.py api/client/core/__init__.py
-cp client/core/resume_craft_report.py api/client/core/resume_craft_report.py
 cp client/core/resume_match_report.py api/client/core/resume_match_report.py
 cp client/core/skill_prefill_policy.py api/client/core/skill_prefill_policy.py
 

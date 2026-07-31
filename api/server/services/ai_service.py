@@ -15,8 +15,6 @@ class AIService:
     def __init__(self):
         self.resume_service = ResumeService()
         self.llm = self._build_platform_llm()
-        if self.llm is None:
-            logger.warning("Platform LLM unavailable at startup; running in degraded mode.")
         self.careerforge_agent = CareerForgeAgent(llm=self.llm)
 
     @staticmethod
@@ -28,7 +26,7 @@ class AIService:
     def _build_platform_llm(self):
         provider = (Config.PLATFORM_PROVIDER or "deepseek").strip().lower() or "deepseek"
         model_name = (Config.PLATFORM_MODEL or "").strip() or Config.DEEPSEEK_MODEL
-        kwargs: Dict[str, Any] = {"temperature": 0.7}
+        kwargs: Dict[str, Any] = {"temperature": 0.7, "max_retries": 0}
 
         if provider == "deepseek":
             kwargs["base_url"] = Config.DEEPSEEK_BASE_URL
@@ -38,21 +36,7 @@ class AIService:
         elif provider == "anthropic":
             kwargs["api_key"] = Config.ANTHROPIC_API_KEY
 
-        try:
-            return ModelFactory.get_model(provider, model_name, **kwargs)
-        except Exception as e:
-            logger.warning("Platform model init fallback to deepseek: %s", e)
-            try:
-                return ModelFactory.get_model(
-                    "deepseek",
-                    Config.DEEPSEEK_MODEL,
-                    temperature=0.7,
-                    base_url=Config.DEEPSEEK_BASE_URL,
-                    api_key=Config.DEEPSEEK_API_KEY,
-                )
-            except Exception as fallback_e:
-                logger.warning("Platform deepseek fallback init failed: %s", fallback_e)
-                return None
+        return ModelFactory.get_model(provider, model_name, **kwargs)
 
     def _build_runtime_agent(self, runtime: Optional[Dict[str, Any]] = None) -> CareerForgeAgent:
         if not runtime:
@@ -90,7 +74,7 @@ class AIService:
             "max_tokens": 1100,
             "streaming": False,
             "timeout": 45,
-            "max_retries": 1,
+            "max_retries": 0,
         }
 
         if provider == "deepseek":
@@ -121,55 +105,6 @@ class AIService:
             return "en"
         return "zh"
 
-
-
-    @staticmethod
-    def _looks_like_auth_failure(text: str) -> bool:
-        lower = (text or "").lower()
-        markers = (
-            "authentication fails",
-            "authentication_error",
-            "invalid api key",
-            "api key is invalid",
-            "invalid_request_error",
-            "unauthorized",
-            "error code: 401",
-            "401",
-        )
-        return any(marker in lower for marker in markers)
-
-
-    @staticmethod
-    def _can_retry_with_server_platform_key(runtime: Optional[Dict[str, Any]], reason: str) -> bool:
-        if not isinstance(runtime, dict):
-            return False
-        mode = str(runtime.get("mode") or "platform").strip().lower()
-        if mode != "platform":
-            return False
-        runtime_key = str(runtime.get("api_key") or "").strip()
-        if not runtime_key:
-            return False
-        return AIService._looks_like_auth_failure(reason)
-
-    @staticmethod
-    def _runtime_without_api_key(runtime: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-        clean = dict(runtime or {})
-        clean["mode"] = "platform"
-        clean["api_key"] = ""
-        return clean
-
-    @staticmethod
-    def _extract_step4_runtime_error(decision: Any) -> str:
-        if not isinstance(decision, dict):
-            return str(decision or "")
-        return str(
-            decision.get("model_connection_error")
-            or decision.get("error")
-            or decision.get("message")
-            or ""
-        ).strip()
-
-    
     def analyze_resume_and_update_job(self, user_id, resume_text, current_job_intention):
         """
         Analyze resume to extract job intention and key projects.
@@ -444,109 +379,11 @@ class AIService:
         except Exception as e:
             raise RuntimeError(f"分析请求失败: {str(e)}") from e
 
-    def run_resume_craft(self, payload, runtime: Optional[Dict[str, Any]] = None):
-        try:
-            return self._build_runtime_agent(runtime).run_resume_craft(payload)
-        except Exception as e:
-            logger.error("run_resume_craft runtime error: %s", e)
-            return {
-                "error": "runtime_call_failed",
-                "message": "Model runtime call failed.",
-            }
-
-    def run_resume_craft_dialog(self, payload, runtime: Optional[Dict[str, Any]] = None):
-        try:
-            return self._build_runtime_agent(runtime).run_resume_craft_dialog(payload)
-        except Exception as e:
-            logger.error("run_resume_craft_dialog runtime error: %s", e)
-            return "简历助手暂时不可用，请稍后重试。"
-
-    def run_resume_craft_step4_decision(self, payload, runtime: Optional[Dict[str, Any]] = None):
-        try:
-            decision = self._build_runtime_agent(runtime).run_resume_craft_step4_decision(payload)
-            reason = self._extract_step4_runtime_error(decision)
-            if self._can_retry_with_server_platform_key(runtime, reason):
-                try:
-                    retry_runtime = self._runtime_without_api_key(runtime)
-                    retried = self._build_runtime_agent(retry_runtime).run_resume_craft_step4_decision(payload)
-                    if bool(retried.get("model_connection_ok")):
-                        return retried
-                    retried_reason = self._extract_step4_runtime_error(retried)
-                    if retried_reason and self._looks_like_auth_failure(reason):
-                        return retried
-                except Exception as retry_error:
-                    logger.warning("run_resume_craft_step4_decision platform retry failed: %s", retry_error)
-            return decision
-        except Exception as e:
-            logger.error("run_resume_craft_step4_decision runtime error: %s", e)
-            fallback_builder = getattr(self.careerforge_agent, "_build_step4_heuristic_decision", None)
-            if callable(fallback_builder):
-                try:
-                    decision = fallback_builder(payload if isinstance(payload, dict) else {})
-                    if isinstance(decision, dict):
-                        decision["model_connection_ok"] = False
-                        decision["model_connection_error"] = str(e)
-                        return decision
-                except Exception as fallback_error:
-                    logger.warning("run_resume_craft_step4_decision heuristic fallback failed: %s", fallback_error)
-            return {
-                "reply": str((payload or {}).get("fallback_reply") or "请继续补充这一段项目的关键信息。"),
-                "resume_ready_draft": {"title": "项目经历", "role": "核心开发", "period": "时间待补", "bullets": []},
-                "missing_points": ["请继续补充该项目里一个最关键的技术实现或功能细节。"],
-                "current_experience_completed": False,
-                "ask_more_experience": True,
-                "reasoning_focus": [],
-                "model_connection_ok": False,
-                "model_connection_error": str(e),
-            }
-
-    def run_resume_craft_step6_revise(self, payload, runtime: Optional[Dict[str, Any]] = None):
-        try:
-            return self._build_runtime_agent(runtime).run_resume_craft_step6_revise(payload)
-        except Exception as e:
-            logger.error("run_resume_craft_step6_revise runtime error: %s", e)
-            fallback_builder = getattr(self.careerforge_agent, "_build_step6_heuristic_revision", None)
-            if callable(fallback_builder):
-                try:
-                    return fallback_builder(payload if isinstance(payload, dict) else {})
-                except Exception as fallback_error:
-                    logger.warning("run_resume_craft_step6_revise heuristic fallback failed: %s", fallback_error)
-            return {
-                "updated_draft_json": (payload or {}).get("current_draft_json") or {},
-                "updated_preview_markdown": "",
-                "applied_changes": [],
-                "needs_clarification": False,
-                "clarification_question": "",
-            }
+    def run_resume_craft_chat_turn(self, payload, runtime: Optional[Dict[str, Any]] = None):
+        return self._build_runtime_agent(runtime).run_resume_craft_chat_turn(payload)
 
     def run_resume_craft_html(self, payload, runtime: Optional[Dict[str, Any]] = None):
-        try:
-            result = self._build_runtime_agent(runtime).run_resume_craft_html(payload)
-            if str(result or "").strip():
-                return result
-            if isinstance(runtime, dict):
-                mode = str(runtime.get("mode") or "platform").strip().lower()
-                runtime_key = str(runtime.get("api_key") or "").strip()
-                if mode == "platform" and runtime_key:
-                    try:
-                        retry_runtime = self._runtime_without_api_key(runtime)
-                        retry_result = self._build_runtime_agent(retry_runtime).run_resume_craft_html(payload)
-                        if str(retry_result or "").strip():
-                            return retry_result
-                    except Exception as retry_error:
-                        logger.warning("run_resume_craft_html platform retry failed: %s", retry_error)
-            return ""
-        except Exception as e:
-            logger.error("run_resume_craft_html runtime error: %s", e)
-            if self._can_retry_with_server_platform_key(runtime, str(e)):
-                try:
-                    retry_runtime = self._runtime_without_api_key(runtime)
-                    retry_result = self._build_runtime_agent(retry_runtime).run_resume_craft_html(payload)
-                    if str(retry_result or "").strip():
-                        return retry_result
-                except Exception as retry_error:
-                    logger.warning("run_resume_craft_html platform retry after exception failed: %s", retry_error)
-            return ""
+        return self._build_runtime_agent(runtime).run_resume_craft_html(payload)
 
     def run_cover_letter(self, payload, runtime: Optional[Dict[str, Any]] = None):
         try:

@@ -7,7 +7,6 @@ from typing import Any, Dict, List, Optional, Tuple
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 
-from client.core.resume_craft_report import build_resume_craft_html_report
 from client.core.resume_match_report import build_resume_match_html_report
 from client.core.skill_prefill_policy import (
     build_prefill_choice_prompt,
@@ -313,12 +312,21 @@ class CareerForgeCommandAgent:
                 intent=intent,
                 user_id=user_id,
                 slots=slots,
+                message=text,
+                history=history or [],
+                wizard_state=session.get("wizard_state") or {},
                 runtime=runtime,
             )
             session["last_result"] = result
-            session["intent"] = ""
-            session["slots"] = {}
-            session["missing_fields"] = []
+            if intent == "resume-craft":
+                session["wizard_state"] = result.get("wizard_state") or session.get("wizard_state") or {}
+                session["intent"] = intent
+                session["slots"] = slots
+                session["missing_fields"] = []
+            else:
+                session["intent"] = ""
+                session["slots"] = {}
+                session["missing_fields"] = []
             self._clear_prefill_choice(session=session, intent=intent)
             return self._resp(
                 reply=reply,
@@ -885,11 +893,6 @@ class CareerForgeCommandAgent:
                 missing.append("jd_text")
             return missing
 
-        if intent == "resume-craft":
-            if not (slots.get("resume_text") or "").strip():
-                return ["resume_text"]
-            return []
-
         if intent == "cover-letter":
             missing = []
             if not (slots.get("resume_text") or "").strip():
@@ -917,6 +920,9 @@ class CareerForgeCommandAgent:
         intent: str,
         user_id: int,
         slots: Dict[str, Any],
+        message: str = "",
+        history: Optional[List[Dict[str, Any]]] = None,
+        wizard_state: Optional[Dict[str, Any]] = None,
         runtime: Optional[Dict[str, Any]] = None,
     ) -> Tuple[Dict[str, Any], str, str, List[Dict[str, str]]]:
         if intent == "resume-match":
@@ -953,38 +959,18 @@ class CareerForgeCommandAgent:
             return result, reply, "skill_executed", artifacts
 
         if intent == "resume-craft":
-            payload = {
-                "resume_text": (slots.get("resume_text") or "")[:24000],
-                "target_role": (slots.get("target_role") or "").strip(),
-                "language": (slots.get("language") or "zh").strip() or "zh",
-                "template": (slots.get("template") or "").strip(),
-                "optimization_goal": (slots.get("optimization_goal") or "").strip(),
-            }
-            result = self.ai_service.run_resume_craft(payload, runtime=runtime)
-            reply = self._summarize_resume_craft(result)
-            artifacts: List[Dict[str, str]] = []
-            if isinstance(result, dict) and not result.get("error"):
-                try:
-                    report_name, html_doc = build_resume_craft_html_report(
-                        result,
-                        target_role=payload["target_role"],
-                        language=payload["language"],
-                        template=payload["template"],
-                    )
-                    self._output_dir.mkdir(parents=True, exist_ok=True)
-                    out_path = self._output_dir / report_name
-                    out_path.write_text(html_doc, encoding="utf-8")
-                    artifacts.append(
-                        {
-                            "type": "html",
-                            "title": "简历预览",
-                            "path": str(out_path),
-                        }
-                    )
-                    reply += "\n\n已生成 HTML 简历，可直接在页面中预览或导出。"
-                except Exception as e:
-                    logger.warning("Failed to build resume-craft html artifact: %s", e)
-            return result, reply, "skill_executed", artifacts
+            result = self.ai_service.run_resume_craft_chat_turn(
+                {
+                    "message": message,
+                    "history": history or [],
+                    "current_step": slots.get("current_step"),
+                    "step1_profile": slots.get("step1_profile") if isinstance(slots.get("step1_profile"), dict) else {},
+                    "wizard_state": wizard_state or {},
+                },
+                runtime=runtime,
+            )
+            reply = str(result.get("reply") or result.get("step6_preview_markdown") or "").strip()
+            return result, reply, str(result.get("action") or "collect"), []
 
         if intent == "cover-letter":
             payload = {
@@ -1056,8 +1042,6 @@ class CareerForgeCommandAgent:
 
         if intent == "resume-match":
             return f"{resume_prefix}\n要进行简历匹配分析，还缺：{joined}。请先补充。".strip()
-        if intent == "resume-craft":
-            return f"{resume_prefix}\n要生成简历，还缺：{joined}。请先补充。".strip()
         if intent == "cover-letter":
             return f"{resume_prefix}\n要生成求职信，还缺：{joined}。请先补充。".strip()
         if intent == "job-hunt":
@@ -1079,17 +1063,6 @@ class CareerForgeCommandAgent:
             f"匹配等级：{result.get('match_level', '-') }\n"
             f"总结：{result.get('summary', '')}"
         )
-
-    @staticmethod
-    def _summarize_resume_craft(result: Dict[str, Any]) -> str:
-        if not isinstance(result, dict):
-            return "已完成简历生成，但返回结构异常。"
-        if result.get("error"):
-            detail = str(result.get("message") or result.get("error") or "")
-            return f"简历生成失败：{CareerForgeCommandAgent._humanize_runtime_error(detail)}"
-        title = result.get("title", "")
-        summary = result.get("profile_summary", "")
-        return f"简历生成完成。\n标题：{title}\n概述：{summary}"
 
     @staticmethod
     def _summarize_cover_letter(result: Dict[str, Any]) -> str:

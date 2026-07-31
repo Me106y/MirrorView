@@ -45,7 +45,7 @@ DEFAULT_LOG_FORMAT = logging.Formatter(
 
 _SENSITIVE_REGEX = [
     re.compile(r"(?i)(api[_-]?key\s*[:=]\s*)([^\s,;]+)"),
-    re.compile(r"(?i)(authorization\s*[:=]\s*)([^\s,;]+)"),
+    re.compile(r"(?i)(authorization\s*[:=]\s*)((?:bearer\s+)?)([^\s,;]+)"),
     re.compile(r"(?i)(cookie\s*[:=]\s*)([^\s,;]+)"),
     re.compile(r"\b(sk-[A-Za-z0-9_\-]{8,})\b"),
     re.compile(r"\b(bai-[A-Za-z0-9_\-]{8,})\b"),
@@ -55,7 +55,9 @@ _SENSITIVE_REGEX = [
 def _sanitize_text(text: str) -> str:
     masked = text
     for rgx in _SENSITIVE_REGEX:
-        if rgx.pattern.startswith("(?i)("):
+        if "authorization" in rgx.pattern.lower():
+            masked = rgx.sub(r"\1\2***", masked)
+        elif rgx.pattern.startswith("(?i)("):
             masked = rgx.sub(r"\1***", masked)
         else:
             masked = rgx.sub("***", masked)
