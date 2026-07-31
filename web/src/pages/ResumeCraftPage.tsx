@@ -505,7 +505,6 @@ export function ResumeCraftPage() {
         throw new Error("Agent response has invalid next_step_suggestion");
       }
       const nextWizard = resp.wizard_state as ResumeCraftWizardState;
-      const nextStepSuggestion = resp.next_step_suggestion;
   
       setWizardState(nextWizard);
       setAgentRenderReady(resp.render_ready === true);
@@ -513,9 +512,6 @@ export function ResumeCraftPage() {
         ...prev,
         [activeChatStep]: [...nextMessages, { role: "assistant", content: assistantReply, timestamp: nowTimeLabel() }],
       }));
-      if (nextStepSuggestion === "next" && activeChatStep < 5) {
-        setStep((prev) => Math.min(prev + 1, 5) as StepNumber);
-      }
     } catch (err) {
       setMessagesByStep((prev) => ({
         ...prev,

@@ -193,6 +193,34 @@ def test_agent_merges_compact_state_patch_after_user_has_no_more_experience():
     assert "自行点击" in str(model.prompt)
 
 
+def test_agent_prompt_prevents_repeating_answered_grill_questions():
+    model = _JsonModel(
+        '{"reply":"信息已记录，请继续下一步。","action":"advance",'
+        '"next_step_suggestion":"next","render_ready":false,"missing_fields":[], '
+        '"wizard_state":{},"step6_preview_markdown":"",'
+        '"step6_waiting_confirm":false,"step6_applied_changes":[]}'
+    )
+    agent = CareerForgeAgent(llm=model)
+
+    agent.run_resume_craft_chat_turn(
+        {
+            "message": "没有其他补充了",
+            "current_step": 4,
+            "step1_profile": _profile(),
+            "wizard_state": {"current_step": 4},
+            "history": [
+                {"role": "assistant", "content": "请确认文档数量和RAG过滤逻辑。"},
+                {"role": "user", "content": "已经说明了3050份文档和Jaccard过滤，其他没有了。"},
+            ],
+        }
+    )
+
+    prompt = str(model.prompt)
+    assert "不得重复" in prompt
+    assert "已回答" in prompt
+    assert "没有其他补充" in prompt
+
+
 def test_agent_exposes_invalid_json_without_repair_retry():
     model = _JsonModel("```json\n{\"reply\": \"需要修复\"}\n```")
     agent = CareerForgeAgent(llm=model)
