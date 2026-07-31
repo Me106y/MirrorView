@@ -167,7 +167,7 @@ prefill_policy:
 }
 ```
 
-`wizard_state` 必须保留已有状态并写入本轮确认过的信息。不要依赖固定关键词识别“没有更多”、确认或修改；应根据上下文判断用户意图。只有用户明确确认预览内容后，才能设置 `step6_confirmed=true` 和 `render_ready=true`。
+`wizard_state` 只需返回本轮必要的最小 JSON 补丁，运行时会将其深度合并到已有状态，不要重复输出未变化的完整历史或聊天记录。不要依赖固定关键词识别“没有更多”、确认或修改；应根据上下文判断用户意图。`next_step_suggestion=next` 只用于表达语义上的阶段完成，回复中应引导用户自行点击“下一步”，不要假设页面自动跳转。只有用户明确确认预览内容后，才能设置 `step6_confirmed=true` 和 `render_ready=true`。
 
 ---
 

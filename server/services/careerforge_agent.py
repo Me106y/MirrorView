@@ -1,6 +1,7 @@
 import json
 import os
 import re
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, Dict, Generator, List, Optional
 
@@ -54,6 +55,20 @@ class CareerForgeAgent:
     @staticmethod
     def _language_label(language: str) -> str:
         return "English" if language == "en" else "Chinese"
+
+    @staticmethod
+    def _merge_state_patch(existing: Any, patch: Any) -> Any:
+        """Merge a model's minimal JSON state patch without losing prior state."""
+        if not isinstance(existing, dict) or not isinstance(patch, dict):
+            return deepcopy(patch)
+
+        merged = deepcopy(existing)
+        for key, value in patch.items():
+            if isinstance(value, dict) and isinstance(merged.get(key), dict):
+                merged[key] = CareerForgeAgent._merge_state_patch(merged[key], value)
+            else:
+                merged[key] = deepcopy(value)
+        return merged
 
     def _safe_json_loads(self, raw: str) -> Optional[dict]:
         raw = (raw or "").strip()
@@ -482,7 +497,7 @@ You MUST follow the provided Skill specification when answering.
             "next_step_suggestion": "stay|next",
             "render_ready": False,
             "missing_fields": ["string"],
-            "wizard_state": "updated ResumeCraftWizardState object",
+            "wizard_state": "minimal JSON patch for ResumeCraftWizardState",
             "step6_preview_markdown": "string",
             "step6_waiting_confirm": False,
             "step6_applied_changes": ["string"],
@@ -505,9 +520,9 @@ You MUST follow the provided Skill specification when answering.
 3. 不要按固定轮数、固定字段顺序或关键词判断推进；已经提供的信息不要重复询问，用户自然表达“没有更多”时按语义理解。
 4. 可以一次询问多个彼此相关的问题，也可以在信息充分时直接推进；问题应该像职业顾问对话，而不是表单提示。
 5. 严格遵守事实边界，不编造经历、技能、职责或成果。对不清楚的内容先追问或标记为缺失。
-6. 返回完整的 wizard_state。保留已有字段和历史，只根据本轮对话做必要更新。把用户新提供的事实写入对应的 collected_by_step / step_states。
+6. 只返回本轮必要的 wizard_state 最小 JSON 补丁，不要重复输出完整历史、聊天记录或未变化的经历内容。运行时会把补丁合并到已有状态；本轮确认过的新事实写入对应的 collected_by_step / step_states。
 7. Step6 的修改必须基于当前 draft_json；只有用户明确确认当前预览时才设置 step6_confirmed=true、render_ready=true。
-8. next_step_suggestion=next 只表示你判断当前阶段已完成，前端会执行页面切换；不要为了满足固定流程而强行推进。
+8. next_step_suggestion=next 只表示你判断当前阶段已完成；不要依赖页面自动跳转，应在 reply 中自然引导用户自行点击“下一步”。不要为了满足固定流程而强行推进。
 
 [Required JSON Schema]
 {schema_json}
@@ -537,6 +552,9 @@ You MUST follow the provided Skill specification when answering.
             raise RuntimeError("resume-craft agent response is missing wizard_state")
         if not str(parsed.get("reply") or "").strip() and not str(parsed.get("step6_preview_markdown") or "").strip():
             raise RuntimeError("resume-craft agent response is missing reply")
+        parsed["wizard_state"] = self._merge_state_patch(
+            context["wizard_state"], parsed["wizard_state"]
+        )
         return parsed
 
     def _build_resume_craft_html_prompt(self, payload: dict) -> str:

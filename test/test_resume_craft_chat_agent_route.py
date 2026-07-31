@@ -159,6 +159,40 @@ def test_agent_loads_skill_and_returns_structured_state():
     assert "不要按固定轮数" in str(model.prompt)
 
 
+def test_agent_merges_compact_state_patch_after_user_has_no_more_experience():
+    model = _JsonModel(
+        '{"reply":"好的，这段经历已记录。请点击页面的“下一步”，我们继续整理技能与证书。",'
+        '"action":"advance","next_step_suggestion":"next",'
+        '"render_ready":false,"missing_fields":[],'
+        '"wizard_state":{"step_states":{"step4":{"confirmed":true}}},'
+        '"step6_preview_markdown":"","step6_waiting_confirm":false,"step6_applied_changes":[]}'
+    )
+    existing_state = {
+        "current_step": 4,
+        "collected_by_step": {"experiences": ["完整经历事实"], "skills_and_certs": []},
+        "chat_history_by_step": {"step4": ["很长的历史"], "step5": []},
+        "step_states": {"step4": {"confirmed": False, "drafts": ["保留草稿"]}},
+    }
+    agent = CareerForgeAgent(llm=model)
+
+    result = agent.run_resume_craft_chat_turn(
+        {
+            "message": "没有",
+            "current_step": 4,
+            "step1_profile": _profile(),
+            "wizard_state": existing_state,
+            "history": [{"role": "assistant", "content": "如果没有，我们可以进入下一步。"}],
+        }
+    )
+
+    assert "下一步" in result["reply"]
+    assert result["wizard_state"]["collected_by_step"]["experiences"] == ["完整经历事实"]
+    assert result["wizard_state"]["step_states"]["step4"]["confirmed"] is True
+    assert result["wizard_state"]["step_states"]["step4"]["drafts"] == ["保留草稿"]
+    assert "minimal" in str(model.prompt)
+    assert "自行点击" in str(model.prompt)
+
+
 def test_agent_exposes_invalid_json_without_repair_retry():
     model = _JsonModel("```json\n{\"reply\": \"需要修复\"}\n```")
     agent = CareerForgeAgent(llm=model)
