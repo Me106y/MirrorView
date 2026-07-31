@@ -30,7 +30,7 @@ function normalizeApiBaseUrl(value: string): string {
   return localDev ? "/api" : "";
 }
 
-function buildRuntime(settings: ModelSettings) {
+export function buildRuntime(settings: ModelSettings) {
   return {
     mode: "platform",
     provider: "deepseek",
@@ -83,6 +83,24 @@ async function postForm<T>(url: string, body: FormData): Promise<ApiEnvelope<T>>
   }
 
   return data;
+}
+
+
+export async function testCareerforgeRuntime(
+  settings: Pick<ModelSettings, "provider" | "model" | "apiKey" | "baseUrl" | "apiBaseUrl">
+): Promise<ApiEnvelope<{ ok: boolean; provider: string; model: string; base_url: string }>> {
+  const runtime = buildRuntime({
+    mode: "platform",
+    provider: settings.provider,
+    model: settings.model,
+    apiKey: settings.apiKey,
+    baseUrl: settings.baseUrl,
+    turnstileToken: "",
+    apiBaseUrl: settings.apiBaseUrl,
+  });
+  const base = normalizeApiBaseUrl(settings.apiBaseUrl);
+  const url = `${base}/careerforge/runtime/check`;
+  return postJson(url, { runtime });
 }
 
 export async function callCareerforgeSkill<T>(

@@ -2,6 +2,7 @@ import { DragEvent, FormEvent, KeyboardEvent, SyntheticEvent, useEffect, useMemo
 import { NavLink } from "react-router-dom";
 import { callCareerforgeSkillMultipart } from "../lib/api";
 import { useModelSettings } from "../context/ModelSettingsContext";
+import { useCareerFeatureGuard } from "../components/CareerFeatureGuard";
 import { gsap } from "gsap";
 
 type ResultState = {
@@ -18,6 +19,7 @@ function isPdfFile(file: File) {
 
 export function ResumeMatchPage() {
   const { settings } = useModelSettings();
+  const featureGuard = useCareerFeatureGuard(settings, "匹配分析");
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [jdText, setJdText] = useState("");
   const [targetRole, setTargetRole] = useState("");
@@ -278,6 +280,7 @@ export function ResumeMatchPage() {
         </svg>
         返回
       </NavLink>
+      {featureGuard.overlay}
       <div className="resume-match-layout">
         <form className="surface resume-match-form" onSubmit={onSubmit}>
           <header className="resume-match-form-head">

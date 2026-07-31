@@ -2,6 +2,7 @@ import { FormEvent, useMemo, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { callCareerforgeSkill } from "../lib/api";
 import { useModelSettings } from "../context/ModelSettingsContext";
+import { useCareerFeatureGuard } from "../components/CareerFeatureGuard";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
@@ -9,6 +10,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export function MockInterviewPage() {
   const { settings } = useModelSettings();
+  const featureGuard = useCareerFeatureGuard(settings, "模拟面试");
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Msg[]>([]);
   const [loading, setLoading] = useState(false);
@@ -63,6 +65,8 @@ export function MockInterviewPage() {
   };
 
   return (
+    <>
+      {featureGuard.overlay}
     <section className="mock-shell">
       <NavLink to="/" className="back-home-btn">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -88,5 +92,6 @@ export function MockInterviewPage() {
         </form>
       </article>
     </section>
+    </>
   );
 }

@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useModelSettings } from "../context/ModelSettingsContext";
+import { testCareerforgeRuntime } from "../lib/api";
+import { createRuntimeStatus, loadRuntimeStatus, saveRuntimeStatus, type PersistedRuntimeStatus } from "../lib/runtimeStatus";
 
 type Provider = 'deepseek' | 'openai';
 
@@ -13,44 +15,12 @@ function detectProvider(baseUrl: string): Provider {
   return 'deepseek';
 }
 
-const SETTINGS_STATUS_KEY = "mirrorview:web:settings:test-status";
-
-interface PersistedTestStatus {
-  success: boolean;
-  model: string;
-  balance?: string;
-  testedAt: number;
-}
 
 type TestState =
   | { kind: "idle" }
   | { kind: "loading" }
-  | { kind: "success"; message: string; balance?: string }
+  | { kind: "success"; message: string }
   | { kind: "error"; message: string };
-
-function loadPersistedStatus(): PersistedTestStatus | null {
-  try {
-    const raw = localStorage.getItem(SETTINGS_STATUS_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as PersistedTestStatus;
-    if (parsed && parsed.success && parsed.model) return parsed;
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-function persistStatus(status: PersistedTestStatus | null): void {
-  try {
-    if (!status) {
-      localStorage.removeItem(SETTINGS_STATUS_KEY);
-    } else {
-      localStorage.setItem(SETTINGS_STATUS_KEY, JSON.stringify(status));
-    }
-  } catch {
-    // ignore
-  }
-}
 
 export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { settings, updateSettings } = useModelSettings();
@@ -61,7 +31,7 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
   const [draftBaseUrl, setDraftBaseUrl] = useState(settings.baseUrl);
   const [provider, setProvider] = useState<Provider>(() => detectProvider(settings.baseUrl));
   const [testState, setTestState] = useState<TestState>({ kind: "idle" });
-  const [persistedStatus, setPersistedStatus] = useState<PersistedTestStatus | null>(() => loadPersistedStatus());
+  const [persistedStatus, setPersistedStatus] = useState<PersistedRuntimeStatus | null>(() => loadRuntimeStatus());
   const [saveFlash, setSaveFlash] = useState(false);
 
   function selectProvider(p: Provider) {
@@ -83,7 +53,7 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
     if (open) {
       setTestState({ kind: "idle" });
       setSaveFlash(false);
-      setPersistedStatus(loadPersistedStatus());
+      setPersistedStatus(loadRuntimeStatus());
     }
   }, [open]);
 
@@ -145,7 +115,7 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
     setDraftBaseUrl("");
     setTestState({ kind: "idle" });
     setPersistedStatus(null);
-    persistStatus(null);
+    saveRuntimeStatus(null);
   };
 
   const handleTest = async () => {
@@ -155,49 +125,30 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
     }
     setTestState({ kind: "loading" });
     try {
-      const rawBase = draftBaseUrl.trim() || "https://api.deepseek.com";
-      const normalizedBase = rawBase.endsWith("/v1") || rawBase.endsWith("/v1/")
-        ? rawBase.replace(/\/+$/, "")
-        : rawBase.replace(/\/+$/, "") + "/v1";
-      const url = `${normalizedBase}/chat/completions`;
-
-      const resp = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${draftApiKey.trim()}`,
-        },
-        body: JSON.stringify({
-          model: draftModel.trim() || "deepseek-chat",
-          messages: [{ role: "user", content: "hi" }],
-          max_tokens: 5,
-        }),
+      const resp = await testCareerforgeRuntime({
+        provider: provider === "openai" ? "openai" : "deepseek",
+        model: draftModel.trim() || "deepseek-chat",
+        apiKey: draftApiKey.trim(),
+        baseUrl: draftBaseUrl.trim(),
+        apiBaseUrl: settings.apiBaseUrl,
       });
-
-      if (!resp.ok) {
-        let errMsg = `Request failed (${resp.status})`;
-        try {
-          const errData = await resp.json();
-          const detail = (errData as Record<string, unknown>).error as Record<string, unknown> | undefined;
-          if (detail && typeof detail.message === "string") {
-            errMsg = detail.message;
-          } else if (typeof (errData as Record<string, unknown>).message === "string") {
-            errMsg = (errData as Record<string, unknown>).message as string;
-          }
-        } catch { /* ignore parse error */ }
-        throw new Error(errMsg);
+      const payload = (resp.result ?? resp) as Record<string, unknown>;
+      if (payload.ok === false) {
+        throw new Error((payload.message as string) || resp.message || "连接失败，请检查配置。");
       }
 
-      const modelName = draftModel.trim() || "deepseek-chat";
-      const next: PersistedTestStatus = {
-        success: true,
-        model: modelName,
-        testedAt: Date.now(),
-      };
+      const next = createRuntimeStatus({
+        provider: provider === "openai" ? "openai" : "deepseek",
+        model: draftModel.trim() || "deepseek-chat",
+        apiKey: draftApiKey.trim(),
+        baseUrl: draftBaseUrl.trim(),
+      });
       setPersistedStatus(next);
-      persistStatus(next);
+      saveRuntimeStatus(next);
       setTestState({ kind: "success", message: "连接成功，API 可用。" });
     } catch (err) {
+      saveRuntimeStatus(null);
+      setPersistedStatus(null);
       setTestState({ kind: "error", message: (err as Error).message || "连接失败，请检查配置。" });
     }
   };
@@ -265,9 +216,6 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
           <div className="settings-status-bar">
             <span className="status-dot status-dot--green"></span>
             <span className="status-model">{persistedStatus!.model}</span>
-            {persistedStatus!.balance && (
-              <span className="status-balance">余额: {persistedStatus!.balance}</span>
-            )}
           </div>
         )}
 

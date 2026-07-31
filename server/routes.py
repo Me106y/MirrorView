@@ -1037,6 +1037,92 @@ def _resolve_runtime(data: Dict[str, Any]) -> Tuple[Optional[Dict[str, str]], Op
     return runtime, None, build_runtime_meta(runtime or {})
 
 
+def _require_user_runtime_api_key(runtime: Optional[Dict[str, str]]) -> Optional[Tuple[Dict[str, Any], int]]:
+    api_key = str((runtime or {}).get("api_key") or "").strip()
+    if api_key:
+        return None
+    return ({
+        "error": "user_runtime_required",
+        "message": "请先在模型设置中填写并测试你自己的 API Key。",
+    }, 400)
+
+
+def _to_score_int(value: Any) -> Optional[int]:
+    try:
+        score = int(round(float(value)))
+    except Exception:
+        return None
+    return max(0, min(100, score))
+
+
+def _normalize_resume_match_list(value: Any) -> List[str]:
+    if isinstance(value, list):
+        items = [str(item or "").strip() for item in value]
+        return [item for item in items if item]
+    if isinstance(value, str):
+        items = [line.strip(" -\t") for line in value.splitlines() if line.strip()]
+        return [item for item in items if item]
+    return []
+
+
+def _validate_resume_match_result(result: Any) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    if not isinstance(result, dict):
+        return None, "模型未返回有效 JSON 对象。"
+
+    if result.get("error"):
+        return None, str(result.get("message") or result.get("error") or "模型分析失败。")
+
+    score = _to_score_int(result.get("overall_score"))
+    if score is None:
+        return None, "匹配分析结果缺少有效的 overall_score。"
+
+    match_level = str(result.get("match_level") or "").strip()
+    if not match_level:
+        return None, "匹配分析结果缺少有效的 match_level。"
+
+    summary = str(result.get("summary") or "").strip()
+    if not summary:
+        return None, "匹配分析结果缺少有效的 summary。"
+
+    raw_dimensions = result.get("dimension_scores")
+    if not isinstance(raw_dimensions, list):
+        return None, "匹配分析结果缺少有效的 dimension_scores。"
+
+    normalized_dimensions: List[Dict[str, Any]] = []
+    for item in raw_dimensions:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()
+        dim_score = _to_score_int(item.get("score"))
+        highlight = str(item.get("highlight") or "").strip()
+        gap = str(item.get("gap") or "").strip()
+        advice = str(item.get("advice") or "").strip()
+        if not name or dim_score is None or not highlight or not gap or not advice:
+            continue
+        normalized_dimensions.append({
+            "name": name,
+            "score": dim_score,
+            "highlight": highlight,
+            "gap": gap,
+            "advice": advice,
+        })
+
+    if not normalized_dimensions:
+        return None, "匹配分析结果缺少可渲染的维度评分内容。"
+
+    return {
+        "overall_score": score,
+        "match_level": match_level,
+        "summary": summary,
+        "dimension_scores": normalized_dimensions,
+        "critical_missing": _normalize_resume_match_list(result.get("critical_missing")),
+        "extra_advantages": _normalize_resume_match_list(result.get("extra_advantages")),
+        "optimization_suggestions": _normalize_resume_match_list(result.get("optimization_suggestions")),
+        "optimized_resume_markdown": str(result.get("optimized_resume_markdown") or "").strip(),
+        "assumptions": _normalize_resume_match_list(result.get("assumptions")),
+    }, None
+
+
 def _guard_high_cost_request(endpoint_name: str, data: Dict[str, Any]) -> Optional[Tuple[Dict[str, Any], int]]:
     if endpoint_name not in HIGH_COST_ENDPOINTS:
         return None
@@ -2587,6 +2673,35 @@ def update_profile(user_id):
     return jsonify({'message': 'Profile updated successfully'}), 200
 
 
+@api.route('/careerforge/runtime/check', methods=['POST'])
+def careerforge_runtime_check():
+    data = _coerce_request_data()
+    runtime, runtime_error, meta = _resolve_runtime(data)
+    if runtime_error:
+        payload, status = runtime_error
+        return jsonify(payload), status
+
+    runtime_required = _require_user_runtime_api_key(runtime)
+    if runtime_required:
+        payload, status = runtime_required
+        return jsonify({**payload, "meta": meta}), status
+
+    try:
+        result = ai_service.test_runtime_connection(runtime=runtime)
+    except RuntimeError as e:
+        return jsonify({
+            "ok": False,
+            "error": "runtime_connection_failed",
+            "message": str(e),
+            "meta": meta,
+        }), 200
+
+    return jsonify({
+        **result,
+        "meta": meta,
+    }), 200
+
+
 @api.route('/careerforge/resume-match', methods=['POST'])
 def careerforge_resume_match():
     data = _coerce_request_data()
@@ -2594,6 +2709,18 @@ def careerforge_resume_match():
     if runtime_error:
         payload, status = runtime_error
         return jsonify(payload), status
+
+    runtime_required = _require_user_runtime_api_key(runtime)
+    if runtime_required:
+        payload, status = runtime_required
+        return jsonify({
+            "skill": "resume-match",
+            **payload,
+            "report_html": "",
+            "report_name": "",
+            "result": None,
+            "meta": meta,
+        }), status
 
     guard_error = _guard_high_cost_request("resume-match", data)
     if guard_error:
@@ -2609,20 +2736,39 @@ def careerforge_resume_match():
     if not jd_text:
         return jsonify({'message': 'Please provide jd_text.'}), 400
 
+    skill_payload = {
+        "target_role": target_role,
+        "jd_text": jd_text[:12000],
+        "resume_text": resume_text[:20000],
+        "prefill_context": {
+            "target_role": target_role,
+            "jd_text": jd_text[:12000],
+            "resume_text": resume_text[:20000],
+        },
+    }
+
     try:
-        result = ai_service.run_resume_match(
-            {
-                "resume_text": resume_text[:20000],
-                "jd_text": jd_text[:12000],
-                "target_role": target_role,
-            },
-            runtime=runtime,
-        )
+        raw_result = ai_service.run_resume_match(skill_payload, runtime=runtime)
     except RuntimeError as e:
         return jsonify(
             {
                 "skill": "resume-match",
-                "error": str(e),
+                "error": "resume_match_failed",
+                "message": str(e),
+                "report_html": "",
+                "report_name": "",
+                "result": None,
+                "meta": meta,
+            }
+        ), 200
+
+    result, validation_error = _validate_resume_match_result(raw_result)
+    if validation_error:
+        return jsonify(
+            {
+                "skill": "resume-match",
+                "error": "invalid_skill_output",
+                "message": validation_error,
                 "report_html": "",
                 "report_name": "",
                 "result": None,
@@ -2634,13 +2780,24 @@ def careerforge_resume_match():
     report_html = ""
     try:
         report_name, report_html = build_resume_match_html_report(
-            result=result if isinstance(result, dict) else {},
+            result=result,
             resume_text=resume_text,
             target_role=target_role,
             jd_text=jd_text,
         )
     except Exception as e:
         logger.warning("resume-match html report generation failed: %s", e)
+        return jsonify(
+            {
+                "skill": "resume-match",
+                "error": "report_generation_failed",
+                "message": "匹配分析已生成，但报告渲染失败，请稍后重试。",
+                "report_html": "",
+                "report_name": "",
+                "result": result,
+                "meta": meta,
+            }
+        ), 200
 
     return jsonify(
         {
@@ -2650,9 +2807,9 @@ def careerforge_resume_match():
             "report_html": report_html,
             "meta": meta,
             "process": [
-                "Loaded CareerForge resume-match skill",
-                "Parsed resume and JD context",
-                "Generated matching report",
+                "Loaded CareerForge resume-match skill via SkillLoader",
+                "Parsed current resume and JD input as prefill context",
+                "Generated matching report from user BYOK runtime",
             ],
         }
     ), 200

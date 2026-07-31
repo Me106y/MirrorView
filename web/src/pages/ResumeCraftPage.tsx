@@ -2,6 +2,7 @@ import { FormEvent, ReactNode, SyntheticEvent, useEffect, useMemo, useRef, useSt
 import { NavLink } from "react-router-dom";
 import { callCareerforgeSkill } from "../lib/api";
 import { useModelSettings } from "../context/ModelSettingsContext";
+import { useCareerFeatureGuard } from "../components/CareerFeatureGuard";
 import { loadResumeCraftDraft, saveResumeCraftDraft } from "../lib/storage";
 import type { EducationItem, ResumeCraftWizardState, Step1Profile } from "../types";
 import { ConsentModal } from "../components/ConsentModal";
@@ -220,6 +221,7 @@ function splitPeriod(period: string) {
 
 export function ResumeCraftPage() {
   const { settings } = useModelSettings();
+  const featureGuard = useCareerFeatureGuard(settings, "简历优化");
   const { accepted } = useConsent();
   const [showConsentPrompt, setShowConsentPrompt] = useState(false);
 
@@ -820,6 +822,8 @@ export function ResumeCraftPage() {
   }
 
   return (
+    <>
+      {featureGuard.overlay}
     <section className="resume-craft-page">
       <NavLink to="/" className="back-home-btn">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1266,5 +1270,6 @@ export function ResumeCraftPage() {
       </div>
       <ConsentModal open={showConsentPrompt} onClose={() => { setShowConsentPrompt(false); if (accepted) void renderResume(); }} />
     </section>
+    </>
   );
 }

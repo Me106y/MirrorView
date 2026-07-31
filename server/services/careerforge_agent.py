@@ -9,6 +9,7 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 
 from server.factories.llm_factory import ModelFactory
+from server.services.skill_loader import SkillLoader
 from utils.logger_handler import logger
 
 
@@ -26,27 +27,8 @@ class CareerForgeAgent:
         "mock-interview",
     }
 
-    def __init__(self, skills_root: Optional[str] = None, llm=None):
-        base = Path(__file__).resolve().parents[2]
-        candidates = []
-        if skills_root:
-            candidates.append(Path(skills_root))
-        env_root = os.environ.get("CAREERFORGE_SKILLS_ROOT")
-        if env_root:
-            candidates.append(Path(env_root))
-        candidates.extend(
-            [
-                base / "skills" / "CareerForge" / "skills",
-                Path.home() / ".codex" / "skills" / "CareerForge" / "skills",
-            ]
-        )
-        chosen = None
-        for cand in candidates:
-            if (cand / "resume-match" / "SKILL.md").exists():
-                chosen = cand
-                break
-        self.skills_root = chosen or candidates[0]
-        self._cache: Dict[str, str] = {}
+    def __init__(self, skills_root: Optional[str] = None, llm=None, skill_loader: Optional[SkillLoader] = None):
+        self.skill_loader = skill_loader or SkillLoader(skills_root=skills_root)
         self.llm_error: Optional[str] = None
         if llm is not None:
             self.llm = llm
@@ -62,22 +44,10 @@ class CareerForgeAgent:
                 self.llm_error = str(e)
                 logger.warning("CareerForgeAgent LLM init failed: %s", e)
 
-    def _skill_path(self, skill_name: str) -> Path:
-        return self.skills_root / skill_name / "SKILL.md"
-
     def load_skill(self, skill_name: str) -> str:
         if skill_name not in self.SUPPORTED_SKILLS:
             raise ValueError(f"Unsupported skill: {skill_name}")
-        if skill_name in self._cache:
-            return self._cache[skill_name]
-
-        path = self._skill_path(skill_name)
-        if not path.exists():
-            raise FileNotFoundError(f"Skill file not found: {path}")
-
-        content = path.read_text(encoding="utf-8", errors="ignore")
-        self._cache[skill_name] = content
-        return content
+        return self.skill_loader.load(skill_name)
 
     @staticmethod
     def _normalize_language(language: str = "zh") -> str:
@@ -167,14 +137,23 @@ You MUST follow the provided Skill specification to process user input.
             if parsed is None:
                 logger.warning("Skill %s returned non-JSON output", skill_name)
                 return {
+                    "error": "invalid_skill_output",
+                    "message": "Model returned non-JSON output.",
                     "raw_text": raw.strip(),
                     "assumptions": ["model_output_not_json"],
+                }
+            if not isinstance(parsed, dict):
+                return {
+                    "error": "invalid_skill_output",
+                    "message": "Model output must be a JSON object.",
+                    "assumptions": ["model_output_not_object"],
                 }
             return parsed
         except Exception as e:
             logger.error("Skill %s invocation failed: %s", skill_name, e)
             return {
-                "error": str(e),
+                "error": "skill_failed",
+                "message": str(e),
                 "assumptions": ["model_call_failed"],
             }
 

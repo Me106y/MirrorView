@@ -2,6 +2,7 @@ from typing import Any, Dict, Optional
 
 from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.messages import HumanMessage
 
 from server.config import Config
 from server.factories.llm_factory import ModelFactory
@@ -389,18 +390,48 @@ class AIService:
                 return "Could not generate feedback due to an error."
             return "生成面试反馈时出现异常，请稍后重试。"
 
+    def test_runtime_connection(self, runtime: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        if not isinstance(runtime, dict):
+            raise RuntimeError("缺少运行时配置。")
+        runtime_api_key = self._runtime_text(runtime.get("api_key"))
+        if not runtime_api_key:
+            raise RuntimeError("请先填写 API Key。")
+
+        provider = self._runtime_text(runtime.get("provider") or Config.PLATFORM_PROVIDER or "deepseek").lower() or "deepseek"
+        model_name = self._runtime_text(runtime.get("model") or Config.PLATFORM_MODEL or Config.DEEPSEEK_MODEL)
+        base_url = self._runtime_text(runtime.get("base_url"))
+
+        try:
+            agent = self._build_runtime_agent(runtime)
+            llm = agent.llm
+            if llm is None:
+                raise RuntimeError(agent.llm_error or "模型初始化失败。")
+            _ = llm.invoke([HumanMessage(content="ping")])
+            return {
+                "ok": True,
+                "provider": provider,
+                "model": model_name,
+                "base_url": base_url,
+            }
+        except Exception as e:
+            raise RuntimeError(str(e) or "模型连通性校验失败。") from e
+
     def run_resume_match(self, payload, runtime: Optional[Dict[str, Any]] = None):
+        runtime_api_key = self._runtime_text((runtime or {}).get("api_key"))
+        if not runtime_api_key:
+            raise RuntimeError("resume-match 仅支持使用用户提供的 API Key 运行。")
+
         try:
             agent = self._build_runtime_agent(runtime)
             result = agent.run_resume_match(payload)
 
-            # If result contains an error, raise it instead of falling back
             if isinstance(result, dict) and result.get("error"):
-                raise RuntimeError(f"模型调用失败: {result['error']}")
+                raise RuntimeError(str(result.get("message") or result.get("error") or "模型调用失败"))
+            if not isinstance(result, dict):
+                raise RuntimeError("模型未返回有效 JSON 对象。")
 
             return result
         except Exception as e:
-            # Re-raise — do NOT fall back to keyword heuristic
             raise RuntimeError(f"分析请求失败: {str(e)}") from e
 
     def run_resume_craft(self, payload, runtime: Optional[Dict[str, Any]] = None):

@@ -2,9 +2,11 @@ import { FormEvent, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { callCareerforgeSkill } from "../lib/api";
 import { useModelSettings } from "../context/ModelSettingsContext";
+import { useCareerFeatureGuard } from "../components/CareerFeatureGuard";
 
 export function CoverLetterPage() {
   const { settings } = useModelSettings();
+  const featureGuard = useCareerFeatureGuard(settings, "求职信生成");
   const [resumeText, setResumeText] = useState("");
   const [jdText, setJdText] = useState("");
   const [companyName, setCompanyName] = useState("");
@@ -32,6 +34,8 @@ export function CoverLetterPage() {
   };
 
   return (
+    <>
+      {featureGuard.overlay}
     <section className="card-grid">
       <NavLink to="/" className="back-home-btn">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -61,5 +65,6 @@ export function CoverLetterPage() {
         <pre>{output || "提交后将在这里显示 JSON 结果"}</pre>
       </article>
     </section>
+    </>
   );
 }
