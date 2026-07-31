@@ -507,10 +507,24 @@ def build_resume_match_html_report(result: dict, resume_text: str, target_role: 
       gap: 10px;
     }}
     .action {{
+      display: block;
       border: 1px solid var(--border);
       background: var(--bg);
       border-radius: 12px;
       padding: 12px;
+      color: inherit;
+      text-decoration: none;
+      transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, background 160ms ease;
+      cursor: pointer;
+    }}
+    .action:hover {{
+      transform: translateY(-2px);
+      border-color: rgba(45, 107, 95, 0.24);
+      background: #f9f6ef;
+      box-shadow: 0 14px 26px rgba(26, 31, 46, 0.08);
+    }}
+    .action:active {{
+      transform: translateY(0);
     }}
     .action .icon {{
       width: 32px;
@@ -641,21 +655,21 @@ def build_resume_match_html_report(result: dict, resume_text: str, target_role: 
       <section>
         <h2 class="section-title">下一步行动</h2>
         <div class="actions">
-          <article class="action">
+          <a class="action" href="/resume-craft" target="_top">
             <div class="icon a">CV</div>
             <h5>resume-craft</h5>
             <p>将确认后的优化内容直接生成排版精美的 HTML + PDF 简历版本。</p>
-          </article>
-          <article class="action">
+          </a>
+          <a class="action" href="/cover-letter" target="_top">
             <div class="icon b">✉</div>
             <h5>cover-letter</h5>
             <p>基于目标 JD 生成定制化求职信与平台招呼语。</p>
-          </article>
-          <article class="action">
+          </a>
+          <a class="action" href="/mock-interview" target="_top">
             <div class="icon c">🎯</div>
             <h5>mock-interview</h5>
             <p>针对本次识别的短板做面试问答强化训练。</p>
-          </article>
+          </a>
         </div>
       </section>
     </div>
@@ -665,4 +679,3 @@ def build_resume_match_html_report(result: dict, resume_text: str, target_role: 
 </html>
 """
     return file_name, html_doc
-
