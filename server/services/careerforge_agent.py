@@ -26,12 +26,18 @@ class CareerForgeAgent:
         "mock-interview",
     }
 
-    def __init__(self, skills_root: Optional[str] = None, llm=None, skill_loader: Optional[SkillLoader] = None):
+    def __init__(
+        self,
+        skills_root: Optional[str] = None,
+        llm=None,
+        skill_loader: Optional[SkillLoader] = None,
+        llm_error: Optional[str] = None,
+    ):
         self.skill_loader = skill_loader or SkillLoader(skills_root=skills_root)
-        self.llm_error: Optional[str] = None
+        self.llm_error: Optional[str] = llm_error
         self.llm = llm
         if llm is None:
-            self.llm_error = "LLM must be provided by the runtime service"
+            self.llm_error = self.llm_error or "LLM must be provided by the runtime service"
 
     def load_skill(self, skill_name: str) -> str:
         if skill_name not in self.SUPPORTED_SKILLS:

@@ -14,8 +14,19 @@ from utils.logger_handler import logger
 class AIService:
     def __init__(self):
         self.resume_service = ResumeService()
-        self.llm = self._build_platform_llm()
-        self.careerforge_agent = CareerForgeAgent(llm=self.llm)
+        self._platform_llm_error: Optional[str] = None
+        try:
+            self.llm = self._build_platform_llm()
+        except Exception as exc:
+            # Keep serverless module import alive. The original configuration
+            # error is raised when a request actually needs the model.
+            self.llm = None
+            self._platform_llm_error = str(exc)
+            logger.error("Platform LLM initialization failed: %s", exc)
+        self.careerforge_agent = CareerForgeAgent(
+            llm=self.llm,
+            llm_error=self._platform_llm_error,
+        )
 
     @staticmethod
     def _runtime_text(value: Any) -> str:
