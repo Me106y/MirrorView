@@ -5,10 +5,7 @@ from pathlib import Path
 
 def _load_json_config():
     base_path = Path(__file__).resolve().parent
-    candidates = [
-        base_path / "config.json",
-        base_path / "config.json.example",
-    ]
+    candidates = [base_path / "config.json"]
 
     for config_path in candidates:
         if not config_path.exists():
@@ -19,9 +16,7 @@ def _load_json_config():
             raise ValueError(f"{config_path.name} must be a JSON object.")
         return data
 
-    raise FileNotFoundError(
-        f"Missing config files. Expected one of: {', '.join(str(p) for p in candidates)}"
-    )
+    return {}
 
 
 def _to_bool(value, default=False):
