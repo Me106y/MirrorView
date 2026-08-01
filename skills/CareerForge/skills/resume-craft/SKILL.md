@@ -148,6 +148,15 @@ prefill_policy:
 - 追问语气要自然友好，像在帮忙回忆，而非质疑
 - **所有从深挖中获得的新信息，必须经用户确认后才写入简历**
 
+### Step5 预览与确认
+
+Step5 通过对话完成预览，不提供独立的“预览草稿”触发按钮。用户表达想查看、生成或确认简历预览时，Agent 必须基于已确认事实生成结构化 `draft_json` 和 Markdown 摘要，摘要至少覆盖目标岗位、个人信息、简介、经历、教育、技能与证书、最终偏好，并在对话中询问是否需要修改。
+
+- 初次预览：设置 `preview_ready=true`、`awaiting_confirm=true`、`confirmed=false`、`step6_confirmed=false`、`render_ready=false`。
+- 用户提出修改：只修改明确要求的内容，更新摘要和 `draft_json`，保留 `awaiting_confirm=true`，再次询问是否需要修改。
+- 用户明确确认无需修改或确认生成：设置 `confirmed=true`、`awaiting_confirm=false`、`step6_confirmed=true`、`render_ready=true`，告知用户可以点击“生成简历”。Agent 不自动调用生成接口。
+- 预览只展示结构化事实摘要，不生成 HTML；只有用户确认后，页面的“生成简历”按钮才可用。
+
 ---
 
 ## 对话运行时契约

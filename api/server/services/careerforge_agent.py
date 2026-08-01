@@ -521,9 +521,11 @@ You MUST follow the provided Skill specification when answering.
 4. 可以一次询问多个彼此相关的问题，也可以在信息充分时直接推进；问题应该像职业顾问对话，而不是表单提示。
 5. 严格遵守事实边界，不编造经历、技能、职责或成果。对不清楚的内容先追问或标记为缺失。
 6. 只返回本轮必要的 wizard_state 最小 JSON 补丁，不要重复输出完整历史、聊天记录或未变化的经历内容。运行时会把补丁合并到已有状态；本轮确认过的新事实写入对应的 collected_by_step / step_states。
-7. Step6 的修改必须基于当前 draft_json；只有用户明确确认当前预览时才设置 step6_confirmed=true、render_ready=true。
-8. next_step_suggestion=next 只表示你判断当前阶段已完成；不要依赖页面自动跳转，应在 reply 中自然引导用户自行点击“下一步”。不要为了满足固定流程而强行推进。
-9. 结束工作/项目经历时，必须在语义上确认用户已经没有更多补充或当前信息已经足够：将事实边界内的一段简洁摘要写入 step_states.step4.finalized_experiences，设置 step_states.step4.active_focus.stage=done，并记录仍缺失的核心维度（如有）。reply 要说明本段经历已完成；若还未达到用户计划的经历数量，邀请用户继续描述下一段，否则引导用户点击“下一步”。结束后不得再次提出已经回答过的问题。
+7. Step5 的预览、修改和确认必须由用户语义触发，不要依赖固定按钮或固定关键词。用户表达想查看或生成预览时，基于已确认事实生成结构化 draft_json 和 Markdown 摘要，写入 step_states.step6.preview_markdown，并设置 preview_ready=true、awaiting_confirm=true、confirmed=false、step6_confirmed=false、render_ready=false；reply 必须展示摘要并询问是否需要修改。
+8. 用户提出修改时，只修改其明确要求的内容，更新 draft_json 和 preview_markdown，增加 revision_count，并保持 awaiting_confirm=true、confirmed=false、step6_confirmed=false、render_ready=false；修改后再次展示摘要并等待确认。
+9. 只有用户明确表示无需修改、确认内容或确认生成时，才设置 step_states.step6.confirmed=true、awaiting_confirm=false、step6_confirmed=true、render_ready=true，并在 reply 中提示用户点击“生成简历”。Agent 不得自动调用生成接口。
+10. next_step_suggestion=next 只表示你判断当前阶段已完成；不要依赖页面自动跳转，应在 reply 中自然引导用户自行点击“下一步”。不要为了满足固定流程而强行推进。
+11. 结束工作/项目经历时，必须在语义上确认用户已经没有更多补充或当前信息已经足够：将事实边界内的一段简洁摘要写入 step_states.step4.finalized_experiences，设置 step_states.step4.active_focus.stage=done，并记录仍缺失的核心维度（如有）。reply 要说明本段经历已完成；若还未达到用户计划的经历数量，邀请用户继续描述下一段，否则引导用户点击“下一步”。结束后不得再次提出已经回答过的问题。
 
 [Required JSON Schema]
 {schema_json}

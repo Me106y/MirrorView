@@ -302,7 +302,9 @@ export function ResumeCraftPage() {
   const canGenerate = useMemo(() => {
     const draft = wizardState.step_states.step6?.draft_json;
     const hasDraft = Boolean(draft && Object.keys(draft).length > 0);
-    return agentRenderReady && hasDraft && !renderLoading;
+    const confirmed = wizardState.collected_by_step.step6_confirmed === true
+      && wizardState.step_states.step6?.confirmed === true;
+    return agentRenderReady && confirmed && hasDraft && !renderLoading;
   }, [agentRenderReady, wizardState, renderLoading]);
 
   useEffect(() => {
@@ -547,10 +549,6 @@ export function ResumeCraftPage() {
     await sendChatMessage(chatInput.trim());
   };
   
-  const generatePreview = async () => {
-    await sendChatMessage("请生成简历预览");
-  };
-
   const updateEducationField = (index: number, field: keyof EducationItem, value: string) => {
     setProfile((prev) => {
       const rows = prev.education.length ? [...prev.education] : [{ ...EMPTY_EDUCATION }];
@@ -1221,11 +1219,8 @@ export function ResumeCraftPage() {
 
                   {chatStep === 5 ? (
                     <div className="resume-craft-step-actions">
-                      <button type="button" className="ghost-btn" disabled={renderLoading || chatLoading} onClick={generatePreview}>
-                        预览草稿
-                      </button>
                       <button type="button" className="primary-btn resume-craft-next-btn" disabled={!canGenerate} onClick={() => void renderResume()}>
-                        {renderLoading ? "生成中..." : wizardState?.step_states?.step6?.preview_ready ? "确认生成简历" : "生成简历"}
+                        {renderLoading ? "生成中..." : "生成简历"}
                       </button>
                     </div>
                   ) : null}
