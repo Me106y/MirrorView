@@ -41,7 +41,23 @@ const LANGUAGE_OPTIONS = [
   { value: "both", label: "中英文双版" },
 ];
 
-const INITIAL_CHAT_MESSAGE = "你可以直接描述任何想写入或修改的内容，AI 会结合上下文追问、整理或推进。";
+const INITIAL_CHAT_MESSAGES: Record<ChatStep, string> = {
+  3: "请描述一段工作或项目经历，可以包括项目背景、你的职责、采取的关键行动，以及最终结果或影响。我会围绕目标岗位帮你提炼亮点并进行追问。",
+  4: "请补充与目标岗位相关的技能、工具、编程语言、语言能力或证书，并说明你的掌握程度和实际使用场景。我会帮你整理成简历中的技能信息。",
+  5: "请告诉我你希望简历重点突出什么，例如目标岗位方向、内容取舍、语气风格或其他排版偏好。我会结合已确认的信息整理最终简历草稿。",
+};
+
+const CHAT_INPUT_PLACEHOLDERS: Record<ChatStep, string> = {
+  3: "描述一段工作或项目经历，包含职责、行动和结果",
+  4: "补充技能、工具、语言能力或证书信息",
+  5: "补充简历重点、内容取舍或排版偏好",
+};
+
+const CHAT_STEP_DESCRIPTIONS: Record<ChatStep, string> = {
+  3: "围绕工作或项目经历的背景、职责、行动和结果，提炼与目标岗位匹配的亮点。",
+  4: "整理技能、工具、语言能力和证书，并补充掌握程度与实际使用场景。",
+  5: "确认简历重点、内容取舍、语气风格和其他偏好，生成最终简历草稿。",
+};
 
 const STEP_TITLES: Record<StepNumber, string> = {
   1: "Step1 基础信息",
@@ -225,9 +241,9 @@ export function ResumeCraftPage() {
 
   const [wizardState, setWizardState] = useState<ResumeCraftWizardState>(EMPTY_WIZARD);
   const [messagesByStep, setMessagesByStep] = useState<Record<ChatStep, Msg[]>>({
-    3: [{ role: "assistant", content: INITIAL_CHAT_MESSAGE, timestamp: nowTimeLabel() }],
-    4: [{ role: "assistant", content: INITIAL_CHAT_MESSAGE, timestamp: nowTimeLabel() }],
-    5: [{ role: "assistant", content: INITIAL_CHAT_MESSAGE, timestamp: nowTimeLabel() }],
+    3: [{ role: "assistant", content: INITIAL_CHAT_MESSAGES[3], timestamp: nowTimeLabel() }],
+    4: [{ role: "assistant", content: INITIAL_CHAT_MESSAGES[4], timestamp: nowTimeLabel() }],
+    5: [{ role: "assistant", content: INITIAL_CHAT_MESSAGES[5], timestamp: nowTimeLabel() }],
   });
 
   const [chatInput, setChatInput] = useState("");
@@ -423,7 +439,10 @@ export function ResumeCraftPage() {
       return;
     }
     if (!activeChatStep) return;
-    setMessagesByStep((prev) => ({ ...prev, [activeChatStep]: [{ role: "assistant", content: INITIAL_CHAT_MESSAGE, timestamp: nowTimeLabel() }] }));
+    setMessagesByStep((prev) => ({
+      ...prev,
+      [activeChatStep]: [{ role: "assistant", content: INITIAL_CHAT_MESSAGES[activeChatStep], timestamp: nowTimeLabel() }],
+    }));
     setWizardState((prev) => {
       const next = JSON.parse(JSON.stringify(prev)) as ResumeCraftWizardState;
       const key = stepKey(activeChatStep);
@@ -1096,7 +1115,7 @@ export function ResumeCraftPage() {
                     <div className="resume-craft-chat-head-left">
                       <span className="resume-craft-step-tag">Step {chatStep} / 5</span>
                       <h2>{STEP_TITLES[chatStep]}</h2>
-                      <p>你可以自由补充信息，AI 会根据目标岗位和完整上下文决定追问、整理或推进。</p>
+                      <p>{CHAT_STEP_DESCRIPTIONS[chatStep]}</p>
                       <div className="resume-craft-head-divider" />
                     </div>
                     <div className="resume-craft-head-actions">
@@ -1164,7 +1183,7 @@ export function ResumeCraftPage() {
                     <input
                       value={step === chatStep ? chatInput : ""}
                       onChange={(e) => setChatInput(e.target.value)}
-                      placeholder="自由补充信息，AI 会结合上下文追问或推进"
+                      placeholder={CHAT_INPUT_PLACEHOLDERS[chatStep]}
                       disabled={step !== chatStep}
                       aria-label="输入当前步骤信息"
                     />
