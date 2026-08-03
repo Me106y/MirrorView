@@ -682,14 +682,14 @@ a {
 .resume-craft-page > .back-home-btn {
   position: absolute;
   top: 12px;
-  left: -15px;
+  left: 0;
   margin-bottom: 0;
   z-index: 2;
 }
 
 @media (max-width: 1199px) {
   .resume-craft-page > .back-home-btn {
-    left: -15px;
+    left: 0;
   }
 }
 
@@ -1176,11 +1176,12 @@ a {
 }
 
 .resume-craft-step1-card #rc-jd-summary {
-  height: 140px;
-  min-height: 140px;
-  max-height: 140px;
+  height: 156px;
+  min-height: 156px;
+  max-height: 156px;
   overflow-y: auto;
   resize: none;
+  transform: translateY(2px);
 }
 
 .resume-craft-step1-card {
@@ -1542,10 +1543,29 @@ a {
   overflow: hidden;
 }
 
+.resume-craft-page.is-step1-page {
+  height: calc(100% + 16px);
+}
+
 .resume-craft-page.is-step1-page .resume-craft-layout,
 .resume-craft-page.is-step2-page .resume-craft-layout {
   height: 100%;
   min-height: 0;
+}
+
+@media (min-width: 768px) {
+  .resume-craft-layout {
+    padding-left: 76px;
+  }
+}
+
+@media (max-width: 767px) {
+  .resume-craft-page > .back-home-btn {
+    position: relative;
+    top: 0;
+    left: 0;
+    margin-bottom: 8px;
+  }
 }
 
 .resume-craft-step1-head {
