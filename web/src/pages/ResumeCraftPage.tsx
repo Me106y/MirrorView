@@ -738,7 +738,7 @@ export function ResumeCraftPage() {
   };
 
   const stepCard = (stepNo: StepNumber, content: ReactNode) => (
-    <article className={`surface resume-craft-step-card ${stepNo <= 1 ? "resume-craft-step1-card" : "resume-craft-chat-step"}`} ref={(el) => (stepRefs.current[stepNo] = el)}>
+    <article className={`surface resume-craft-step-card ${stepNo === 1 ? "resume-craft-step1-card" : stepNo === 2 ? "resume-craft-step2-card" : "resume-craft-chat-step"}`} ref={(el) => (stepRefs.current[stepNo] = el)}>
       {content}
     </article>
   );
@@ -821,7 +821,7 @@ export function ResumeCraftPage() {
   return (
     <>
       {featureGuard.overlay}
-    <section className="resume-craft-page">
+    <section className={`resume-craft-page ${activeChatStep ? "is-chat-page" : ""}`}>
       <NavLink to="/" className="back-home-btn">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M19 12H5M12 19l-7-7 7-7"/>
@@ -829,7 +829,7 @@ export function ResumeCraftPage() {
         返回
       </NavLink>
       <div className="resume-craft-layout">
-        <div className={`resume-craft-wizard-viewport ${activeChatStep ? "is-chat-viewport" : ""}`} style={viewportHeight ? { height: `${viewportHeight}px` } : undefined}>
+        <div className={`resume-craft-wizard-viewport ${activeChatStep ? "is-chat-viewport" : ""} ${step === 2 ? "is-step2-viewport" : ""}`} style={viewportHeight ? { height: `${viewportHeight}px` } : undefined}>
           <div className="resume-craft-wizard-track" ref={wizardTrackRef} style={{ transform: `translateX(-${(step - 1) * STEP_SHIFT}%)` }}>
             {stepCard(
               1,

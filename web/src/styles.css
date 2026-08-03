@@ -676,8 +676,9 @@ a {
 .resume-craft-page > .back-home-btn {
   position: absolute;
   top: 24px;
-  left: -12px;
+  left: -20px;
   margin-bottom: 0;
+  z-index: 2;
 }
 
 .resume-craft-layout {
@@ -697,6 +698,10 @@ a {
 .resume-craft-wizard-viewport.is-chat-viewport {
   overflow: hidden;
   max-height: none;
+}
+
+.resume-craft-wizard-viewport.is-step2-viewport {
+  max-height: calc(100dvh - 32px);
 }
 
 .resume-craft-wizard-track {
@@ -1145,6 +1150,18 @@ a {
   resize: vertical;
 }
 
+.resume-craft-step1-card #rc-jd-summary {
+  min-height: 140px;
+}
+
+.resume-craft-step2-card {
+  height: clamp(640px, calc(100dvh - 8px), 760px);
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
 .resume-craft-education-wrap {
   margin-top: 4px;
   display: grid;
@@ -1408,6 +1425,11 @@ a {
   gap: 10px;
   height: clamp(440px, calc(100dvh - 165px), 760px);
   min-height: 0;
+  overflow: hidden;
+}
+
+.resume-craft-page.is-chat-page {
+  padding-bottom: 0;
   overflow: hidden;
 }
 
@@ -2861,7 +2883,7 @@ textarea {
   }
 
   .resume-craft-page > .back-home-btn {
-    left: -8px;
+    left: -16px;
   }
 
   .resume-craft-chat-head {
