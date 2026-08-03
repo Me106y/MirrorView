@@ -1,4 +1,5 @@
 import { FormEvent, ReactNode, SyntheticEvent, useEffect, useMemo, useRef, useState } from "react";
+import { gsap } from "gsap";
 import { NavLink } from "react-router-dom";
 import { callCareerforgeSkill } from "../lib/api";
 import { useModelSettings } from "../context/ModelSettingsContext";
@@ -271,11 +272,14 @@ export function ResumeCraftPage() {
   const [monthPickerYear, setMonthPickerYear] = useState<number>(new Date().getFullYear());
   const [expandedPill, setExpandedPill] = useState<string | null>(null);
   const [touchedFields, setTouchedFields] = useState<Record<string, boolean>>({});
+  const [activeEducationIndex, setActiveEducationIndex] = useState(0);
 
   const previewFrameRef = useRef<HTMLIFrameElement | null>(null);
   const photoInputRef = useRef<HTMLInputElement | null>(null);
   const wizardTrackRef = useRef<HTMLDivElement | null>(null);
   const stepRefs = useRef<Record<StepNumber, HTMLElement | null>>({ 1: null, 2: null, 3: null, 4: null, 5: null });
+  const educationCarouselRef = useRef<HTMLDivElement | null>(null);
+  const previousEducationIndexRef = useRef(0);
   const monthPickerWrapRef = useRef<HTMLDivElement | null>(null);
   const rafRef = useRef<number>(0);
   const stepSnapshots = useRef<Record<number, {
@@ -308,6 +312,10 @@ export function ResumeCraftPage() {
   }, [profile.personal_info, profile.education]);
 
   const activeChatStep = step >= 3 ? (step as ChatStep) : null;
+  const educationRows = profile.education.length ? profile.education : [{ ...EMPTY_EDUCATION }];
+  const educationIndex = Math.min(activeEducationIndex, educationRows.length - 1);
+  const edu = educationRows[educationIndex];
+  const index = educationIndex;
 
   const canAdvanceChatStep = useMemo(() => {
     if (!activeChatStep) return false;
@@ -344,6 +352,28 @@ export function ResumeCraftPage() {
       cancelAnimationFrame(rafRef.current);
     };
   }, [step]);
+
+  useEffect(() => {
+    setActiveEducationIndex((current) => Math.min(current, Math.max(educationRows.length - 1, 0)));
+  }, [educationRows.length]);
+
+  useEffect(() => {
+    const slide = educationCarouselRef.current?.querySelector<HTMLElement>(".resume-craft-edu-item");
+    if (!slide) return;
+
+    const direction = activeEducationIndex >= previousEducationIndexRef.current ? 1 : -1;
+    previousEducationIndexRef.current = activeEducationIndex;
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const context = gsap.context(() => {
+      gsap.fromTo(
+        slide,
+        { x: reduceMotion ? 0 : direction * 28, autoAlpha: reduceMotion ? 1 : 0 },
+        { x: 0, autoAlpha: 1, duration: reduceMotion ? 0 : 0.3, ease: "power2.out" },
+      );
+    }, educationCarouselRef);
+
+    return () => context.revert();
+  }, [activeEducationIndex]);
 
   useEffect(() => {
     const onPointerDown = (event: MouseEvent) => {
@@ -604,15 +634,25 @@ export function ResumeCraftPage() {
   };
 
   const addEducationRow = () => {
+    setActiveEducationIndex(educationRows.length);
     setProfile((prev) => ({ ...prev, education: [...(prev.education.length ? prev.education : [{ ...EMPTY_EDUCATION }]), { ...EMPTY_EDUCATION }] }));
   };
 
   const removeEducationRow = (index: number) => {
+    const rows = educationRows;
+    const nextLength = Math.max(rows.length - 1, 1);
+    setActiveEducationIndex((current) => (current > index ? current - 1 : Math.min(current, nextLength - 1)));
     setProfile((prev) => {
-      const rows = prev.education.length ? [...prev.education] : [{ ...EMPTY_EDUCATION }];
-      const nextRows = rows.filter((_, idx) => idx !== index);
+      const currentRows = prev.education.length ? [...prev.education] : [{ ...EMPTY_EDUCATION }];
+      const nextRows = currentRows.filter((_, idx) => idx !== index);
       return { ...prev, education: nextRows.length ? nextRows : [{ ...EMPTY_EDUCATION }] };
     });
+  };
+
+  const switchEducation = (nextIndex: number) => {
+    if (nextIndex < 0 || nextIndex >= educationRows.length || nextIndex === activeEducationIndex) return;
+    setOpenMonthPicker(null);
+    setActiveEducationIndex(nextIndex);
   };
 
   useEffect(() => {
@@ -821,7 +861,7 @@ export function ResumeCraftPage() {
   return (
     <>
       {featureGuard.overlay}
-    <section className={`resume-craft-page ${activeChatStep ? "is-chat-page" : ""}`}>
+    <section className={`resume-craft-page ${activeChatStep ? "is-chat-page" : ""} ${step === 2 ? "is-step2-page" : ""}`}>
       <NavLink to="/" className="back-home-btn">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M19 12H5M12 19l-7-7 7-7"/>
@@ -839,8 +879,6 @@ export function ResumeCraftPage() {
                   <p>设置模板、语言、可选照片、目标岗位与 JD 摘要。</p>
                   <div className="resume-craft-head-divider" />
                 </header>
-                <div className="resume-craft-soft-separator" aria-hidden="true" />
-
                 <div className="resume-craft-step-grid resume-craft-step1-select-section">
                   <label className="resume-craft-control" htmlFor="rc-template">
                     <span className="resume-craft-control-label">模板</span>
@@ -988,8 +1026,8 @@ export function ResumeCraftPage() {
                       <span className="resume-craft-edu-icon" aria-hidden="true">EDU</span>
                       教育背景
                     </h3>
-                    {(profile.education.length ? profile.education : [{ ...EMPTY_EDUCATION }]).map((edu, index) => (
-                      <div className="resume-craft-edu-item" key={`edu-${index}`}>
+                    <div className="resume-craft-education-carousel" ref={educationCarouselRef}>
+                      <div className="resume-craft-edu-item" key={`edu-${activeEducationIndex}`}>
                         <div className="resume-craft-edu-main-row">
                           <input
                             value={edu.school}
@@ -1115,8 +1153,31 @@ export function ResumeCraftPage() {
                           ) : null}
                         </div>
                       </div>
-                  ))}
-                  <button type="button" className="ghost-btn" onClick={addEducationRow}>+ 新增教育经历</button>
+                    </div>
+                    <div className="resume-craft-education-nav" aria-label="教育经历切换">
+                      <button
+                        type="button"
+                        className="ghost-btn resume-craft-education-nav-btn"
+                        aria-label="上一段教育经历"
+                        title="上一段教育经历"
+                        onClick={() => switchEducation(activeEducationIndex - 1)}
+                        disabled={activeEducationIndex === 0}
+                      >
+                        ←
+                      </button>
+                      <span>{activeEducationIndex + 1} / {educationRows.length}</span>
+                      <button
+                        type="button"
+                        className="ghost-btn resume-craft-education-nav-btn"
+                        aria-label="下一段教育经历"
+                        title="下一段教育经历"
+                        onClick={() => switchEducation(activeEducationIndex + 1)}
+                        disabled={activeEducationIndex >= educationRows.length - 1}
+                      >
+                        →
+                      </button>
+                    </div>
+                    <button type="button" className="ghost-btn resume-craft-add-education-btn" onClick={addEducationRow}>+ 新增教育经历</button>
                 </section>
               </>
             )}
