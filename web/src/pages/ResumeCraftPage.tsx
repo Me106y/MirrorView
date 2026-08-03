@@ -312,8 +312,7 @@ export function ResumeCraftPage() {
   const canGenerate = useMemo(() => {
     const draft = wizardState.step_states.step6?.draft_json;
     const hasDraft = Boolean(draft && Object.keys(draft).length > 0);
-    const confirmed = wizardState.collected_by_step.step6_confirmed === true
-      && wizardState.step_states.step6?.confirmed === true;
+    const confirmed = wizardState.collected_by_step.step6_confirmed === true;
     return confirmed && hasDraft && !renderLoading;
   }, [wizardState, renderLoading]);
 

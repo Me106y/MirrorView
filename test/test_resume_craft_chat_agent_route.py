@@ -355,6 +355,38 @@ def test_agent_step5_confirmation_unlocks_generation():
     assert result["wizard_state"]["step_states"]["step6"]["confirmed"] is True
 
 
+def test_agent_render_ready_normalizes_step6_confirmation_state():
+    model = _JsonModel(
+        '{"reply":"预览已确认，可以生成简历。",'
+        '"action":"confirm","next_step_suggestion":"stay","render_ready":true,'
+        '"missing_fields":[],"wizard_state":{"step_states":{"step6":{'
+        '"draft_json":{"target_role":"AI应用开发"}}}},'
+        '"step6_preview_markdown":"# 简历摘要",'
+        '"step6_waiting_confirm":false,"step6_applied_changes":[]}'
+    )
+    agent = CareerForgeAgent(llm=model)
+
+    result = agent.run_resume_craft_chat_turn(
+        {
+            "message": "没有问题，确认生成",
+            "current_step": 6,
+            "step1_profile": _profile(),
+            "wizard_state": {
+                "current_step": 6,
+                "collected_by_step": {"step6_confirmed": False},
+                "step_states": {"step6": {"preview_ready": True, "awaiting_confirm": True}},
+            },
+            "history": [{"role": "assistant", "content": "是否需要修改？"}],
+        }
+    )
+
+    step6 = result["wizard_state"]["step_states"]["step6"]
+    assert result["render_ready"] is True
+    assert result["wizard_state"]["collected_by_step"]["step6_confirmed"] is True
+    assert step6["confirmed"] is True
+    assert step6["awaiting_confirm"] is False
+
+
 def test_agent_exposes_invalid_json_without_repair_retry():
     model = _JsonModel("```json\n{\"reply\": \"需要修复\"}\n```")
     agent = CareerForgeAgent(llm=model)

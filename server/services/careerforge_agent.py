@@ -70,6 +70,32 @@ class CareerForgeAgent:
                 merged[key] = deepcopy(value)
         return merged
 
+    @staticmethod
+    def _normalize_render_ready_state(result: dict) -> dict:
+        """Keep the UI confirmation state aligned with the render-ready contract."""
+        if result.get("render_ready") is not True:
+            return result
+
+        wizard_state = result.get("wizard_state")
+        if not isinstance(wizard_state, dict):
+            result["render_ready"] = False
+            return result
+
+        step_states = wizard_state.get("step_states")
+        step6 = step_states.get("step6") if isinstance(step_states, dict) else None
+        draft_json = step6.get("draft_json") if isinstance(step6, dict) else None
+        if not isinstance(draft_json, dict) or not draft_json:
+            result["render_ready"] = False
+            return result
+
+        collected = wizard_state.setdefault("collected_by_step", {})
+        if isinstance(collected, dict):
+            collected["step6_confirmed"] = True
+        if isinstance(step6, dict):
+            step6["confirmed"] = True
+            step6["awaiting_confirm"] = False
+        return result
+
     def _safe_json_loads(self, raw: str) -> Optional[dict]:
         raw = (raw or "").strip()
         if not raw:
@@ -558,7 +584,7 @@ You MUST follow the provided Skill specification when answering.
         parsed["wizard_state"] = self._merge_state_patch(
             context["wizard_state"], parsed["wizard_state"]
         )
-        return parsed
+        return self._normalize_render_ready_state(parsed)
 
     def _build_resume_craft_html_prompt(self, payload: dict) -> str:
         skill_spec = self.load_skill("resume-craft")
