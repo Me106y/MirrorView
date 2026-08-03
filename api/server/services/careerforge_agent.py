@@ -215,8 +215,30 @@ class CareerForgeAgent:
         return result
 
     @staticmethod
-    def _normalize_render_ready_state(result: dict) -> dict:
+    def _normalize_render_ready_state(result: dict, current_step: Any = 6) -> dict:
         """Keep the UI confirmation state aligned with the render-ready contract."""
+        if str(current_step) != "6":
+            wizard_state = result.get("wizard_state")
+            premature_confirmation = False
+            if isinstance(wizard_state, dict):
+                collected = wizard_state.get("collected_by_step")
+                if isinstance(collected, dict):
+                    premature_confirmation = bool(collected.get("step6_confirmed"))
+                    collected["step6_confirmed"] = False
+                step_states = wizard_state.get("step_states")
+                step6 = step_states.get("step6") if isinstance(step_states, dict) else None
+                if isinstance(step6, dict):
+                    premature_confirmation = premature_confirmation or bool(step6.get("confirmed"))
+                    step6["confirmed"] = False
+                    step6["awaiting_confirm"] = False
+            if result.get("render_ready") is not True and not premature_confirmation:
+                return result
+            result["render_ready"] = False
+            result["action"] = "advance"
+            result["next_step_suggestion"] = "next"
+            result["reply"] = "技能与证书信息已记录。请点击“下一步”进入确认与偏好，完成预览确认后再生成简历。"
+            return result
+
         if result.get("render_ready") is not True:
             return result
 
@@ -709,7 +731,7 @@ You MUST follow the provided Skill specification when answering.
 5. 可以一次询问多个彼此相关的问题，也可以在问题集合全部回答后进入下一轮；问题应该像职业顾问对话，而不是表单提示。每个问题必须绑定仍缺失且影响简历准确性的维度；如果用户已经具体回答过某主题，即使没有使用原问题措辞，也必须将其标记为 answered，不得再次生成等价问题。没有 open 问题且核心事实已齐全时，用户语义表示没有更多补充应直接结束当前经历，不要用宽泛问题延长对话。
 6. 严格遵守事实边界，不编造经历、技能、职责或成果。对不清楚的内容先追问或标记为缺失。
 7. 只返回本轮必要的 wizard_state 最小 JSON 补丁，不要重复输出完整历史、聊天记录或未变化的经历内容。运行时会把补丁合并到已有状态；本轮确认过的新事实写入对应的 collected_by_step / step_states。
-8. Step5 的预览、修改和确认必须由用户语义触发，不要依赖固定按钮或固定关键词。用户表达想查看或生成预览时，基于已确认事实生成结构化 draft_json 和 Markdown 摘要，写入 step_states.step6.preview_markdown，并设置 preview_ready=true、awaiting_confirm=true、confirmed=false、step6_confirmed=false、render_ready=false；reply 必须展示摘要并询问是否需要修改。
+8. 只有当前页面上下文中的 `current_step=6`（页面 Step5“确认与偏好”）才能进行 Step6 预览、修改和确认。Step4 页面对应 `current_step=5`，此时只能收集技能、工具、语言能力和证书，不得设置 `step6_confirmed=true`、`step6.confirmed=true` 或 `render_ready=true`，也不得引导用户点击“生成简历”。在 `current_step=6` 时，Step5 的预览、修改和确认必须由用户语义触发，不要依赖固定按钮或固定关键词。用户表达想查看或生成预览时，基于已确认事实生成结构化 draft_json 和 Markdown 摘要，写入 step_states.step6.preview_markdown，并设置 preview_ready=true、awaiting_confirm=true、confirmed=false、step6_confirmed=false、render_ready=false；reply 必须展示摘要并询问是否需要修改。
 9. 用户提出修改时，只修改其明确要求的内容，更新 draft_json 和 preview_markdown，增加 revision_count，并保持 awaiting_confirm=true、confirmed=false、step6_confirmed=false、render_ready=false；修改后再次展示摘要并等待确认。
 10. 只有用户明确表示无需修改、确认内容或确认生成时，才设置 step_states.step6.confirmed=true、awaiting_confirm=false、step6_confirmed=true、render_ready=true，并在 reply 中明确提示用户点击“生成简历”生成 HTML 和 PDF。Agent 不得自动调用生成接口。
 11. next_step_suggestion=next 只表示你判断当前阶段已完成；不要依赖页面自动跳转，应在 reply 中自然引导用户自行点击“下一步”。不要为了满足固定流程而强行推进。
@@ -750,7 +772,7 @@ You MUST follow the provided Skill specification when answering.
         parsed = self._normalize_grill_state(
             previous_wizard_state, parsed["wizard_state"], parsed
         )
-        return self._normalize_render_ready_state(parsed)
+        return self._normalize_render_ready_state(parsed, payload.get("current_step"))
 
     def _build_resume_craft_html_prompt(self, payload: dict) -> str:
         skill_spec = self.load_skill("resume-craft")

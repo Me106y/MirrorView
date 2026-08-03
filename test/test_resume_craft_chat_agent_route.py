@@ -466,6 +466,36 @@ def test_agent_render_ready_adds_generation_guidance_when_model_omits_it():
     assert "点击“生成简历”" in result["reply"]
 
 
+def test_agent_does_not_unlock_step6_from_step5_confirmation():
+    model = _JsonModel(
+        '{"reply":"好的，已确认无需修改。请点击“生成简历”按钮。",'
+        '"action":"render_ready","next_step_suggestion":"next","render_ready":true,'
+        '"missing_fields":[],"wizard_state":{"step_states":{"step6":{'
+        '"confirmed":true,"awaiting_confirm":false,"draft_json":{"target_role":"AI应用开发"}}},'
+        '"collected_by_step":{"step6_confirmed":true}},"step6_preview_markdown":"# 摘要",'
+        '"step6_waiting_confirm":false,"step6_applied_changes":[]}'
+    )
+    agent = CareerForgeAgent(llm=model)
+
+    result = agent.run_resume_craft_chat_turn({
+        "message": "不用修改。",
+        "current_step": 5,
+        "step1_profile": _profile(),
+        "wizard_state": {
+            "current_step": 5,
+            "collected_by_step": {"step6_confirmed": False},
+            "step_states": {"step6": {"confirmed": False, "awaiting_confirm": True}},
+        },
+        "history": [],
+    })
+
+    assert result["render_ready"] is False
+    assert result["wizard_state"]["collected_by_step"]["step6_confirmed"] is False
+    assert result["wizard_state"]["step_states"]["step6"]["confirmed"] is False
+    assert "current_step=6" in str(model.prompt)
+    assert "current_step=5" in str(model.prompt)
+
+
 def test_agent_closes_experience_when_user_has_no_more_to_add():
     model = _JsonModel(
         '{"reply":"这段经历已整理完成。若还有其他经历可以继续描述；如果没有，请点击“下一步”进入技能与证书。",'

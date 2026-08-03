@@ -579,6 +579,28 @@ def test_resume_craft_render_rejects_jd_only_facts(monkeypatch):
     assert body["error"] == "unsupported_fact_detected"
 
 
+def test_resume_craft_fact_audit_accepts_confirmed_text_with_jd_formatting():
+    result = routes._audit_resume_fact_integrity(
+        "<!DOCTYPE html><html><body><p>熟悉大模型应用开发经验</p></body></html>",
+        "【工作/项目经历】\n- 经历1: 已确认大模型 应用开发实践",
+        "JD 方向摘要: 熟悉大模型应用开发经验",
+    )
+
+    assert result["passed"] is True
+    assert result["unsupported_tokens"] == []
+
+
+def test_resume_craft_fact_audit_still_rejects_unconfirmed_jd_qualifier():
+    result = routes._audit_resume_fact_integrity(
+        "<!DOCTYPE html><html><body><p>AI应用开发工程师</p></body></html>",
+        "【目标岗位】\n- 目标岗位: AI 应用开发",
+        "JD 方向摘要: AI应用开发工程师",
+    )
+
+    assert result["passed"] is False
+    assert "应用开发工程师" in result["unsupported_tokens"]
+
+
 def test_resume_craft_render_accepts_facts_from_finalized_experiences(monkeypatch):
     Config.TURNSTILE_ENFORCE = False
     Config.RATE_LIMIT_ENFORCE = False

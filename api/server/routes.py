@@ -61,6 +61,10 @@ RESUME_CRAFT_FACT_AUDIT_STOPWORDS = {
     "经验",
     "能力",
     "熟悉",
+    "熟练",
+    "掌握",
+    "精通",
+    "具备",
     "了解",
     "使用",
     "工作",
@@ -1490,7 +1494,7 @@ def _strip_html_text(value: str) -> str:
 
 def _extract_fact_audit_tokens(text: str) -> List[str]:
     source = str(text or "")
-    zh_tokens = re.findall(r"[\u4e00-\u9fff]{2,10}", source)
+    zh_tokens = re.findall(r"[\u4e00-\u9fff]{2,40}", source)
     en_tokens = re.findall(r"[A-Za-z][A-Za-z0-9+._-]{2,}", source)
     out: List[str] = []
     for token in zh_tokens + en_tokens:
@@ -1504,20 +1508,43 @@ def _extract_fact_audit_tokens(text: str) -> List[str]:
     return out[:120]
 
 
+def _normalize_fact_audit_text(value: str) -> str:
+    """Compare facts across whitespace, punctuation, and line-break formatting."""
+    return re.sub(r"[\s\W_]+", "", str(value or "").lower())
+
+
+def _strip_fact_audit_stopwords(token: str) -> str:
+    value = str(token or "").lower()
+    chinese_stopwords = sorted(
+        (item for item in RESUME_CRAFT_FACT_AUDIT_STOPWORDS if re.search(r"[\u4e00-\u9fff]", item)),
+        key=len,
+        reverse=True,
+    )
+    for stopword in chinese_stopwords:
+        value = value.replace(stopword, "")
+    return value
+
+
 def _audit_resume_fact_integrity(
     report_html: str,
     confirmed_facts_context: str,
     jd_direction_context: str,
 ) -> Dict[str, Any]:
-    html_text = _strip_html_text(report_html).lower()
-    facts_text = str(confirmed_facts_context or "").lower()
-    jd_tokens = _extract_fact_audit_tokens(jd_direction_context)
-    unsupported = []
-    for token in jd_tokens:
-        if token in facts_text:
+    html_text = _normalize_fact_audit_text(_strip_html_text(report_html))
+    facts_text = _normalize_fact_audit_text(confirmed_facts_context)
+    jd_tokens = []
+    for raw_token in _extract_fact_audit_tokens(jd_direction_context):
+        raw_normalized = _normalize_fact_audit_text(raw_token)
+        semantic_normalized = _normalize_fact_audit_text(_strip_fact_audit_stopwords(raw_token))
+        if len(raw_normalized) < 3:
             continue
-        if token in html_text:
-            unsupported.append(token)
+        jd_tokens.append((raw_normalized, semantic_normalized))
+    unsupported = []
+    for raw_token, semantic_token in jd_tokens:
+        if semantic_token and semantic_token in facts_text:
+            continue
+        if raw_token in html_text or (semantic_token and semantic_token in html_text):
+            unsupported.append(raw_token)
     unsupported = unsupported[:8]
     return {
         "passed": len(unsupported) == 0,
