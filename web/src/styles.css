@@ -1201,9 +1201,9 @@ a {
   }
 
   .resume-craft-step1-card #rc-jd-summary {
-    height: 236px;
-    min-height: 236px;
-    max-height: 236px;
+    height: 256px;
+    min-height: 256px;
+    max-height: 256px;
   }
 }
 
