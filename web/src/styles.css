@@ -676,9 +676,15 @@ a {
 .resume-craft-page > .back-home-btn {
   position: absolute;
   top: 24px;
-  left: -20px;
+  left: -70px;
   margin-bottom: 0;
   z-index: 2;
+}
+
+@media (max-width: 1199px) {
+  .resume-craft-page > .back-home-btn {
+    left: -24px;
+  }
 }
 
 .resume-craft-layout {
