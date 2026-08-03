@@ -1050,7 +1050,6 @@ export function ResumeCraftPage() {
                           →
                         </button>
                       </div>
-                      <button type="button" className="ghost-btn resume-craft-add-education-btn" onClick={addEducationRow}>+ 新增教育经历</button>
                     </div>
                     <div className="resume-craft-education-carousel" ref={educationCarouselRef}>
                       <div className="resume-craft-edu-item" key={`edu-${activeEducationIndex}`}>
@@ -1172,11 +1171,14 @@ export function ResumeCraftPage() {
                             placeholder="亮点（可选）：如 GPA、奖学金、核心课程、研究方向、项目成果"
                             onChange={(e) => updateEducationField(index, "highlights", e.target.value)}
                           />
-                          {(profile.education.length ? profile.education.length : 1) > 1 ? (
-                            <button type="button" className="ghost-btn resume-craft-edu-remove-btn" onClick={() => removeEducationRow(index)}>
-                              删除
-                            </button>
-                          ) : null}
+                          <div className="resume-craft-edu-side-actions">
+                            {(profile.education.length ? profile.education.length : 1) > 1 ? (
+                              <button type="button" className="ghost-btn resume-craft-edu-remove-btn" onClick={() => removeEducationRow(index)}>
+                                删除
+                              </button>
+                            ) : null}
+                            <button type="button" className="ghost-btn resume-craft-add-education-btn" onClick={addEducationRow}>+ 新增教育经历</button>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1278,9 +1280,15 @@ export function ResumeCraftPage() {
         {activeChatStep ? (
           <div className="resume-craft-fixed-composer">
             <form className="chat-input resume-craft-chat-input" onSubmit={onSendChat}>
-              <input
+              <textarea
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    void sendChatMessage(chatInput);
+                  }
+                }}
                 placeholder={CHAT_INPUT_PLACEHOLDERS[activeChatStep]}
                 disabled={chatLoading || renderLoading}
                 aria-label="输入当前步骤信息"

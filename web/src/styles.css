@@ -1184,6 +1184,14 @@ a {
   transform: translateY(2px);
 }
 
+@media (min-width: 768px) {
+  .resume-craft-step1-card #rc-jd-summary {
+    height: 172px;
+    min-height: 172px;
+    max-height: 172px;
+  }
+}
+
 .resume-craft-step1-card {
   height: 100%;
   max-height: none;
@@ -1221,11 +1229,8 @@ a {
 }
 
 .resume-craft-education-head-row .resume-craft-education-nav {
-  justify-self: center;
-}
-
-.resume-craft-education-head-row .resume-craft-add-education-btn {
   justify-self: end;
+  margin-right: 10px;
 }
 
 .resume-craft-education-carousel {
@@ -1421,8 +1426,10 @@ a {
 }
 
 .resume-craft-education-wrap .ghost-btn {
-  justify-self: center;
-  min-width: 180px;
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  min-height: 36px;
   margin-top: 2px;
   background: #efe9df;
   color: #676767;
@@ -1437,7 +1444,6 @@ a {
 }
 
 .resume-craft-education-wrap .resume-craft-add-education-btn {
-  justify-self: center;
   margin-top: 0;
 }
 
@@ -1455,12 +1461,22 @@ a {
 }
 
 .resume-craft-edu-remove-btn {
-  grid-column: 4 / 5;
   width: 100%;
-  height: 40px;
-  min-height: 44px;
+  height: 36px;
+  min-height: 36px;
   margin-top: 0;
   padding: 0 10px;
+}
+
+.resume-craft-education-wrap .resume-craft-edu-remove-btn {
+  margin-top: 0;
+}
+
+.resume-craft-edu-side-actions {
+  grid-column: 4 / 5;
+  display: grid;
+  gap: 10px;
+  align-content: start;
 }
 
 .resume-craft-next-btn {
@@ -1560,11 +1576,22 @@ a {
 }
 
 @media (max-width: 767px) {
+  .resume-craft-fixed-composer {
+    left: 50%;
+    width: calc(100vw - 40px);
+  }
+
   .resume-craft-page > .back-home-btn {
     position: relative;
     top: 0;
     left: 0;
     margin-bottom: 8px;
+  }
+}
+
+@media (max-width: 400px) {
+  .resume-craft-fixed-composer {
+    width: calc(100vw - 16px);
   }
 }
 
@@ -1854,10 +1881,10 @@ a {
 
 .resume-craft-fixed-composer {
   position: fixed;
-  left: 50%;
+  left: calc(50% + 38px);
   bottom: max(16px, env(safe-area-inset-bottom));
   z-index: 40;
-  width: min(1120px, calc(100vw - 32px));
+  width: min(1044px, calc(100vw - 116px));
   transform: translateX(-50%);
   pointer-events: none;
 }
@@ -1872,12 +1899,16 @@ a {
   pointer-events: auto;
 }
 
-.resume-craft-chat-input input {
+.resume-craft-chat-input textarea {
   margin: 0;
-  height: 44px;
+  height: 56px;
   min-height: 44px;
+  max-height: 120px;
   border-radius: 12px;
   box-sizing: border-box;
+  resize: none;
+  overflow-y: auto;
+  line-height: 1.45;
 }
 
 .resume-craft-chat-input .resume-craft-send-btn {
@@ -3048,12 +3079,8 @@ textarea {
   .resume-craft-education-head-row .resume-craft-education-nav {
     grid-column: 2;
     grid-row: 1;
-  }
-
-  .resume-craft-education-head-row .resume-craft-add-education-btn {
-    grid-column: 2;
-    grid-row: 2;
-    width: 180px;
+    justify-self: end;
+    margin-right: 0;
   }
 
   .resume-craft-page > .back-home-btn {
@@ -3096,7 +3123,7 @@ textarea {
   }
 
   .resume-craft-edu-highlight-row textarea,
-  .resume-craft-edu-remove-btn {
+  .resume-craft-edu-side-actions {
     grid-column: auto;
   }
 
