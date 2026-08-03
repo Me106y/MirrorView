@@ -66,9 +66,9 @@ const CHAT_STEP_DESCRIPTIONS: Record<ChatStep, string> = {
 const STEP_TITLES: Record<StepNumber, string> = {
   1: "Step1 基础信息",
   2: "Step2 个人信息与教育背景",
-  3: "Step3 工作/项目经历（Grill）",
-  4: "Step4 技能与证书（对话）",
-  5: "Step5 确认与偏好（对话）",
+  3: "Step3 工作/项目经历",
+  4: "Step4 技能与证书",
+  5: "Step5 确认与偏好",
 };
 
 const EMPTY_PROFILE: Step1Profile = {
