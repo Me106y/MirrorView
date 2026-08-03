@@ -861,7 +861,7 @@ export function ResumeCraftPage() {
   return (
     <>
       {featureGuard.overlay}
-    <section className={`resume-craft-page ${activeChatStep ? "is-chat-page" : ""} ${step === 2 ? "is-step2-page" : ""}`}>
+    <section className={`resume-craft-page ${activeChatStep ? "is-chat-page" : ""} ${step === 1 ? "is-step1-page" : ""} ${step === 2 ? "is-step2-page" : ""}`}>
       <NavLink to="/" className="back-home-btn">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M19 12H5M12 19l-7-7 7-7"/>
@@ -869,14 +869,17 @@ export function ResumeCraftPage() {
         返回
       </NavLink>
       <div className="resume-craft-layout">
-        <div className={`resume-craft-wizard-viewport ${activeChatStep ? "is-chat-viewport" : ""} ${step === 2 ? "is-step2-viewport" : ""}`} style={viewportHeight ? { height: `${viewportHeight}px` } : undefined}>
+        <div className={`resume-craft-wizard-viewport ${activeChatStep ? "is-chat-viewport" : ""} ${step === 1 ? "is-step1-viewport" : ""} ${step === 2 ? "is-step2-viewport" : ""}`} style={activeChatStep && viewportHeight ? { height: `${viewportHeight}px` } : undefined}>
           <div className="resume-craft-wizard-track" ref={wizardTrackRef} style={{ transform: `translateX(-${(step - 1) * STEP_SHIFT}%)` }}>
             {stepCard(
               1,
               <>
-                <header className="resume-craft-step-head">
-                  <h2>{STEP_TITLES[1]}</h2>
-                  <p>设置模板、语言、可选照片、目标岗位与 JD 摘要。</p>
+                <header className="resume-craft-step-head resume-craft-step1-head">
+                  <div className="resume-craft-step1-head-copy">
+                    <h2>{STEP_TITLES[1]}</h2>
+                    <p>设置模板、语言、可选照片、目标岗位与 JD 摘要。</p>
+                  </div>
+                  <button type="button" className="primary-btn resume-craft-next-btn resume-craft-step1-next-btn" disabled={!canStep1Next} onClick={goNext}>下一步</button>
                   <div className="resume-craft-head-divider" />
                 </header>
                 <div className="resume-craft-step-grid resume-craft-step1-select-section">
@@ -943,9 +946,6 @@ export function ResumeCraftPage() {
                   </label>
                 </div>
 
-                <div className="resume-craft-step-actions">
-                  <button type="button" className="primary-btn resume-craft-next-btn" disabled={!canStep1Next} onClick={goNext}>下一步</button>
-                </div>
               </>
             )}
 
@@ -1022,10 +1022,36 @@ export function ResumeCraftPage() {
                 </div>
 
                   <section className="resume-craft-education-wrap">
-                    <h3>
-                      <span className="resume-craft-edu-icon" aria-hidden="true">EDU</span>
-                      教育背景
-                    </h3>
+                    <div className="resume-craft-education-head-row">
+                      <h3>
+                        <span className="resume-craft-edu-icon" aria-hidden="true">EDU</span>
+                        教育背景
+                      </h3>
+                      <div className="resume-craft-education-nav" aria-label="教育经历切换">
+                        <button
+                          type="button"
+                          className="ghost-btn resume-craft-education-nav-btn"
+                          aria-label="上一段教育经历"
+                          title="上一段教育经历"
+                          onClick={() => switchEducation(activeEducationIndex - 1)}
+                          disabled={activeEducationIndex === 0}
+                        >
+                          ←
+                        </button>
+                        <span>{activeEducationIndex + 1} / {educationRows.length}</span>
+                        <button
+                          type="button"
+                          className="ghost-btn resume-craft-education-nav-btn"
+                          aria-label="下一段教育经历"
+                          title="下一段教育经历"
+                          onClick={() => switchEducation(activeEducationIndex + 1)}
+                          disabled={activeEducationIndex >= educationRows.length - 1}
+                        >
+                          →
+                        </button>
+                      </div>
+                      <button type="button" className="ghost-btn resume-craft-add-education-btn" onClick={addEducationRow}>+ 新增教育经历</button>
+                    </div>
                     <div className="resume-craft-education-carousel" ref={educationCarouselRef}>
                       <div className="resume-craft-edu-item" key={`edu-${activeEducationIndex}`}>
                         <div className="resume-craft-edu-main-row">
@@ -1154,30 +1180,6 @@ export function ResumeCraftPage() {
                         </div>
                       </div>
                     </div>
-                    <div className="resume-craft-education-nav" aria-label="教育经历切换">
-                      <button
-                        type="button"
-                        className="ghost-btn resume-craft-education-nav-btn"
-                        aria-label="上一段教育经历"
-                        title="上一段教育经历"
-                        onClick={() => switchEducation(activeEducationIndex - 1)}
-                        disabled={activeEducationIndex === 0}
-                      >
-                        ←
-                      </button>
-                      <span>{activeEducationIndex + 1} / {educationRows.length}</span>
-                      <button
-                        type="button"
-                        className="ghost-btn resume-craft-education-nav-btn"
-                        aria-label="下一段教育经历"
-                        title="下一段教育经历"
-                        onClick={() => switchEducation(activeEducationIndex + 1)}
-                        disabled={activeEducationIndex >= educationRows.length - 1}
-                      >
-                        →
-                      </button>
-                    </div>
-                    <button type="button" className="ghost-btn resume-craft-add-education-btn" onClick={addEducationRow}>+ 新增教育经历</button>
                 </section>
               </>
             )}
