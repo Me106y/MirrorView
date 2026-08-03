@@ -1573,12 +1573,14 @@ a {
   padding: 0 4px;
 }
 
-.resume-craft-chat-log .msg span {
+.resume-craft-chat-log .msg .resume-craft-message-bubble {
   border-radius: 18px;
   padding: 10px 14px;
   max-width: min(78ch, 82%);
   line-height: 1.45;
   box-shadow: 0 1px 1px rgba(0, 0, 0, 0.05);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .resume-craft-chat-log .msg-ai-avatar {
@@ -1600,18 +1602,45 @@ a {
   border: 1px solid rgba(111, 141, 168, 0.3);
 }
 
-.resume-craft-chat-log .msg.assistant span {
+.resume-craft-chat-log .msg.assistant .resume-craft-message-bubble {
   background: #e9e9eb;
   color: var(--ink);
   border: 1px solid rgba(0, 0, 0, 0.06);
   border-bottom-left-radius: 8px;
 }
 
-.resume-craft-chat-log .msg.user span {
+.resume-craft-chat-log .msg.user .resume-craft-message-bubble {
   background: #0070e0;
   border: 1px solid rgba(0, 112, 224, 0.75);
   color: #ffffff;
   border-bottom-right-radius: 8px;
+}
+
+.resume-craft-chat-log .msg .resume-craft-preview-message {
+  font-size: 0.88rem;
+  line-height: 1.6;
+  white-space: normal;
+}
+
+.resume-craft-preview-message h1,
+.resume-craft-preview-message h2,
+.resume-craft-preview-message h3 {
+  margin: 0.5em 0 0.25em;
+}
+
+.resume-craft-preview-message h1:first-child,
+.resume-craft-preview-message h2:first-child,
+.resume-craft-preview-message h3:first-child {
+  margin-top: 0;
+}
+
+.resume-craft-preview-message ul {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+
+.resume-craft-preview-message p {
+  margin: 0.4em 0;
 }
 
 .resume-craft-chat-input {
@@ -1738,74 +1767,6 @@ a {
 
 .resume-craft-final-frame {
   min-height: 70vh;
-}
-
-/* Preview panel for Step 5 (backend step6) */
-.resume-craft-preview-panel {
-  border: 1px solid rgba(111, 141, 168, 0.24);
-  border-radius: 12px;
-  background: rgba(240, 248, 255, 0.4);
-  padding: 14px;
-  margin: 12px 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.resume-craft-preview-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.resume-craft-preview-title {
-  font-size: 0.92rem;
-  font-weight: 600;
-  color: #3c5369;
-}
-
-.resume-craft-preview-close {
-  padding: 4px 8px;
-  font-size: 0.8rem;
-  min-height: 44px;
-  min-width: 44px;
-}
-
-.resume-craft-preview-content {
-  max-height: 340px;
-  overflow-y: auto;
-  border-radius: 8px;
-  padding: 12px;
-  background: rgba(255, 255, 255, 0.8);
-  font-size: 0.88rem;
-  line-height: 1.6;
-  color: #333;
-}
-
-.resume-craft-preview-content h1,
-.resume-craft-preview-content h2,
-.resume-craft-preview-content h3 {
-  margin: 0.5em 0 0.25em;
-}
-
-.resume-craft-preview-content ul {
-  padding-left: 1.5em;
-  margin: 0.5em 0;
-}
-
-.resume-craft-preview-content p {
-  margin: 0.4em 0;
-}
-
-@media (max-width: 620px) {
-  .resume-craft-preview-panel {
-    margin: 8px 0;
-    padding: 10px;
-  }
-  .resume-craft-preview-content {
-    max-height: 260px;
-    padding: 10px;
-  }
 }
 
 .resume-craft-readiness-note p {
@@ -3346,8 +3307,6 @@ textarea {
 
   .login-card { background: var(--surface); border-color: var(--line); }
   .oauth-callback-card { background: var(--surface); border-color: var(--line); }
-
-  .resume-craft-preview-panel { background: var(--surface-raised); border-color: var(--line); }
 
   .resume-craft-pill-btn { border-color: var(--line); color: var(--text-muted); }
 

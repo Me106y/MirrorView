@@ -8,7 +8,7 @@ import type { EducationItem, ResumeCraftWizardState, Step1Profile } from "../typ
 import { ConsentModal } from "../components/ConsentModal";
 import { useConsent } from "../context/ConsentContext";
 
-type Msg = { role: "user" | "assistant"; content: string; timestamp: string };
+type Msg = { role: "user" | "assistant"; content: string; timestamp: string; isPreview?: boolean };
 type StepNumber = 1 | 2 | 3 | 4 | 5;
 type ChatStep = 3 | 4 | 5;
 
@@ -147,7 +147,14 @@ const EMPTY_EDUCATION: EducationItem = {
 };
 
 function simpleMarkdownToHtml(md: string): string {
-  return md
+  const escaped = md
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+  return escaped
     .replace(/^### (.+)$/gm, '<h3>$1</h3>')
     .replace(/^## (.+)$/gm, '<h2>$1</h2>')
     .replace(/^# (.+)$/gm, '<h1>$1</h1>')
@@ -253,7 +260,6 @@ export function ResumeCraftPage() {
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const [renderLoading, setRenderLoading] = useState(false);
-  const [agentRenderReady, setAgentRenderReady] = useState(false);
   const [result, setResult] = useState<ResultState>({ kind: "idle", reportHtml: "", message: "" });
   const [showFinalPreview, setShowFinalPreview] = useState(false);
   const [reportName, setReportName] = useState("resume-craft-report.html");
@@ -308,8 +314,8 @@ export function ResumeCraftPage() {
     const hasDraft = Boolean(draft && Object.keys(draft).length > 0);
     const confirmed = wizardState.collected_by_step.step6_confirmed === true
       && wizardState.step_states.step6?.confirmed === true;
-    return agentRenderReady && confirmed && hasDraft && !renderLoading;
-  }, [agentRenderReady, wizardState, renderLoading]);
+    return confirmed && hasDraft && !renderLoading;
+  }, [wizardState, renderLoading]);
 
   useEffect(() => {
     const card = stepRefs.current[step];
@@ -435,7 +441,6 @@ export function ResumeCraftPage() {
 
   const onRestartCurrentChat = () => {
     if (step === 2) {
-      setAgentRenderReady(false);
       setProfile((prev) => ({ ...prev, education: [{ ...EMPTY_EDUCATION }] }));
       setWizardState((prev) => ({
         ...prev,
@@ -521,7 +526,9 @@ export function ResumeCraftPage() {
       if (!serverReply && !step6PreviewMarkdown) {
         throw new Error("Agent response missing reply");
       }
-      const assistantReply = serverReply || step6PreviewMarkdown;
+      const assistantReply = [serverReply, step6PreviewMarkdown]
+        .filter(Boolean)
+        .join("\n\n");
 
       if (!resp.wizard_state || typeof resp.wizard_state !== "object") {
         throw new Error("Agent response missing wizard_state");
@@ -532,10 +539,14 @@ export function ResumeCraftPage() {
       const nextWizard = resp.wizard_state as ResumeCraftWizardState;
   
       setWizardState(nextWizard);
-      setAgentRenderReady(resp.render_ready === true);
       setMessagesByStep((prev) => ({
         ...prev,
-        [activeChatStep]: [...nextMessages, { role: "assistant", content: assistantReply, timestamp: nowTimeLabel() }],
+        [activeChatStep]: [...nextMessages, {
+          role: "assistant",
+          content: assistantReply,
+          timestamp: nowTimeLabel(),
+          isPreview: activeChatStep === 5 && Boolean(step6PreviewMarkdown),
+        }],
       }));
     } catch (err) {
       setMessagesByStep((prev) => ({
@@ -1160,7 +1171,14 @@ export function ResumeCraftPage() {
                       <div key={`${chatStep}-${msg.role}-${idx}`} className={`msg ${msg.role}`}>
                         {msg.role === "assistant" ? <span className="msg-ai-avatar" aria-hidden="true">AI</span> : null}
                         <div className="resume-craft-bubble-wrap">
-                          <span>{msg.content}</span>
+                          {msg.isPreview && msg.role === "assistant" ? (
+                            <div
+                              className="resume-craft-message-bubble resume-craft-preview-message"
+                              dangerouslySetInnerHTML={{ __html: simpleMarkdownToHtml(msg.content) }}
+                            />
+                          ) : (
+                            <span className="resume-craft-message-bubble">{msg.content}</span>
+                          )}
                           <small className="resume-craft-msg-time">{msg.timestamp}</small>
                         </div>
                       </div>
@@ -1189,31 +1207,6 @@ export function ResumeCraftPage() {
                   <div className="resume-craft-readiness-note">
                     {step === chatStep ? <p>对话状态由 Agent 根据语义和已确认内容维护。</p> : <p>切换到本步骤后可继续对话。</p>}
                   </div>
-
-                  {chatStep === 5 && wizardState?.step_states?.step6?.preview_markdown ? (
-                    <div className="resume-craft-preview-panel">
-                      <div className="resume-craft-preview-header">
-                        <span className="resume-craft-preview-title">草稿预览</span>
-                        <button
-                          type="button"
-                          className="ghost-btn resume-craft-preview-close"
-                          onClick={() => setWizardState(prev => ({
-                            ...prev,
-                            step_states: {
-                              ...prev.step_states,
-                              step6: { ...prev.step_states.step6, preview_markdown: "" }
-                            }
-                          }))}
-                        >
-                          ✕
-                        </button>
-                      </div>
-                      <div
-                        className="resume-craft-preview-content"
-                        dangerouslySetInnerHTML={{ __html: simpleMarkdownToHtml(wizardState.step_states.step6.preview_markdown) }}
-                      />
-                    </div>
-                  ) : null}
 
                   {chatStep === 5 ? (
                     <div className="resume-craft-step-actions">
