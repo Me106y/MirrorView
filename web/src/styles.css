@@ -673,6 +673,13 @@ a {
   position: relative;
 }
 
+.resume-craft-page > .back-home-btn {
+  position: absolute;
+  top: 24px;
+  left: -12px;
+  margin-bottom: 0;
+}
+
 .resume-craft-layout {
   max-width: 1120px;
   margin: 0 auto;
@@ -681,7 +688,7 @@ a {
 .resume-craft-wizard-viewport {
   overflow-x: hidden;
   overflow-y: auto;
-  max-height: calc(100dvh - 160px);
+  max-height: calc(100dvh - 105px);
   border-radius: 22px;
   scrollbar-gutter: stable;
   transition: height 280ms ease;
@@ -1399,7 +1406,7 @@ a {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  height: clamp(440px, calc(100dvh - 220px), 760px);
+  height: clamp(440px, calc(100dvh - 165px), 760px);
   min-height: 0;
   overflow: hidden;
 }
@@ -2851,6 +2858,10 @@ textarea {
 
   .resume-craft-step-card {
     padding: 16px;
+  }
+
+  .resume-craft-page > .back-home-btn {
+    left: -8px;
   }
 
   .resume-craft-chat-head {
