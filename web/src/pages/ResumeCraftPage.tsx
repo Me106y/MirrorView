@@ -1,10 +1,10 @@
-import { FormEvent, ReactNode, SyntheticEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { gsap } from "gsap";
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import { callCareerforgeSkill } from "../lib/api";
 import { useModelSettings } from "../context/ModelSettingsContext";
 import { useCareerFeatureGuard } from "../components/CareerFeatureGuard";
-import { loadResumeCraftDraft, saveResumeCraftDraft } from "../lib/storage";
+import { loadResumeCraftDraft, saveResumeCraftDraft, saveResumeCraftResult } from "../lib/storage";
 import type { EducationItem, ResumeCraftWizardState, Step1Profile } from "../types";
 import { ConsentModal } from "../components/ConsentModal";
 import { useConsent } from "../context/ConsentContext";
@@ -17,8 +17,7 @@ const UI_TO_BACKEND: Record<number, number> = { 1: 1, 2: 3, 3: 4, 4: 5, 5: 6 };
 function uiStepToBackendKey(step: number): string { return `step${UI_TO_BACKEND[step]}`; }
 
 type ResultState = {
-  kind: "idle" | "report" | "error";
-  reportHtml: string;
+  kind: "idle" | "error";
   message: string;
 };
 
@@ -238,6 +237,7 @@ function splitPeriod(period: string) {
 
 export function ResumeCraftPage() {
   const { settings } = useModelSettings();
+  const navigate = useNavigate();
   const featureGuard = useCareerFeatureGuard(settings, "简历优化");
   const { accepted } = useConsent();
   const [showConsentPrompt, setShowConsentPrompt] = useState(false);
@@ -261,12 +261,7 @@ export function ResumeCraftPage() {
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const [renderLoading, setRenderLoading] = useState(false);
-  const [result, setResult] = useState<ResultState>({ kind: "idle", reportHtml: "", message: "" });
-  const [showFinalPreview, setShowFinalPreview] = useState(false);
-  const [reportName, setReportName] = useState("resume-craft-report.html");
-  const [reportPdfName, setReportPdfName] = useState("resume-craft-report.pdf");
-  const [reportPdfBase64, setReportPdfBase64] = useState("");
-  const [frameHeight, setFrameHeight] = useState(980);
+  const [result, setResult] = useState<ResultState>({ kind: "idle", message: "" });
   const [viewportHeight, setViewportHeight] = useState<number | null>(null);
   const [openMonthPicker, setOpenMonthPicker] = useState<{ index: number; part: "start" | "end" } | null>(null);
   const [monthPickerYear, setMonthPickerYear] = useState<number>(new Date().getFullYear());
@@ -274,7 +269,6 @@ export function ResumeCraftPage() {
   const [touchedFields, setTouchedFields] = useState<Record<string, boolean>>({});
   const [activeEducationIndex, setActiveEducationIndex] = useState(0);
 
-  const previewFrameRef = useRef<HTMLIFrameElement | null>(null);
   const photoInputRef = useRef<HTMLInputElement | null>(null);
   const wizardTrackRef = useRef<HTMLDivElement | null>(null);
   const stepRefs = useRef<Record<StepNumber, HTMLElement | null>>({ 1: null, 2: null, 3: null, 4: null, 5: null });
@@ -703,78 +697,23 @@ export function ResumeCraftPage() {
       const resp = (await callCareerforgeSkill(settings, "/careerforge/resume-craft/render", payload)) as Record<string, unknown>;
       const reportHtml = String(resp.report_html || "").trim();
       if (!reportHtml) throw new Error(String(resp.message || "未返回有效简历 HTML"));
-      setResult({ kind: "report", reportHtml, message: "" });
-      setReportName(String(resp.report_name || "resume-craft-report.html"));
       const nextPdfName = String(resp.report_pdf_name || "resume-craft-report.pdf").trim();
       const nextPdfBase64 = String(resp.report_pdf_base64 || "").trim();
-      setReportPdfName(nextPdfName || "resume-craft-report.pdf");
-      setReportPdfBase64(nextPdfBase64);
-      setShowFinalPreview(true);
+      const artifact = {
+        reportHtml,
+        reportName: String(resp.report_name || "resume-craft-report.html"),
+        reportPdfName: nextPdfName || "resume-craft-report.pdf",
+        reportPdfBase64: nextPdfBase64,
+        templateCode: step1Profile.template_code,
+        language: step1Profile.language,
+      };
+      saveResumeCraftResult(artifact);
+      navigate("/resume-craft/result", { state: { artifact } });
     } catch (err) {
-      setResult({ kind: "error", reportHtml: "", message: (err as Error).message || "生成失败" });
-      setReportPdfName("resume-craft-report.pdf");
-      setReportPdfBase64("");
-      setShowFinalPreview(false);
+      setResult({ kind: "error", message: (err as Error).message || "生成失败" });
     } finally {
       setRenderLoading(false);
     }
-  };
-
-  const onPreviewLoad = (e: SyntheticEvent<HTMLIFrameElement>) => {
-    const doc = e.currentTarget.contentDocument;
-    if (!doc?.body) return;
-    const h = Math.max(doc.body.scrollHeight, doc.documentElement?.scrollHeight || 0, 900);
-    setFrameHeight(Math.min(Math.max(h + 16, 900), 3400));
-  };
-
-  const exportHtml = () => {
-    if (result.kind !== "report") return;
-    const blob = new Blob([result.reportHtml], { type: "text/html;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = reportName;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const exportPdf = () => {
-    if (result.kind !== "report") return;
-    if (reportPdfBase64) {
-      try {
-        const binary = window.atob(reportPdfBase64.replace(/\s+/g, ""));
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i += 1) {
-          bytes[i] = binary.charCodeAt(i);
-        }
-        const blob = new Blob([bytes], { type: "application/pdf" });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = reportPdfName || "resume-craft-report.pdf";
-        link.click();
-        URL.revokeObjectURL(url);
-        return;
-      } catch {
-        // fallback to browser print below
-      }
-    }
-    const frame = previewFrameRef.current;
-    const win = frame?.contentWindow;
-    if (!win) return;
-    win.focus();
-    win.print();
-  };
-
-  const backToWizardFromPreview = () => {
-    setShowFinalPreview(false);
-    setPhotoLoading(false);
-    setProfile((prev) => ({
-      ...prev,
-      template_code: normalizeTemplateCodeForUI(prev.template_code),
-      language: normalizeLanguageForUI(prev.language),
-    }));
-    setStep(1);
   };
 
   const stepCard = (stepNo: StepNumber, content: ReactNode) => (
@@ -782,81 +721,6 @@ export function ResumeCraftPage() {
       {content}
     </article>
   );
-
-  if (showFinalPreview && result.kind === "report") {
-    return (
-      <section className="resume-craft-page">
-        <NavLink to="/" className="back-home-btn">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M19 12H5M12 19l-7-7 7-7"/>
-          </svg>
-          返回
-        </NavLink>
-        <div className="resume-craft-layout">
-          <section className="surface resume-craft-final-page">
-            <header className="resume-craft-final-head">
-              <div>
-                <h2>简历预览</h2>
-                <p>已生成 HTML 简历，你可以直接预览或导出。</p>
-              </div>
-              <div className="resume-craft-final-head-actions">
-                <label className="resume-craft-result-control">
-                  <span>模板</span>
-                  <select
-                    value={normalizeTemplateCodeForUI(profile.template_code)}
-                    onChange={(e) =>
-                      setProfile((prev) => ({ ...prev, template_code: normalizeTemplateCodeForUI(e.target.value) }))
-                    }
-                  >
-                    {TEMPLATE_OPTIONS.map((item) => (
-                      <option key={`result-template-${item.value}`} value={item.value}>
-                        {item.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="resume-craft-result-control">
-                  <span>语言</span>
-                  <select
-                    value={normalizeLanguageForUI(profile.language)}
-                    onChange={(e) =>
-                      setProfile((prev) => ({ ...prev, language: normalizeLanguageForUI(e.target.value) }))
-                    }
-                  >
-                    {LANGUAGE_OPTIONS.map((item) => (
-                      <option key={`result-language-${item.value}`} value={item.value}>
-                        {item.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <button
-                  type="button"
-                  className="primary-btn resume-craft-regenerate-btn"
-                  onClick={() => renderResume({ template_code: profile.template_code, language: profile.language })}
-                  disabled={renderLoading}
-                >
-                  {renderLoading ? "重新生成中..." : "按当前模板/语言重新生成"}
-                </button>
-                <button type="button" className="ghost-btn" onClick={backToWizardFromPreview}>返回继续编辑</button>
-                <button type="button" className="ghost-btn" onClick={exportHtml}>导出 HTML</button>
-                <button type="button" className="ghost-btn" onClick={exportPdf}>导出 PDF</button>
-              </div>
-            </header>
-            <iframe
-              ref={previewFrameRef}
-              title="Resume Craft HTML Preview Final"
-              className="resume-craft-preview-frame resume-craft-final-frame"
-              srcDoc={result.reportHtml}
-              onLoad={onPreviewLoad}
-              style={{ height: `${frameHeight}px` }}
-            />
-          </section>
-        </div>
-        <ConsentModal open={showConsentPrompt} onClose={() => { setShowConsentPrompt(false); if (accepted) void renderResume(); }} />
-      </section>
-    );
-  }
 
   return (
     <>
@@ -1284,13 +1148,14 @@ export function ResumeCraftPage() {
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
+                  if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                     e.preventDefault();
                     void sendChatMessage(chatInput);
                   }
                 }}
                 placeholder={CHAT_INPUT_PLACEHOLDERS[activeChatStep]}
                 disabled={chatLoading || renderLoading}
+                rows={1}
                 aria-label="输入当前步骤信息"
               />
               <button className="primary-btn resume-craft-send-btn" disabled={!chatInput.trim() || chatLoading || renderLoading}>发送</button>

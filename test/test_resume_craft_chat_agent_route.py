@@ -63,6 +63,35 @@ def test_resume_craft_runtime_allows_long_structured_agent_response(monkeypatch)
     assert captured["max_tokens"] >= 8000
 
 
+def test_resume_craft_runtime_does_not_force_json_for_html_render(monkeypatch):
+    captured = {}
+
+    def fake_model(provider, model_name, **kwargs):
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setattr(ModelFactory, "get_model", fake_model)
+    monkeypatch.setattr(
+        CareerForgeAgent,
+        "run_resume_craft_html",
+        lambda self, payload: "<!DOCTYPE html><html><body>ok</body></html>",
+    )
+    service = object.__new__(AIService)
+
+    result = service.run_resume_craft_html(
+        {},
+        runtime={
+            "mode": "byok",
+            "provider": "deepseek",
+            "model": "deepseek-chat",
+            "api_key": "test-key",
+        },
+    )
+
+    assert "<!DOCTYPE html>" in result
+    assert "response_format" not in captured
+
+
 def test_platform_runtime_allows_full_resume_html_response(monkeypatch):
     captured = {}
 

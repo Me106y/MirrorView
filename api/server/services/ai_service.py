@@ -54,7 +54,12 @@ class AIService:
 
         return ModelFactory.get_model(provider, model_name, **kwargs)
 
-    def _build_runtime_agent(self, runtime: Optional[Dict[str, Any]] = None) -> CareerForgeAgent:
+    def _build_runtime_agent(
+        self,
+        runtime: Optional[Dict[str, Any]] = None,
+        *,
+        json_output: bool = True,
+    ) -> CareerForgeAgent:
         if not runtime:
             return self.careerforge_agent
 
@@ -98,7 +103,8 @@ class AIService:
             kwargs["api_key"] = api_key or Config.DEEPSEEK_API_KEY
             kwargs["base_url"] = base_url or Config.DEEPSEEK_BASE_URL
             kwargs["extra_body"] = {"thinking": {"type": "disabled"}}
-            kwargs["response_format"] = {"type": "json_object"}
+            if json_output:
+                kwargs["response_format"] = {"type": "json_object"}
         elif provider == "openai":
             kwargs["api_key"] = api_key or Config.OPENAI_API_KEY
             if base_url:
@@ -400,7 +406,7 @@ class AIService:
         return self._build_runtime_agent(runtime).run_resume_craft_chat_turn(payload)
 
     def run_resume_craft_html(self, payload, runtime: Optional[Dict[str, Any]] = None):
-        return self._build_runtime_agent(runtime).run_resume_craft_html(payload)
+        return self._build_runtime_agent(runtime, json_output=False).run_resume_craft_html(payload)
 
     def run_cover_letter(self, payload, runtime: Optional[Dict[str, Any]] = None):
         try:

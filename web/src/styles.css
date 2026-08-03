@@ -1577,7 +1577,7 @@ a {
 
 @media (max-width: 767px) {
   .resume-craft-fixed-composer {
-    left: 50%;
+    left: 20px;
     width: calc(100vw - 40px);
   }
 
@@ -1881,11 +1881,11 @@ a {
 
 .resume-craft-fixed-composer {
   position: fixed;
-  left: calc(50% + 38px);
+  /* Keep the composer aligned with the wizard card's content column. */
+  left: max(20px, calc(96px + max(0px, (100vw - 1160px) / 2)));
   bottom: max(16px, env(safe-area-inset-bottom));
   z-index: 40;
   width: min(1044px, calc(100vw - 116px));
-  transform: translateX(-50%);
   pointer-events: none;
 }
 
@@ -1902,13 +1902,14 @@ a {
 .resume-craft-chat-input textarea {
   margin: 0;
   height: 56px;
-  min-height: 44px;
+  min-height: 56px;
   max-height: 120px;
   border-radius: 12px;
   box-sizing: border-box;
   resize: none;
   overflow-y: auto;
   line-height: 1.45;
+  white-space: pre-wrap;
 }
 
 .resume-craft-chat-input .resume-craft-send-btn {
@@ -1971,6 +1972,16 @@ a {
   gap: 8px;
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.resume-craft-result-meta {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 4px;
+  color: #6d6d6d;
+  font-size: 0.84rem;
+  white-space: nowrap;
 }
 
 .resume-craft-result-control {

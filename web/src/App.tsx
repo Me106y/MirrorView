@@ -3,6 +3,7 @@ import { Shell } from "./components/Shell";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { ResumeMatchPage } from "./pages/ResumeMatchPage";
 import { ResumeCraftPage } from "./pages/ResumeCraftPage";
+import { ResumeCraftResultPage } from "./pages/ResumeCraftResultPage";
 import { CoverLetterPage } from "./pages/CoverLetterPage";
 import { MockInterviewPage } from "./pages/MockInterviewPage";
 import { JobHuntPage } from "./pages/JobHuntPage";
@@ -37,6 +38,7 @@ export default function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/resume-match" element={<ResumeMatchPage />} />
           <Route path="/resume-craft" element={<ResumeCraftPage />} />
+          <Route path="/resume-craft/result" element={<ResumeCraftResultPage />} />
           <Route path="/cover-letter" element={<CoverLetterPage />} />
           <Route path="/mock-interview" element={<MockInterviewPage />} />
           <Route path="/job-hunt" element={<JobHuntPage />} />

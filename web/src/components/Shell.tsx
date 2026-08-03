@@ -42,7 +42,7 @@ export function Shell({ onOpenSettings }: { onOpenSettings: () => void }) {
   const avatarAlt = user ? `${user.username} 的 GitHub 头像` : "GitHub 头像";
 
   return (
-    <div className={`app-shell${location.pathname === "/resume-craft" ? " app-shell-resume-craft" : ""}`}>
+    <div className={`app-shell${location.pathname.startsWith("/resume-craft") ? " app-shell-resume-craft" : ""}`}>
       <header className={`topbar${isHome ? " topbar-home" : ""}`}>
         <div className="topbar-brand-wrap">
           <NavLink to="/" className="topbar-brand-link">
