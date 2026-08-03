@@ -681,7 +681,7 @@ a {
 .resume-craft-wizard-viewport {
   overflow-x: hidden;
   overflow-y: auto;
-  max-height: calc(100dvh - 32px);
+  max-height: calc(100dvh - 160px);
   border-radius: 22px;
   scrollbar-gutter: stable;
   transition: height 280ms ease;
