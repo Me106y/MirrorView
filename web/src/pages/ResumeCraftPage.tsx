@@ -829,7 +829,7 @@ export function ResumeCraftPage() {
         返回
       </NavLink>
       <div className="resume-craft-layout">
-        <div className="resume-craft-wizard-viewport" style={viewportHeight ? { height: `${viewportHeight}px` } : undefined}>
+        <div className={`resume-craft-wizard-viewport ${activeChatStep ? "is-chat-viewport" : ""}`} style={viewportHeight ? { height: `${viewportHeight}px` } : undefined}>
           <div className="resume-craft-wizard-track" ref={wizardTrackRef} style={{ transform: `translateX(-${(step - 1) * STEP_SHIFT}%)` }}>
             {stepCard(
               1,
@@ -1224,9 +1224,6 @@ export function ResumeCraftPage() {
               />
               <button className="primary-btn resume-craft-send-btn" disabled={!chatInput.trim() || chatLoading || renderLoading}>发送</button>
             </form>
-            <div className="resume-craft-readiness-note">
-              <p>对话状态由 Agent 根据语义和已确认内容维护。</p>
-            </div>
           </div>
         ) : null}
 

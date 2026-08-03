@@ -687,6 +687,11 @@ a {
   transition: height 280ms ease;
 }
 
+.resume-craft-wizard-viewport.is-chat-viewport {
+  overflow: hidden;
+  max-height: none;
+}
+
 .resume-craft-wizard-track {
   display: flex;
   width: 500%;
@@ -1394,7 +1399,9 @@ a {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding-bottom: 132px;
+  height: clamp(440px, calc(100dvh - 220px), 760px);
+  min-height: 0;
+  overflow: hidden;
 }
 
 .resume-craft-chat-head {
@@ -1560,12 +1567,15 @@ a {
 .resume-craft-chat-log {
   border: 1px solid rgba(170, 181, 191, 0.3);
   background: #f8f8f6;
-  min-height: 360px;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .chat-log.resume-craft-chat-log {
   max-height: none;
-  overflow: visible;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 
 .resume-craft-chat-log .msg {
@@ -1661,22 +1671,17 @@ a {
   z-index: 40;
   width: min(1120px, calc(100vw - 32px));
   transform: translateX(-50%);
-  padding: 12px 14px 10px;
-  border: 1px solid rgba(170, 181, 191, 0.42);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 14px 34px rgba(31, 45, 58, 0.18);
-  backdrop-filter: blur(12px);
-}
-
-.resume-craft-fixed-composer .resume-craft-readiness-note p {
-  margin: 5px 2px 0;
+  pointer-events: none;
 }
 
 .resume-craft-chat-input:hover,
 .resume-craft-chat-input:focus-within {
   border: none;
   box-shadow: none;
+}
+
+.resume-craft-fixed-composer .resume-craft-chat-input {
+  pointer-events: auto;
 }
 
 .resume-craft-chat-input input {
