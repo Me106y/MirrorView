@@ -1,4 +1,4 @@
-import type { ModelSettings, Step1Profile } from "../types";
+import type { ModelSettings, ResumeCraftWizardState, Step1Profile } from "../types";
 
 export const MODEL_SETTINGS_KEY = "mirrorview:web:model-settings:v2";
 export const CONSENT_ACCEPTED_KEY = "mirrorview:web:consent:v1";
@@ -12,6 +12,17 @@ export interface ResumeCraftResultArtifact {
   reportPdfBase64: string;
   templateCode: string;
   language: string;
+  editorState?: ResumeCraftEditorState;
+}
+
+export interface ResumeCraftEditorState {
+  wizardState: ResumeCraftWizardState;
+  messagesByStep: Record<string, Array<{
+    role: "user" | "assistant";
+    content: string;
+    timestamp: string;
+    isPreview?: boolean;
+  }> >;
 }
 
 export const defaultSettings: ModelSettings = {
@@ -129,8 +140,15 @@ export function loadResumeCraftResult(): ResumeCraftResultArtifact | null {
       reportPdfBase64: typeof parsed.reportPdfBase64 === "string" ? parsed.reportPdfBase64 : "",
       templateCode: typeof parsed.templateCode === "string" ? parsed.templateCode : "02",
       language: typeof parsed.language === "string" ? parsed.language : "zh",
+      editorState: isResumeCraftEditorState(parsed.editorState) ? parsed.editorState : undefined,
     };
   } catch {
     return null;
   }
+}
+
+function isResumeCraftEditorState(value: unknown): value is ResumeCraftEditorState {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<ResumeCraftEditorState>;
+  return Boolean(candidate.wizardState && typeof candidate.wizardState === "object" && candidate.messagesByStep && typeof candidate.messagesByStep === "object");
 }

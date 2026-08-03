@@ -1,10 +1,10 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { gsap } from "gsap";
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { callCareerforgeSkill } from "../lib/api";
 import { useModelSettings } from "../context/ModelSettingsContext";
 import { useCareerFeatureGuard } from "../components/CareerFeatureGuard";
-import { loadResumeCraftDraft, saveResumeCraftDraft, saveResumeCraftResult } from "../lib/storage";
+import { loadResumeCraftDraft, saveResumeCraftDraft, saveResumeCraftResult, type ResumeCraftEditorState } from "../lib/storage";
 import type { EducationItem, ResumeCraftWizardState, Step1Profile } from "../types";
 import { ConsentModal } from "../components/ConsentModal";
 import { useConsent } from "../context/ConsentContext";
@@ -19,6 +19,11 @@ function uiStepToBackendKey(step: number): string { return `step${UI_TO_BACKEND[
 type ResultState = {
   kind: "idle" | "error";
   message: string;
+};
+
+type ResumeCraftRouteState = {
+  resumeCraftStep?: number;
+  editorState?: ResumeCraftEditorState;
 };
 
 const STEPS: StepNumber[] = [1, 2, 3, 4, 5];
@@ -237,12 +242,17 @@ function splitPeriod(period: string) {
 
 export function ResumeCraftPage() {
   const { settings } = useModelSettings();
+  const location = useLocation();
   const navigate = useNavigate();
   const featureGuard = useCareerFeatureGuard(settings, "简历优化");
   const { accepted } = useConsent();
   const [showConsentPrompt, setShowConsentPrompt] = useState(false);
 
-  const [step, setStep] = useState<StepNumber>(1);
+  const routeStep = (location.state as ResumeCraftRouteState | null)?.resumeCraftStep;
+  const restoredEditorState = (location.state as ResumeCraftRouteState | null)?.editorState;
+  const restoredMessages = restoredEditorState?.messagesByStep as Record<ChatStep, Msg[]> | undefined;
+  const restoredMessageKeys: ChatStep[] = [3, 4, 5];
+  const [step, setStep] = useState<StepNumber>(routeStep === 5 ? 5 : 1);
   const [profile, setProfile] = useState<Step1Profile>(() => loadResumeCraftDraft() ?? EMPTY_PROFILE);
   const [linksInput, setLinksInput] = useState(() => profile.personal_info.links.join(", "));
 
@@ -251,11 +261,16 @@ export function ResumeCraftPage() {
   const [photoHint, setPhotoHint] = useState("");
   const [photoLoading, setPhotoLoading] = useState(false);
 
-  const [wizardState, setWizardState] = useState<ResumeCraftWizardState>(EMPTY_WIZARD);
-  const [messagesByStep, setMessagesByStep] = useState<Record<ChatStep, Msg[]>>({
-    3: [{ role: "assistant", content: INITIAL_CHAT_MESSAGES[3], timestamp: nowTimeLabel() }],
-    4: [{ role: "assistant", content: INITIAL_CHAT_MESSAGES[4], timestamp: nowTimeLabel() }],
-    5: [{ role: "assistant", content: INITIAL_CHAT_MESSAGES[5], timestamp: nowTimeLabel() }],
+  const [wizardState, setWizardState] = useState<ResumeCraftWizardState>(restoredEditorState?.wizardState ?? EMPTY_WIZARD);
+  const [messagesByStep, setMessagesByStep] = useState<Record<ChatStep, Msg[]>>(() => {
+    if (restoredMessages && restoredMessageKeys.every((key) => Array.isArray(restoredMessages[key]))) {
+      return restoredMessages;
+    }
+    return {
+      3: [{ role: "assistant", content: INITIAL_CHAT_MESSAGES[3], timestamp: nowTimeLabel() }],
+      4: [{ role: "assistant", content: INITIAL_CHAT_MESSAGES[4], timestamp: nowTimeLabel() }],
+      5: [{ role: "assistant", content: INITIAL_CHAT_MESSAGES[5], timestamp: nowTimeLabel() }],
+    };
   });
 
   const [chatInput, setChatInput] = useState("");
@@ -706,6 +721,7 @@ export function ResumeCraftPage() {
         reportPdfBase64: nextPdfBase64,
         templateCode: step1Profile.template_code,
         language: step1Profile.language,
+        editorState: { wizardState, messagesByStep },
       };
       saveResumeCraftResult(artifact);
       navigate("/resume-craft/result", { state: { artifact } });

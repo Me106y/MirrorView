@@ -1185,10 +1185,25 @@ a {
 }
 
 @media (min-width: 768px) {
+  .resume-craft-step1-card {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    gap: 4px;
+  }
+
+  .resume-craft-step1-card .resume-craft-step-grid {
+    margin-bottom: 0;
+  }
+
+  .resume-craft-step1-card .resume-craft-photo-label {
+    margin-top: 0;
+  }
+
   .resume-craft-step1-card #rc-jd-summary {
-    height: 172px;
-    min-height: 172px;
-    max-height: 172px;
+    height: 196px;
+    min-height: 196px;
+    max-height: 196px;
   }
 }
 
@@ -1914,8 +1929,8 @@ a {
 
 .resume-craft-chat-input .resume-craft-send-btn {
   margin-top: 0;
-  height: 44px;
-  min-height: 44px;
+  height: 56px;
+  min-height: 56px;
   padding: 0 16px;
   border-radius: 12px;
   align-self: stretch;
@@ -2017,11 +2032,37 @@ a {
   height: 36px;
   min-height: 44px;
   padding: 0 14px;
+  margin-top: 0;
   white-space: nowrap;
 }
 
 .resume-craft-final-frame {
   min-height: 70vh;
+}
+
+.resume-craft-result-page {
+  overflow: visible;
+}
+
+.resume-craft-result-page .resume-craft-layout,
+.resume-craft-result-page .resume-craft-final-page {
+  height: auto;
+  min-height: 0;
+}
+
+.resume-craft-result-page .resume-craft-final-frame {
+  display: block;
+  min-height: 0;
+}
+
+.resume-craft-result-page .resume-craft-export-html-btn {
+  margin-top: 0;
+  background: #111111;
+  color: #ffffff;
+}
+
+.resume-craft-result-page .resume-craft-export-html-btn:hover:not(:disabled) {
+  background: #2f2f2f;
 }
 
 .resume-craft-readiness-note p {
@@ -3171,6 +3212,12 @@ textarea {
   .resume-craft-final-head-actions {
     width: 100%;
     justify-content: flex-start;
+  }
+}
+
+@media (min-width: 768px) {
+  .resume-craft-result-page > .back-home-btn {
+    left: -16px;
   }
 }
 

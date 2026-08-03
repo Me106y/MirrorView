@@ -3,6 +3,7 @@ import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   loadResumeCraftResult,
   saveResumeCraftResult,
+  type ResumeCraftEditorState,
   type ResumeCraftResultArtifact,
 } from "../lib/storage";
 
@@ -18,6 +19,14 @@ const TEMPLATE_LABELS: Record<string, string> = {
 
 type ResultRouteState = { artifact?: unknown };
 
+function normalizeEditorState(value: unknown): ResumeCraftEditorState | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const candidate = value as Partial<ResumeCraftEditorState>;
+  if (!candidate.wizardState || typeof candidate.wizardState !== "object") return undefined;
+  if (!candidate.messagesByStep || typeof candidate.messagesByStep !== "object") return undefined;
+  return candidate as ResumeCraftEditorState;
+}
+
 function normalizeArtifact(value: unknown): ResumeCraftResultArtifact | null {
   if (!value || typeof value !== "object") return null;
   const candidate = value as Partial<ResumeCraftResultArtifact>;
@@ -29,6 +38,7 @@ function normalizeArtifact(value: unknown): ResumeCraftResultArtifact | null {
     reportPdfBase64: typeof candidate.reportPdfBase64 === "string" ? candidate.reportPdfBase64 : "",
     templateCode: typeof candidate.templateCode === "string" ? candidate.templateCode : "02",
     language: typeof candidate.language === "string" ? candidate.language : "zh",
+    editorState: normalizeEditorState(candidate.editorState),
   };
 }
 
@@ -45,7 +55,7 @@ export function ResumeCraftResultPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const previewFrameRef = useRef<HTMLIFrameElement | null>(null);
-  const [frameHeight, setFrameHeight] = useState(980);
+  const [frameHeight, setFrameHeight] = useState(900);
   const [artifact] = useState<ResumeCraftResultArtifact | null>(() => {
     const routeArtifact = normalizeArtifact((location.state as ResultRouteState | null)?.artifact);
     return routeArtifact ?? loadResumeCraftResult();
@@ -87,15 +97,20 @@ export function ResumeCraftResultPage() {
   };
 
   const onPreviewLoad = () => {
-    const document = previewFrameRef.current?.contentDocument;
-    if (!document?.body) return;
-    const height = Math.max(document.body.scrollHeight, document.documentElement?.scrollHeight || 0, 900);
-    setFrameHeight(Math.min(Math.max(height + 16, 900), 3400));
+    const updateFrameHeight = () => {
+      const document = previewFrameRef.current?.contentDocument;
+      if (!document?.body) return;
+      const height = Math.max(document.body.scrollHeight, document.documentElement?.scrollHeight || 0, 0);
+      setFrameHeight(Math.max(height + 24, 900));
+    };
+
+    requestAnimationFrame(updateFrameHeight);
+    window.setTimeout(updateFrameHeight, 80);
   };
 
   return (
     <section className="resume-craft-page resume-craft-result-page">
-      <NavLink to="/resume-craft" className="back-home-btn">
+      <NavLink to="/resume-craft" state={{ resumeCraftStep: 5, editorState: artifact.editorState }} className="back-home-btn">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M19 12H5M12 19l-7-7 7-7" />
         </svg>
@@ -111,8 +126,8 @@ export function ResumeCraftResultPage() {
             <div className="resume-craft-final-head-actions">
               <span className="resume-craft-result-meta">模板：{TEMPLATE_LABELS[artifact.templateCode] || "简历模板"}</span>
               <span className="resume-craft-result-meta">语言：{artifact.language === "en" ? "英文" : artifact.language === "both" ? "中英文双版" : "中文"}</span>
-              <button type="button" className="ghost-btn" onClick={exportHtml}>导出 HTML</button>
-              <button type="button" className="primary-btn resume-craft-regenerate-btn" onClick={exportPdf}>导出 PDF</button>
+              <button type="button" className="primary-btn resume-craft-export-html-btn" onClick={exportHtml}>导出 HTML</button>
+              <button type="button" className="ghost-btn" onClick={exportPdf}>导出 PDF</button>
             </div>
           </header>
           <iframe
