@@ -818,9 +818,6 @@ export function ResumeCraftPage() {
               1,
               <>
                 <header className="resume-craft-step-head">
-                  <div className="resume-craft-step-title-row">
-                    <span className="resume-craft-step-progress-note">基础信息填写</span>
-                  </div>
                   <h2>{STEP_TITLES[1]}</h2>
                   <p>设置模板、语言、可选照片、目标岗位与 JD 摘要。</p>
                   <div className="resume-craft-head-divider" />
