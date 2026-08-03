@@ -678,7 +678,7 @@ a {
 .resume-craft-page > .back-home-btn {
   position: absolute;
   top: 12px;
-  left: 0;
+  left: -80px;
   margin-bottom: 0;
   z-index: 2;
 }
