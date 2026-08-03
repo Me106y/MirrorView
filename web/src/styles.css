@@ -749,23 +749,6 @@ a {
   line-height: 1.7;
 }
 
-.resume-craft-step-tag {
-  display: inline-block;
-  width: fit-content;
-  border-radius: 20px;
-  padding: 6px 14px;
-  font-size: 0.74rem;
-  font-weight: 700;
-  color: #57463b;
-  background: #f0e9df;
-  box-shadow: 0 2px 7px rgba(122, 101, 75, 0.12);
-}
-
-.resume-craft-step1-card .resume-craft-step-tag {
-  border-radius: 20px;
-  padding: 6px 14px;
-}
-
 .resume-craft-step1-card .resume-craft-step-head h2 {
   font-size: 24px;
   font-weight: 600;

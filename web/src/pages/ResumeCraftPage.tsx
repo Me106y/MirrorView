@@ -819,7 +819,6 @@ export function ResumeCraftPage() {
               <>
                 <header className="resume-craft-step-head">
                   <div className="resume-craft-step-title-row">
-                    <span className="resume-craft-step-tag">Step 1 / 5</span>
                     <span className="resume-craft-step-progress-note">基础信息填写</span>
                   </div>
                   <h2>{STEP_TITLES[1]}</h2>
@@ -903,7 +902,6 @@ export function ResumeCraftPage() {
               <>
                 <header className="resume-craft-chat-head">
                   <div className="resume-craft-chat-head-left">
-                    <span className="resume-craft-step-tag">Step 2 / 5</span>
                     <h2>{STEP_TITLES[2]}</h2>
                     <p>填写姓名、联系方式等个人信息，以及教育背景。</p>
                     <div className="resume-craft-head-divider" />
