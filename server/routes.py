@@ -1377,34 +1377,96 @@ def _sanitize_step6_draft_json(raw: Any) -> Dict[str, Any]:
 
 
 
-def _build_confirmed_facts_context(step1_profile: Dict[str, Any], draft_json: Dict[str, Any]) -> str:
+def _build_confirmed_facts_context(
+    step1_profile: Dict[str, Any],
+    draft_json: Dict[str, Any],
+    wizard_state: Optional[Dict[str, Any]] = None,
+) -> str:
     draft = _sanitize_step6_draft_json(draft_json)
-    personal = draft.get("personal_info") or {}
+    profile = step1_profile if isinstance(step1_profile, dict) else {}
+    profile_personal = profile.get("personal_info") if isinstance(profile.get("personal_info"), dict) else {}
+    draft_personal = draft.get("personal_info") or {}
+    wizard = wizard_state if isinstance(wizard_state, dict) else {}
+    collected = wizard.get("collected_by_step") if isinstance(wizard.get("collected_by_step"), dict) else {}
+    step_states = wizard.get("step_states") if isinstance(wizard.get("step_states"), dict) else {}
+    step4 = step_states.get("step4") if isinstance(step_states.get("step4"), dict) else {}
+
+    def unique_text(values: Any, limit: int = 30) -> List[str]:
+        result: List[str] = []
+        if not isinstance(values, list):
+            values = [values]
+        for value in values:
+            text = str(value or "").strip()
+            if text and text not in result:
+                result.append(text[:2400])
+            if len(result) >= limit:
+                break
+        return result
+
+    def profile_education_items() -> List[str]:
+        result: List[str] = []
+        for item in profile.get("education") if isinstance(profile.get("education"), list) else []:
+            if not isinstance(item, dict):
+                continue
+            parts = [
+                str(item.get("school") or "").strip(),
+                str(item.get("major") or "").strip(),
+                str(item.get("degree") or "").strip(),
+                str(item.get("period") or "").strip(),
+                str(item.get("highlights") or "").strip(),
+            ]
+            value = " | ".join(part for part in parts if part)
+            if value:
+                result.append(value)
+        return result
+
+    personal_name = str(draft_personal.get("name") or profile_personal.get("name") or "").strip()
+    personal_phone = str(draft_personal.get("phone") or profile_personal.get("phone") or "").strip()
+    personal_email = str(draft_personal.get("email") or profile_personal.get("email") or "").strip()
+    personal_city = str(draft_personal.get("city") or profile_personal.get("city") or "").strip()
+    links = unique_text(list(draft_personal.get("links") or []) + list(profile_personal.get("links") or []), limit=8)
+    education = unique_text(
+        list(draft.get("education") or [])
+        + profile_education_items()
+        + list(collected.get("education") or []),
+    )
+    experiences = unique_text(
+        list(draft.get("experiences") or [])
+        + list(collected.get("experiences") or [])
+        + list(step4.get("finalized_experiences") or []),
+    )
+    skills_and_certs = unique_text(
+        list(draft.get("skills_and_certs") or [])
+        + list(profile.get("skills") or [])
+        + list(profile.get("certificates") or [])
+        + list(collected.get("skills_and_certs") or []),
+    )
+    final_preferences = str(
+        draft.get("final_preferences") or collected.get("final_preferences") or profile.get("focus_points") or ""
+    ).strip()
+
     lines: List[str] = [
         "【事实白名单（只能使用以下信息）】",
-        f"- 目标岗位: {draft.get('target_role') or step1_profile.get('target_role') or '未填写'}",
-        f"- 姓名: {personal.get('name') or '未填写'}",
-        f"- 手机: {personal.get('phone') or '未填写'}",
-        f"- 邮箱: {personal.get('email') or '未填写'}",
-        f"- 城市: {personal.get('city') or '未填写'}",
-        f"- 链接: {', '.join(personal.get('links') or []) or '无'}",
+        f"- 目标岗位: {draft.get('target_role') or profile.get('target_role') or '未填写'}",
+        f"- 姓名: {personal_name or '未填写'}",
+        f"- 手机: {personal_phone or '未填写'}",
+        f"- 邮箱: {personal_email or '未填写'}",
+        f"- 城市: {personal_city or '未填写'}",
+        f"- 链接: {', '.join(links) or '无'}",
         "- 教育背景:",
     ]
-    for idx, item in enumerate(draft.get("education") or [], start=1):
-        lines.append(f"  - 教育{idx}: {item}")
-    if not draft.get("education"):
+    lines.extend(f"  - 教育{idx}: {item}" for idx, item in enumerate(education, start=1))
+    if not education:
         lines.append("  - （无）")
     lines.append("- 工作/项目经历:")
-    for idx, item in enumerate(draft.get("experiences") or [], start=1):
-        lines.append(f"  - 经历{idx}: {item}")
-    if not draft.get("experiences"):
+    lines.extend(f"  - 经历{idx}: {item}" for idx, item in enumerate(experiences, start=1))
+    if not experiences:
         lines.append("  - （无）")
     lines.append("- 技能与证书:")
-    for idx, item in enumerate(draft.get("skills_and_certs") or [], start=1):
-        lines.append(f"  - 技能{idx}: {item}")
-    if not draft.get("skills_and_certs"):
+    lines.extend(f"  - 技能{idx}: {item}" for idx, item in enumerate(skills_and_certs, start=1))
+    if not skills_and_certs:
         lines.append("  - （无）")
-    lines.append(f"- 生成偏好: {draft.get('final_preferences') or '无'}")
+    lines.append(f"- 生成偏好: {final_preferences or '无'}")
     return "\n".join(lines)
 
 
@@ -1803,13 +1865,13 @@ def careerforge_resume_craft_render():
 
     step1_profile = _normalize_step1_profile(data.get("step1_profile") or {})
     wizard_state = data.get("wizard_state") if isinstance(data.get("wizard_state"), dict) else {}
-    if wizard_state:
-        collected_by_step = wizard_state.get("collected_by_step") if isinstance(wizard_state.get("collected_by_step"), dict) else {}
-        if not bool(collected_by_step.get("step6_confirmed")):
-            return jsonify({"error": "not_ready_for_render", "message": "请先完成 Step6 确认后再生成简历。", "meta": meta}), 400
-
     step_states = wizard_state.get("step_states") if isinstance(wizard_state.get("step_states"), dict) else {}
     step6_state = step_states.get("step6") if isinstance(step_states.get("step6"), dict) else {}
+    if wizard_state:
+        collected_by_step = wizard_state.get("collected_by_step") if isinstance(wizard_state.get("collected_by_step"), dict) else {}
+        if not bool(collected_by_step.get("step6_confirmed")) or not bool(step6_state.get("confirmed")):
+            return jsonify({"error": "not_ready_for_render", "message": "请先完成 Step6 确认后再生成简历。", "meta": meta}), 400
+
     input_draft_json = data.get("draft_json") if isinstance(data.get("draft_json"), dict) else step6_state.get("draft_json")
     if not isinstance(input_draft_json, dict) or not input_draft_json:
         return jsonify(
@@ -1838,7 +1900,11 @@ def careerforge_resume_craft_render():
     preview_snippet = _extract_preview_snippet(templates.get("preview_template", ""), template_code)
 
     step1_context = _build_step1_profile_context(step1_profile, template_code, language, photo_pref)
-    confirmed_facts_context = _build_confirmed_facts_context(step1_profile, step6_draft_json)
+    confirmed_facts_context = _build_confirmed_facts_context(
+        step1_profile,
+        step6_draft_json,
+        wizard_state,
+    )
     jd_direction_context = _build_jd_direction_context(step1_profile)
     html_payload = {
         "template_code": template_code,

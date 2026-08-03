@@ -1501,6 +1501,13 @@ a {
   background: #111111;
 }
 
+.resume-craft-render-ready-note {
+  margin: 0 auto 0 0;
+  color: #496577;
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
 .resume-craft-next-btn:hover:not(:disabled) {
   background: #466b85;
   box-shadow: 0 12px 22px rgba(53, 73, 91, 0.24);

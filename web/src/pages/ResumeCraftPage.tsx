@@ -128,6 +128,12 @@ const EMPTY_WIZARD: ResumeCraftWizardState = {
           validation: false,
         },
         turn_count: 0,
+        grill: {
+          completed_rounds: 0,
+          pending_questions: [],
+          round_status: "awaiting_answers",
+          user_skipped: false,
+        },
       },
     },
     step5: { turn_count: 0, confirmed: false },
@@ -328,15 +334,25 @@ export function ResumeCraftPage() {
 
   const canAdvanceChatStep = useMemo(() => {
     if (!activeChatStep) return false;
-    return messagesByStep[activeChatStep].some(
+    const hasUserMessage = messagesByStep[activeChatStep].some(
       (message) => message.role === "user" && message.content.trim().length > 0
     );
-  }, [activeChatStep, messagesByStep]);
+    if (!hasUserMessage || activeChatStep !== 3) return hasUserMessage;
+
+    const experienceState = wizardState.step_states.step4;
+    const grill = experienceState.active_focus?.grill;
+    if (!grill) return false;
+    return Boolean(
+      grill.user_skipped ||
+      (experienceState.active_focus?.stage === "done" && grill.completed_rounds >= 2)
+    );
+  }, [activeChatStep, messagesByStep, wizardState.step_states.step4]);
 
   const canGenerate = useMemo(() => {
-    const draft = wizardState.step_states.step6?.draft_json;
+    const step6 = wizardState.step_states.step6;
+    const draft = step6?.draft_json;
     const hasDraft = Boolean(draft && Object.keys(draft).length > 0);
-    const confirmed = wizardState.collected_by_step.step6_confirmed === true;
+    const confirmed = wizardState.collected_by_step.step6_confirmed === true && step6?.confirmed === true;
     return confirmed && hasDraft && !renderLoading;
   }, [wizardState, renderLoading]);
 
@@ -519,6 +535,12 @@ export function ResumeCraftPage() {
               validation: false,
             },
             turn_count: 0,
+            grill: {
+              completed_rounds: 0,
+              pending_questions: [],
+              round_status: "awaiting_answers",
+              user_skipped: false,
+            },
           },
         };
       }
@@ -1146,6 +1168,9 @@ export function ResumeCraftPage() {
 
                   {chatStep === 5 ? (
                     <div className="resume-craft-step-actions">
+                      {canGenerate ? (
+                        <p className="resume-craft-render-ready-note">预览内容已确认，请点击“生成简历”生成 HTML 和 PDF。</p>
+                      ) : null}
                       <button type="button" className="primary-btn resume-craft-next-btn" disabled={!canGenerate} onClick={() => void renderResume()}>
                         {renderLoading ? "生成中..." : "生成简历"}
                       </button>

@@ -201,7 +201,8 @@ def test_agent_loads_skill_and_returns_structured_state():
 
     assert result["reply"].startswith("请具体说说")
     assert "Skill Specification" in str(model.prompt)
-    assert "不要按固定轮数" in str(model.prompt)
+    assert "至少 2 轮" in str(model.prompt)
+    assert "最多 3 轮" in str(model.prompt)
 
 
 def test_agent_merges_compact_state_patch_after_user_has_no_more_experience():
@@ -264,6 +265,203 @@ def test_agent_prompt_prevents_repeating_answered_grill_questions():
     assert "不得重复" in prompt
     assert "已回答" in prompt
     assert "没有其他补充" in prompt
+
+
+def test_agent_prompt_requires_question_level_grill_state_and_two_round_minimum():
+    model = _JsonModel(
+        '{"reply":"继续补充。","action":"collect","next_step_suggestion":"stay",'
+        '"render_ready":false,"missing_fields":[],"wizard_state":{},'
+        '"step6_preview_markdown":"","step6_waiting_confirm":false,"step6_applied_changes":[]}'
+    )
+    agent = CareerForgeAgent(llm=model)
+    agent.run_resume_craft_chat_turn({
+        "message": "继续。",
+        "current_step": 4,
+        "step1_profile": _profile(),
+        "wizard_state": {"current_step": 4},
+        "history": [],
+    })
+    prompt = str(model.prompt)
+    assert "pending_questions" in prompt
+    assert "completed_rounds" in prompt
+    assert "至少 2 轮" in prompt
+    assert "最多 3 轮" in prompt
+    assert "user_skipped" in prompt
+
+
+def test_agent_grill_keeps_round_open_until_every_question_is_answered():
+    model = _JsonModel(
+        '{"reply":"已记录前三项，请继续补充第4项。","action":"collect",'
+        '"next_step_suggestion":"stay","render_ready":false,"missing_fields":[], '
+        '"wizard_state":{"step_states":{"step4":{"active_focus":{"grill":{'
+        '"completed_rounds":0,"round_status":"awaiting_answers",'
+        '"pending_questions":['
+        '{"id":"q1","text":"项目背景？","dimension":"context","status":"answered"},'
+        '{"id":"q2","text":"你的职责？","dimension":"role","status":"answered"},'
+        '{"id":"q3","text":"采取了什么行动？","dimension":"action","status":"answered"},'
+        '{"id":"q4","text":"结果如何？","dimension":"result","status":"open"}]}}}}},'
+        '"step6_preview_markdown":"","step6_waiting_confirm":false,"step6_applied_changes":[]}'
+    )
+    agent = CareerForgeAgent(llm=model)
+    existing_state = {
+        "current_step": 4,
+        "step_states": {"step4": {"active_focus": {"grill": {
+            "completed_rounds": 0,
+            "round_status": "awaiting_answers",
+            "pending_questions": [
+                {"id": "q1", "text": "项目背景？", "dimension": "context", "status": "open"},
+                {"id": "q2", "text": "你的职责？", "dimension": "role", "status": "open"},
+                {"id": "q3", "text": "采取了什么行动？", "dimension": "action", "status": "open"},
+                {"id": "q4", "text": "结果如何？", "dimension": "result", "status": "open"},
+            ],
+        }}}},
+    }
+
+    result = agent.run_resume_craft_chat_turn({
+        "message": "前三项我都已经回答了，结果还需要补充。",
+        "current_step": 4,
+        "step1_profile": _profile(),
+        "wizard_state": existing_state,
+        "history": [],
+    })
+
+    grill = result["wizard_state"]["step_states"]["step4"]["active_focus"]["grill"]
+    assert grill["completed_rounds"] == 0
+    assert grill["round_status"] == "awaiting_answers"
+    assert [item["id"] for item in grill["pending_questions"] if item["status"] == "open"] == ["q4"]
+    assert result["next_step_suggestion"] == "stay"
+
+
+def test_agent_grill_completes_a_round_only_after_all_questions_close():
+    model = _JsonModel(
+        '{"reply":"第1轮已完成，我们继续下一轮。","action":"collect",'
+        '"next_step_suggestion":"stay","render_ready":false,"missing_fields":[], '
+        '"wizard_state":{"step_states":{"step4":{"active_focus":{"grill":{'
+        '"completed_rounds":1,"round_status":"round_completed",'
+        '"pending_questions":['
+        '{"id":"q1","text":"项目背景？","dimension":"context","status":"answered"},'
+        '{"id":"q2","text":"你的职责？","dimension":"role","status":"answered"}]}}}}},'
+        '"step6_preview_markdown":"","step6_waiting_confirm":false,"step6_applied_changes":[]}'
+    )
+    agent = CareerForgeAgent(llm=model)
+    result = agent.run_resume_craft_chat_turn({
+        "message": "第2个问题也补充完了。",
+        "current_step": 4,
+        "step1_profile": _profile(),
+        "wizard_state": {"current_step": 4, "step_states": {"step4": {"active_focus": {"grill": {
+            "completed_rounds": 0,
+            "round_status": "awaiting_answers",
+            "pending_questions": [
+                {"id": "q1", "text": "项目背景？", "dimension": "context", "status": "open"},
+                {"id": "q2", "text": "你的职责？", "dimension": "role", "status": "open"},
+            ],
+        }}}}},
+        "history": [],
+    })
+    grill = result["wizard_state"]["step_states"]["step4"]["active_focus"]["grill"]
+    assert grill["completed_rounds"] == 1
+    assert grill["round_status"] == "round_completed"
+
+
+def test_agent_grill_does_not_finish_before_two_rounds():
+    model = _JsonModel(
+        '{"reply":"这段经历已经完成。","action":"advance",'
+        '"next_step_suggestion":"next","render_ready":false,"missing_fields":[], '
+        '"wizard_state":{"step_states":{"step4":{"active_focus":{"stage":"done", "grill":{'
+        '"completed_rounds":1,"round_status":"project_completed",'
+        '"pending_questions":[]}}}}},'
+        '"step6_preview_markdown":"","step6_waiting_confirm":false,"step6_applied_changes":[]}'
+    )
+    agent = CareerForgeAgent(llm=model)
+    result = agent.run_resume_craft_chat_turn({
+        "message": "这一轮没有更多补充了。",
+        "current_step": 4,
+        "step1_profile": _profile(),
+        "wizard_state": {"current_step": 4, "step_states": {"step4": {"active_focus": {"stage": "validation", "grill": {
+            "completed_rounds": 1,
+            "round_status": "round_completed",
+            "pending_questions": [],
+        }}}}},
+        "history": [],
+    })
+    focus = result["wizard_state"]["step_states"]["step4"]["active_focus"]
+    assert focus["stage"] != "done"
+    assert focus["grill"]["round_status"] != "project_completed"
+    assert result["next_step_suggestion"] == "stay"
+
+
+def test_agent_grill_does_not_finish_with_open_questions_even_at_round_limit():
+    model = _JsonModel(
+        '{"reply":"还有一个问题需要确认。","action":"advance",'
+        '"next_step_suggestion":"next","render_ready":false,"missing_fields":[], '
+        '"wizard_state":{"step_states":{"step4":{"active_focus":{"stage":"done", "grill":{'
+        '"completed_rounds":3,"round_status":"project_completed",'
+        '"pending_questions":[{"id":"q4","text":"结果如何？","dimension":"result","status":"open"}]}}}}},'
+        '"step6_preview_markdown":"","step6_waiting_confirm":false,"step6_applied_changes":[]}'
+    )
+    agent = CareerForgeAgent(llm=model)
+    result = agent.run_resume_craft_chat_turn({
+        "message": "还需要确认结果。",
+        "current_step": 4,
+        "step1_profile": _profile(),
+        "wizard_state": {"current_step": 4, "step_states": {"step4": {"active_focus": {"stage": "validation", "grill": {
+            "completed_rounds": 3,
+            "round_status": "awaiting_answers",
+            "pending_questions": [{"id": "q4", "text": "结果如何？", "dimension": "result", "status": "open"}],
+        }}}}},
+        "history": [],
+    })
+    focus = result["wizard_state"]["step_states"]["step4"]["active_focus"]
+    assert focus["stage"] != "done"
+    assert focus["grill"]["completed_rounds"] == 3
+    assert focus["grill"]["round_status"] == "awaiting_answers"
+    assert result["next_step_suggestion"] == "stay"
+
+
+def test_agent_grill_allows_semantic_skip_of_current_project():
+    model = _JsonModel(
+        '{"reply":"好的，跳过这段经历的继续深挖。","action":"advance",'
+        '"next_step_suggestion":"next","render_ready":false,"missing_fields":[], '
+        '"wizard_state":{"step_states":{"step4":{"active_focus":{"stage":"done", "grill":{'
+        '"completed_rounds":0,"user_skipped":true,"round_status":"skipped",'
+        '"pending_questions":[]}}}}},'
+        '"step6_preview_markdown":"","step6_waiting_confirm":false,"step6_applied_changes":[]}'
+    )
+    agent = CareerForgeAgent(llm=model)
+    result = agent.run_resume_craft_chat_turn({
+        "message": "我不想继续回答这段项目的追问了，先跳过。",
+        "current_step": 4,
+        "step1_profile": _profile(),
+        "wizard_state": {"current_step": 4, "step_states": {"step4": {"active_focus": {"stage": "implementation", "grill": {
+            "completed_rounds": 0,
+            "round_status": "awaiting_answers",
+            "pending_questions": [{"id": "q1", "text": "项目结果？", "dimension": "result", "status": "open"}],
+        }}}}},
+        "history": [],
+    })
+    grill = result["wizard_state"]["step_states"]["step4"]["active_focus"]["grill"]
+    assert grill["user_skipped"] is True
+    assert grill["round_status"] == "skipped"
+    assert result["wizard_state"]["step_states"]["step4"]["active_focus"]["stage"] == "done"
+
+
+def test_agent_render_ready_adds_generation_guidance_when_model_omits_it():
+    model = _JsonModel(
+        '{"reply":"预览内容没有问题。","action":"confirm",'
+        '"next_step_suggestion":"stay","render_ready":true,"missing_fields":[], '
+        '"wizard_state":{"step_states":{"step6":{"confirmed":true,"awaiting_confirm":false,'
+        '"draft_json":{"target_role":"AI应用开发"}}},"collected_by_step":{"step6_confirmed":true}},'
+        '"step6_preview_markdown":"# 简历摘要","step6_waiting_confirm":false,"step6_applied_changes":[]}'
+    )
+    agent = CareerForgeAgent(llm=model)
+    result = agent.run_resume_craft_chat_turn({
+        "message": "确认预览内容。",
+        "current_step": 6,
+        "step1_profile": _profile(),
+        "wizard_state": {"current_step": 6},
+        "history": [],
+    })
+    assert "点击“生成简历”" in result["reply"]
 
 
 def test_agent_closes_experience_when_user_has_no_more_to_add():

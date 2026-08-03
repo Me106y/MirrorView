@@ -45,6 +45,20 @@ export interface Step1Profile {
   certificates: string[];
 }
 
+export interface GrillQuestion {
+  id: string;
+  text: string;
+  dimension: string;
+  status: "open" | "answered" | "skipped";
+}
+
+export interface GrillState {
+  completed_rounds: number;
+  pending_questions: GrillQuestion[];
+  round_status: "awaiting_answers" | "round_completed" | "project_completed" | "skipped";
+  user_skipped: boolean;
+}
+
 export interface ExperienceState {
   current_index: number;
   followup_count: number;
@@ -59,6 +73,7 @@ export interface ExperienceState {
       validation: boolean;
     };
     turn_count: number;
+    grill?: GrillState;
   };
 }
 

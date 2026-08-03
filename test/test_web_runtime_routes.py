@@ -235,6 +235,34 @@ def test_resume_craft_render_requires_step6_confirmation_with_wizard_state(monke
     assert body["error"] == "not_ready_for_render"
 
 
+def test_resume_craft_render_requires_both_step6_confirmation_fields(monkeypatch):
+    Config.TURNSTILE_ENFORCE = False
+    Config.RATE_LIMIT_ENFORCE = False
+
+    monkeypatch.setattr(
+        routes.ai_service,
+        "run_resume_craft_html",
+        lambda payload, runtime=None: "<!DOCTYPE html><html><body><h1>Resume</h1></body></html>",
+    )
+
+    client = _client()
+    resp = client.post(
+        "/api/careerforge/resume-craft/render",
+        json={
+            "draft_json": _resume_craft_draft_json(),
+            "step1_profile": _resume_craft_profile(),
+            "wizard_state": {
+                "current_step": 6,
+                "collected_by_step": {"step6_confirmed": True},
+                "step_states": {"step6": {"confirmed": False}},
+            },
+        },
+    )
+
+    assert resp.status_code == 400
+    assert resp.get_json()["error"] == "not_ready_for_render"
+
+
 def test_resume_craft_render_works_with_step1_profile_and_finalized_experiences(monkeypatch):
     Config.TURNSTILE_ENFORCE = False
     Config.RATE_LIMIT_ENFORCE = False
@@ -549,3 +577,51 @@ def test_resume_craft_render_rejects_jd_only_facts(monkeypatch):
     assert resp.status_code == 400
     body = resp.get_json()
     assert body["error"] == "unsupported_fact_detected"
+
+
+def test_resume_craft_render_accepts_facts_from_finalized_experiences(monkeypatch):
+    Config.TURNSTILE_ENFORCE = False
+    Config.RATE_LIMIT_ENFORCE = False
+
+    monkeypatch.setattr(
+        routes.ai_service,
+        "run_resume_craft_html",
+        lambda payload, runtime=None: (
+            "<!DOCTYPE html><html><body><p>通过 Vercel 部署并完成性能优化。</p></body></html>"
+        ),
+    )
+    monkeypatch.setattr(
+        routes,
+        "_generate_resume_craft_pdf_artifact",
+        lambda report_html, report_name: ("resume.pdf", "UERG", ""),
+    )
+
+    client = _client()
+    resp = client.post(
+        "/api/careerforge/resume-craft/render",
+        json={
+            "draft_json": {
+                **_resume_craft_draft_json(),
+                "experiences": ["负责 Flask 后端开发。"],
+            },
+            "step1_profile": {
+                **_resume_craft_profile(),
+                "jd_summary": "Vercel 部署与性能优化经验",
+            },
+            "wizard_state": {
+                "current_step": 6,
+                "collected_by_step": {"step6_confirmed": True},
+                "step_states": {
+                    "step4": {
+                        "finalized_experiences": [
+                            "负责 Flask 后端开发，通过 Vercel 部署并完成性能优化。"
+                        ]
+                    },
+                    "step6": {"confirmed": True},
+                },
+            },
+        },
+    )
+
+    assert resp.status_code == 200
+    assert resp.get_json()["report_pdf_base64"] == "UERG"

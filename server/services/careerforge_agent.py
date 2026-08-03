@@ -71,6 +71,150 @@ class CareerForgeAgent:
         return merged
 
     @staticmethod
+    def _normalize_grill_questions(raw: Any) -> List[Dict[str, str]]:
+        questions: List[Dict[str, str]] = []
+        seen_ids = set()
+        if not isinstance(raw, list):
+            return questions
+        for index, item in enumerate(raw, start=1):
+            if not isinstance(item, dict):
+                continue
+            question_id = str(item.get("id") or f"q-{index}").strip()[:80]
+            question_text = str(item.get("text") or "").strip()[:600]
+            if not question_id or not question_text or question_id in seen_ids:
+                continue
+            status = str(item.get("status") or "open").strip().lower()
+            if status not in {"open", "answered", "skipped"}:
+                status = "open"
+            questions.append(
+                {
+                    "id": question_id,
+                    "text": question_text,
+                    "dimension": str(item.get("dimension") or "").strip()[:120],
+                    "status": status,
+                }
+            )
+            seen_ids.add(question_id)
+        return questions
+
+    @classmethod
+    def _normalize_grill_state(
+        cls,
+        previous_wizard_state: Any,
+        wizard_state: Any,
+        result: dict,
+    ) -> dict:
+        if not isinstance(wizard_state, dict):
+            return result
+        step_states = wizard_state.get("step_states")
+        step4 = step_states.get("step4") if isinstance(step_states, dict) else None
+        active_focus = step4.get("active_focus") if isinstance(step4, dict) else None
+        grill = active_focus.get("grill") if isinstance(active_focus, dict) else None
+        if not isinstance(grill, dict):
+            return result
+
+        previous_step_states = previous_wizard_state.get("step_states") if isinstance(previous_wizard_state, dict) else None
+        previous_step4 = previous_step_states.get("step4") if isinstance(previous_step_states, dict) else None
+        previous_focus = previous_step4.get("active_focus") if isinstance(previous_step4, dict) else None
+        previous_grill = previous_focus.get("grill") if isinstance(previous_focus, dict) else {}
+        previous_grill = previous_grill if isinstance(previous_grill, dict) else {}
+
+        previous_questions = cls._normalize_grill_questions(previous_grill.get("pending_questions"))
+        questions = cls._normalize_grill_questions(grill.get("pending_questions"))
+        questions_by_id = {item["id"]: item for item in questions}
+        previous_open = {
+            item["id"]: item for item in previous_questions if item["status"] == "open"
+        }
+
+        # An open question is never implicitly removed by a model patch. The
+        # model must semantically mark it answered or skipped first.
+        for question_id, question in previous_open.items():
+            current = questions_by_id.get(question_id)
+            if current is None:
+                restored = dict(question)
+                restored["status"] = "open"
+                questions.append(restored)
+                questions_by_id[question_id] = restored
+
+        def _bounded_count(value: Any, default: int = 0) -> int:
+            try:
+                return max(0, min(int(value), 3))
+            except (TypeError, ValueError):
+                return default
+
+        previous_completed = _bounded_count(previous_grill.get("completed_rounds"))
+        proposed_completed = _bounded_count(grill.get("completed_rounds"), previous_completed)
+        # One user turn can close at most the currently pending question set.
+        # This prevents a model response from skipping entire Grill rounds by
+        # returning an inflated completed_rounds value.
+        proposed_completed = min(proposed_completed, previous_completed + 1)
+        remaining_open = [item for item in questions if item["status"] == "open"]
+        if previous_open:
+            previous_ids_closed = all(
+                questions_by_id.get(question_id, {}).get("status") in {"answered", "skipped"}
+                for question_id in previous_open
+            )
+            if previous_ids_closed:
+                proposed_completed = max(proposed_completed, previous_completed + 1)
+            else:
+                proposed_completed = min(proposed_completed, previous_completed)
+        else:
+            # Once a Grill state exists, a round must be backed by the
+            # question set that was open in the prior turn. The initial
+            # project description alone is not a completed Grill round.
+            proposed_completed = min(proposed_completed, previous_completed)
+        completed_rounds = _bounded_count(proposed_completed, previous_completed)
+
+        user_skipped = bool(grill.get("user_skipped"))
+        if user_skipped:
+            for question in questions:
+                if question["status"] == "open":
+                    question["status"] = "skipped"
+            round_status = "skipped"
+            if isinstance(active_focus, dict):
+                active_focus["stage"] = "done"
+            result["next_step_suggestion"] = "next"
+            result["action"] = "advance"
+        else:
+            requested_status = str(grill.get("round_status") or "").strip().lower()
+            if completed_rounds >= 3 and not remaining_open:
+                round_status = "project_completed"
+                if isinstance(active_focus, dict):
+                    active_focus["stage"] = "done"
+                result["next_step_suggestion"] = "next"
+                result["action"] = "advance"
+            elif completed_rounds >= 3 and remaining_open:
+                round_status = "awaiting_answers"
+                if isinstance(active_focus, dict) and active_focus.get("stage") == "done":
+                    active_focus["stage"] = "validation"
+                result["next_step_suggestion"] = "stay"
+                result["action"] = "collect"
+            elif requested_status == "project_completed" and completed_rounds >= 2 and not remaining_open:
+                round_status = "project_completed"
+                if isinstance(active_focus, dict):
+                    active_focus["stage"] = "done"
+            elif requested_status == "project_completed" and completed_rounds < 2:
+                # A project cannot finish after only one completed Grill round.
+                round_status = "round_completed" if not remaining_open else "awaiting_answers"
+                if isinstance(active_focus, dict) and active_focus.get("stage") == "done":
+                    active_focus["stage"] = "validation"
+                result["next_step_suggestion"] = "stay"
+                result["action"] = "collect"
+            elif remaining_open:
+                round_status = "awaiting_answers"
+                if isinstance(active_focus, dict) and active_focus.get("stage") == "done":
+                    active_focus["stage"] = "validation"
+                result["next_step_suggestion"] = "stay"
+            else:
+                round_status = requested_status if requested_status in {"round_completed", "awaiting_answers"} else "round_completed"
+
+        grill["completed_rounds"] = completed_rounds
+        grill["pending_questions"] = questions
+        grill["round_status"] = round_status
+        grill["user_skipped"] = user_skipped
+        return result
+
+    @staticmethod
     def _normalize_render_ready_state(result: dict) -> dict:
         """Keep the UI confirmation state aligned with the render-ready contract."""
         if result.get("render_ready") is not True:
@@ -94,6 +238,15 @@ class CareerForgeAgent:
         if isinstance(step6, dict):
             step6["confirmed"] = True
             step6["awaiting_confirm"] = False
+        guidance = "预览内容已确认，请点击“生成简历”按钮生成 HTML 和 PDF。"
+        reply = str(result.get("reply") or "").strip()
+        has_generation_guidance = (
+            "点击" in reply
+            and ("生成" in reply or "导出" in reply)
+            and any(token in reply for token in ("简历", "HTML", "PDF", "按钮"))
+        )
+        if not has_generation_guidance:
+            result["reply"] = f"{reply}\n\n{guidance}".strip()
         return result
 
     def _safe_json_loads(self, raw: str) -> Optional[dict]:
@@ -527,6 +680,14 @@ You MUST follow the provided Skill specification when answering.
             "step6_preview_markdown": "string",
             "step6_waiting_confirm": False,
             "step6_applied_changes": ["string"],
+            "grill_state": {
+                "completed_rounds": 0,
+                "pending_questions": [
+                    {"id": "string", "text": "string", "dimension": "string", "status": "open|answered|skipped"}
+                ],
+                "round_status": "awaiting_answers|round_completed|project_completed|skipped",
+                "user_skipped": False,
+            },
         }
         schema_json = json.dumps(schema, ensure_ascii=False, indent=2)
         prompt = ChatPromptTemplate.from_template(
@@ -543,15 +704,16 @@ You MUST follow the provided Skill specification when answering.
 [输出要求]
 1. 只输出一个 JSON 对象，严格匹配下面的 schema，不要 Markdown 代码块或额外解释。
 2. 根据用户最新输入的语义、完整对话历史和当前简历状态，自主决定下一步：该追问、确认、修改、预览，还是允许进入下一阶段。
-3. 不要按固定轮数、固定字段顺序或关键词判断推进。先对照完整 history 和当前状态判断哪些问题已经被用户回答；已回答的问题不得重复追问，即使用户没有使用你原问题中的相同措辞。用户表达没有更多补充时，应基于上下文结束当前经历的深挖。
-4. 可以一次询问多个彼此相关的问题，也可以在信息充分时直接推进；问题应该像职业顾问对话，而不是表单提示。
-5. 严格遵守事实边界，不编造经历、技能、职责或成果。对不清楚的内容先追问或标记为缺失。
-6. 只返回本轮必要的 wizard_state 最小 JSON 补丁，不要重复输出完整历史、聊天记录或未变化的经历内容。运行时会把补丁合并到已有状态；本轮确认过的新事实写入对应的 collected_by_step / step_states。
-7. Step5 的预览、修改和确认必须由用户语义触发，不要依赖固定按钮或固定关键词。用户表达想查看或生成预览时，基于已确认事实生成结构化 draft_json 和 Markdown 摘要，写入 step_states.step6.preview_markdown，并设置 preview_ready=true、awaiting_confirm=true、confirmed=false、step6_confirmed=false、render_ready=false；reply 必须展示摘要并询问是否需要修改。
-8. 用户提出修改时，只修改其明确要求的内容，更新 draft_json 和 preview_markdown，增加 revision_count，并保持 awaiting_confirm=true、confirmed=false、step6_confirmed=false、render_ready=false；修改后再次展示摘要并等待确认。
-9. 只有用户明确表示无需修改、确认内容或确认生成时，才设置 step_states.step6.confirmed=true、awaiting_confirm=false、step6_confirmed=true、render_ready=true，并在 reply 中提示用户点击“生成简历”。Agent 不得自动调用生成接口。
-10. next_step_suggestion=next 只表示你判断当前阶段已完成；不要依赖页面自动跳转，应在 reply 中自然引导用户自行点击“下一步”。不要为了满足固定流程而强行推进。
-11. 结束工作/项目经历时，必须在语义上确认用户已经没有更多补充或当前信息已经足够：将事实边界内的一段简洁摘要写入 step_states.step4.finalized_experiences，设置 step_states.step4.active_focus.stage=done，并记录仍缺失的核心维度（如有）。reply 要说明本段经历已完成；若还未达到用户计划的经历数量，邀请用户继续描述下一段，否则引导用户点击“下一步”。结束后不得再次提出已经回答过的问题。
+3. 不要按固定字段顺序或关键词判断推进。先对照完整 history 和当前状态判断哪些问题已经被用户回答；已回答的问题不得重复追问，即使用户没有使用你原问题中的相同措辞。用户表达没有更多补充时，应基于上下文结束当前经历的深挖。
+4. Step4 工作/项目经历 Grill 必须维护 `step_states.step4.active_focus.grill`。一次 Agent 输出中的多个问题属于同一轮，必须逐个用 `pending_questions` 的 ID 标记为 answered 或 skipped；仍有 open 问题时不得增加 `completed_rounds`，不得结束项目。每个项目默认至少完成 2 轮、最多 3 轮；第 2 轮完成且事实足够时可以结束，第 3 轮完成后必须结束。只有用户明确表示不想继续回答当前项目时，才设置 `user_skipped=true`、`round_status=skipped` 并结束，不依赖固定关键词。
+5. 可以一次询问多个彼此相关的问题，也可以在问题集合全部回答后进入下一轮；问题应该像职业顾问对话，而不是表单提示。下一轮不得重复已经回答的问题。
+6. 严格遵守事实边界，不编造经历、技能、职责或成果。对不清楚的内容先追问或标记为缺失。
+7. 只返回本轮必要的 wizard_state 最小 JSON 补丁，不要重复输出完整历史、聊天记录或未变化的经历内容。运行时会把补丁合并到已有状态；本轮确认过的新事实写入对应的 collected_by_step / step_states。
+8. Step5 的预览、修改和确认必须由用户语义触发，不要依赖固定按钮或固定关键词。用户表达想查看或生成预览时，基于已确认事实生成结构化 draft_json 和 Markdown 摘要，写入 step_states.step6.preview_markdown，并设置 preview_ready=true、awaiting_confirm=true、confirmed=false、step6_confirmed=false、render_ready=false；reply 必须展示摘要并询问是否需要修改。
+9. 用户提出修改时，只修改其明确要求的内容，更新 draft_json 和 preview_markdown，增加 revision_count，并保持 awaiting_confirm=true、confirmed=false、step6_confirmed=false、render_ready=false；修改后再次展示摘要并等待确认。
+10. 只有用户明确表示无需修改、确认内容或确认生成时，才设置 step_states.step6.confirmed=true、awaiting_confirm=false、step6_confirmed=true、render_ready=true，并在 reply 中明确提示用户点击“生成简历”生成 HTML 和 PDF。Agent 不得自动调用生成接口。
+11. next_step_suggestion=next 只表示你判断当前阶段已完成；不要依赖页面自动跳转，应在 reply 中自然引导用户自行点击“下一步”。不要为了满足固定流程而强行推进。
+12. 结束工作/项目经历时，必须在事实边界内写入 step_states.step4.finalized_experiences，设置 step_states.step4.active_focus.stage=done，并记录仍缺失的核心维度（如有）。除非 user_skipped=true 或 Grill 已完成至少 2 轮，否则不得结束。reply 要说明本段经历已完成；若还未达到用户计划的经历数量，邀请用户继续描述下一段，否则引导用户点击“下一步”。结束后不得再次提出已经回答过的问题。
 
 [Required JSON Schema]
 {schema_json}
@@ -581,8 +743,12 @@ You MUST follow the provided Skill specification when answering.
             raise RuntimeError("resume-craft agent response is missing wizard_state")
         if not str(parsed.get("reply") or "").strip() and not str(parsed.get("step6_preview_markdown") or "").strip():
             raise RuntimeError("resume-craft agent response is missing reply")
+        previous_wizard_state = context["wizard_state"]
         parsed["wizard_state"] = self._merge_state_patch(
-            context["wizard_state"], parsed["wizard_state"]
+            previous_wizard_state, parsed["wizard_state"]
+        )
+        parsed = self._normalize_grill_state(
+            previous_wizard_state, parsed["wizard_state"], parsed
         )
         return self._normalize_render_ready_state(parsed)
 
