@@ -341,10 +341,12 @@ export function ResumeCraftPage() {
 
     const experienceState = wizardState.step_states.step4;
     const grill = experienceState.active_focus?.grill;
-    if (!grill) return false;
+    const agentMarkedComplete = Boolean(
+      experienceState.active_focus?.stage === "done" && experienceState.finalized_experiences.length > 0
+    );
     return Boolean(
-      grill.user_skipped ||
-      (experienceState.active_focus?.stage === "done" && grill.completed_rounds >= 2)
+      grill?.user_skipped ||
+      agentMarkedComplete
     );
   }, [activeChatStep, messagesByStep, wizardState.step_states.step4]);
 

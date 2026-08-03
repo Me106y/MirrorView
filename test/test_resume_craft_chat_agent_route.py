@@ -265,6 +265,8 @@ def test_agent_prompt_prevents_repeating_answered_grill_questions():
     assert "不得重复" in prompt
     assert "已回答" in prompt
     assert "没有其他补充" in prompt
+    assert "已解决事实维度账本" in prompt
+    assert "同义" in prompt
 
 
 def test_agent_prompt_requires_question_level_grill_state_and_two_round_minimum():
