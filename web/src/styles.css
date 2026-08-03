@@ -669,7 +669,7 @@ a {
 }
 
 .resume-craft-page {
-  padding: 24px 0 84px;
+  padding: 24px 0 156px;
   position: relative;
 }
 
@@ -1394,6 +1394,7 @@ a {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  padding-bottom: 132px;
 }
 
 .resume-craft-chat-head {
@@ -1651,6 +1652,25 @@ a {
   box-shadow: none;
   transition: none;
   align-items: stretch;
+}
+
+.resume-craft-fixed-composer {
+  position: fixed;
+  left: 50%;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 40;
+  width: min(1120px, calc(100vw - 32px));
+  transform: translateX(-50%);
+  padding: 12px 14px 10px;
+  border: 1px solid rgba(170, 181, 191, 0.42);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 14px 34px rgba(31, 45, 58, 0.18);
+  backdrop-filter: blur(12px);
+}
+
+.resume-craft-fixed-composer .resume-craft-readiness-note p {
+  margin: 5px 2px 0;
 }
 
 .resume-craft-chat-input:hover,

@@ -37,7 +37,12 @@ class AIService:
     def _build_platform_llm(self):
         provider = (Config.PLATFORM_PROVIDER or "deepseek").strip().lower() or "deepseek"
         model_name = (Config.PLATFORM_MODEL or "").strip() or Config.DEEPSEEK_MODEL
-        kwargs: Dict[str, Any] = {"temperature": 0.7, "max_retries": 0}
+        kwargs: Dict[str, Any] = {
+            "temperature": 0.7,
+            "max_retries": 0,
+            "max_tokens": 8000,
+            "timeout": 90,
+        }
 
         if provider == "deepseek":
             kwargs["base_url"] = Config.DEEPSEEK_BASE_URL
@@ -82,11 +87,10 @@ class AIService:
 
         kwargs: Dict[str, Any] = {
             "temperature": 0.2,
-            # The agent returns the full wizard state in the same JSON object.
-            # Detailed experience evidence can otherwise truncate that object.
-            "max_tokens": 3000,
+            # Chat state and generated resume HTML both need room for structured output.
+            "max_tokens": 8000,
             "streaming": False,
-            "timeout": 45,
+            "timeout": 90,
             "max_retries": 0,
         }
 

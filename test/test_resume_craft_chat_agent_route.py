@@ -60,7 +60,23 @@ def test_resume_craft_runtime_allows_long_structured_agent_response(monkeypatch)
         }
     )
 
-    assert captured["max_tokens"] >= 3000
+    assert captured["max_tokens"] >= 8000
+
+
+def test_platform_runtime_allows_full_resume_html_response(monkeypatch):
+    captured = {}
+
+    def fake_model(provider, model_name, **kwargs):
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setattr(ModelFactory, "get_model", fake_model)
+    service = object.__new__(AIService)
+
+    service._build_platform_llm()
+
+    assert captured["max_tokens"] >= 8000
+    assert captured["timeout"] >= 90
 
 
 def test_chat_turn_delegates_semantic_decision_to_agent(monkeypatch):

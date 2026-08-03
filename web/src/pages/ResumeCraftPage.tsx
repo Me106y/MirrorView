@@ -309,6 +309,13 @@ export function ResumeCraftPage() {
 
   const activeChatStep = step >= 3 ? (step as ChatStep) : null;
 
+  const canAdvanceChatStep = useMemo(() => {
+    if (!activeChatStep) return false;
+    return messagesByStep[activeChatStep].some(
+      (message) => message.role === "user" && message.content.trim().length > 0
+    );
+  }, [activeChatStep, messagesByStep]);
+
   const canGenerate = useMemo(() => {
     const draft = wizardState.step_states.step6?.draft_json;
     const hasDraft = Boolean(draft && Object.keys(draft).length > 0);
@@ -1128,7 +1135,7 @@ export function ResumeCraftPage() {
                       <button type="button" className="ghost-btn resume-craft-back-btn resume-craft-chat-nav-btn" onClick={goPrev}>上一步</button>
                       <button type="button" className="ghost-btn resume-craft-restart-btn resume-craft-chat-nav-btn" onClick={onRestartCurrentChat} disabled={chatLoading || renderLoading || step !== chatStep}>重新开始</button>
                       {chatStep < 5 ? (
-                        <button type="button" className="primary-btn resume-craft-next-btn resume-craft-chat-nav-btn" onClick={goNext} disabled={step !== chatStep}>下一步</button>
+                        <button type="button" className="primary-btn resume-craft-next-btn resume-craft-chat-nav-btn" onClick={goNext} disabled={step !== chatStep || !canAdvanceChatStep || chatLoading}>下一步</button>
                       ) : null}
                     </div>
                   </header>
@@ -1192,21 +1199,6 @@ export function ResumeCraftPage() {
                     ) : null}
                   </div>
 
-                  <form className="chat-input resume-craft-chat-input" onSubmit={onSendChat}>
-                    <input
-                      value={step === chatStep ? chatInput : ""}
-                      onChange={(e) => setChatInput(e.target.value)}
-                      placeholder={CHAT_INPUT_PLACEHOLDERS[chatStep]}
-                      disabled={step !== chatStep}
-                      aria-label="输入当前步骤信息"
-                    />
-                    <button className="primary-btn resume-craft-send-btn" disabled={step !== chatStep || !chatInput.trim() || chatLoading || renderLoading}>发送</button>
-                  </form>
-
-                  <div className="resume-craft-readiness-note">
-                    {step === chatStep ? <p>对话状态由 Agent 根据语义和已确认内容维护。</p> : <p>切换到本步骤后可继续对话。</p>}
-                  </div>
-
                   {chatStep === 5 ? (
                     <div className="resume-craft-step-actions">
                       <button type="button" className="primary-btn resume-craft-next-btn" disabled={!canGenerate} onClick={() => void renderResume()}>
@@ -1219,6 +1211,24 @@ export function ResumeCraftPage() {
             )}
           </div>
         </div>
+
+        {activeChatStep ? (
+          <div className="resume-craft-fixed-composer">
+            <form className="chat-input resume-craft-chat-input" onSubmit={onSendChat}>
+              <input
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                placeholder={CHAT_INPUT_PLACEHOLDERS[activeChatStep]}
+                disabled={chatLoading || renderLoading}
+                aria-label="输入当前步骤信息"
+              />
+              <button className="primary-btn resume-craft-send-btn" disabled={!chatInput.trim() || chatLoading || renderLoading}>发送</button>
+            </form>
+            <div className="resume-craft-readiness-note">
+              <p>对话状态由 Agent 根据语义和已确认内容维护。</p>
+            </div>
+          </div>
+        ) : null}
 
         {result.kind === "error" ? (
           <section className="surface resume-craft-output resume-craft-result-error" style={{ marginTop: 14 }}>
