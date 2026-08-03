@@ -679,8 +679,11 @@ a {
 }
 
 .resume-craft-wizard-viewport {
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  max-height: calc(100dvh - 32px);
   border-radius: 22px;
+  scrollbar-gutter: stable;
   transition: height 280ms ease;
 }
 
@@ -1574,7 +1577,11 @@ a {
   border: 1px solid rgba(170, 181, 191, 0.3);
   background: #f8f8f6;
   min-height: 360px;
-  max-height: 58vh;
+}
+
+.chat-log.resume-craft-chat-log {
+  max-height: none;
+  overflow: visible;
 }
 
 .resume-craft-chat-log .msg {

@@ -35,6 +35,10 @@ const TEMPLATE_OPTIONS = [
   { value: "07", label: "优雅对称" },
 ];
 
+function templateLabel(code: string) {
+  return TEMPLATE_OPTIONS.find((item) => item.value === normalizeTemplateCodeForUI(code))?.label || "未选择模板";
+}
+
 const LANGUAGE_OPTIONS = [
   { value: "zh", label: "中文" },
   { value: "en", label: "英文" },
@@ -911,10 +915,10 @@ export function ResumeCraftPage() {
                 </header>
 
                 <div className="resume-craft-param-brief">
-                  <button type="button" className="resume-craft-pill-btn" aria-expanded={expandedPill === 'template'} onClick={() => setExpandedPill(expandedPill === 'template' ? null : 'template')}>模板 {profile.template_code}</button>
+                  <button type="button" className="resume-craft-pill-btn" aria-expanded={expandedPill === 'template'} onClick={() => setExpandedPill(expandedPill === 'template' ? null : 'template')}>{templateLabel(profile.template_code)}</button>
                   <button type="button" className="resume-craft-pill-btn" aria-expanded={expandedPill === 'language'} onClick={() => setExpandedPill(expandedPill === 'language' ? null : 'language')}>{profile.language === "zh" ? "中文" : profile.language === "en" ? "英文" : "中英文双版"}</button>
                   <button type="button" className="resume-craft-pill-btn" aria-expanded={expandedPill === 'photo'} onClick={() => setExpandedPill(expandedPill === 'photo' ? null : 'photo')}>{photoDataUrl ? "放照片" : "不放照片"}</button>
-                  <button type="button" className="resume-craft-pill-btn" aria-expanded={expandedPill === 'targetRole'} onClick={() => setExpandedPill(expandedPill === 'targetRole' ? null : 'targetRole')}>岗位 {profile.target_role || "未填写"}</button>
+                  <button type="button" className="resume-craft-pill-btn" aria-expanded={expandedPill === 'targetRole'} onClick={() => setExpandedPill(expandedPill === 'targetRole' ? null : 'targetRole')}>{profile.target_role || "未填写"}</button>
                 </div>
                 {expandedPill === 'template' && (
                   <div className="resume-craft-pill-panel">
@@ -1111,7 +1115,6 @@ export function ResumeCraftPage() {
                 <>
                   <header className="resume-craft-chat-head">
                     <div className="resume-craft-chat-head-left">
-                      <span className="resume-craft-step-tag">Step {chatStep} / 5</span>
                       <h2>{STEP_TITLES[chatStep]}</h2>
                       <p>{CHAT_STEP_DESCRIPTIONS[chatStep]}</p>
                       <div className="resume-craft-head-divider" />
@@ -1126,10 +1129,10 @@ export function ResumeCraftPage() {
                   </header>
 
                   <div className="resume-craft-param-brief">
-                    <button type="button" className="resume-craft-pill-btn" aria-expanded={expandedPill === 'template'} onClick={() => setExpandedPill(expandedPill === 'template' ? null : 'template')}>模板 {profile.template_code}</button>
+                    <button type="button" className="resume-craft-pill-btn" aria-expanded={expandedPill === 'template'} onClick={() => setExpandedPill(expandedPill === 'template' ? null : 'template')}>{templateLabel(profile.template_code)}</button>
                     <button type="button" className="resume-craft-pill-btn" aria-expanded={expandedPill === 'language'} onClick={() => setExpandedPill(expandedPill === 'language' ? null : 'language')}>{profile.language === "zh" ? "中文" : profile.language === "en" ? "英文" : "中英文双版"}</button>
                     <button type="button" className="resume-craft-pill-btn" aria-expanded={expandedPill === 'photo'} onClick={() => setExpandedPill(expandedPill === 'photo' ? null : 'photo')}>{photoDataUrl ? "放照片" : "不放照片"}</button>
-                    <button type="button" className="resume-craft-pill-btn" aria-expanded={expandedPill === 'targetRole'} onClick={() => setExpandedPill(expandedPill === 'targetRole' ? null : 'targetRole')}>岗位 {profile.target_role || "未填写"}</button>
+                    <button type="button" className="resume-craft-pill-btn" aria-expanded={expandedPill === 'targetRole'} onClick={() => setExpandedPill(expandedPill === 'targetRole' ? null : 'targetRole')}>{profile.target_role || "未填写"}</button>
                     {chatStep === 3 ? <span className="resume-craft-pill">经历进度 {wizardState.step_states.step4.finalized_experiences.length}/{profile.expected_experience_count}</span> : null}
                   </div>
                   {expandedPill === 'template' && (
