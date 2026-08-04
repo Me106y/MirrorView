@@ -163,6 +163,29 @@ const EMPTY_WIZARD: ResumeCraftWizardState = {
   },
 };
 
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function mergeWizardState(
+  base: ResumeCraftWizardState,
+  patch: unknown,
+): ResumeCraftWizardState {
+  const mergeValue = (current: unknown, next: unknown): unknown => {
+    if (!isPlainRecord(current) || !isPlainRecord(next)) {
+      return next === undefined ? current : next;
+    }
+
+    const merged: Record<string, unknown> = { ...current };
+    Object.entries(next).forEach(([key, value]) => {
+      merged[key] = mergeValue(merged[key], value);
+    });
+    return merged;
+  };
+
+  return mergeValue(base, patch) as ResumeCraftWizardState;
+}
+
 const EMPTY_EDUCATION: EducationItem = {
   school: "",
   major: "",
@@ -369,7 +392,9 @@ export function ResumeCraftPage() {
   const [photoHint, setPhotoHint] = useState("");
   const [photoLoading, setPhotoLoading] = useState(false);
 
-  const [wizardState, setWizardState] = useState<ResumeCraftWizardState>(restoredEditorState?.wizardState ?? EMPTY_WIZARD);
+  const [wizardState, setWizardState] = useState<ResumeCraftWizardState>(() =>
+    mergeWizardState(EMPTY_WIZARD, restoredEditorState?.wizardState),
+  );
   const [messagesByStep, setMessagesByStep] = useState<Record<ChatStep, Msg[]>>(() => {
     return messagesByStepFromConversation(initialCombinedMessages);
   });
@@ -646,9 +671,9 @@ export function ResumeCraftPage() {
         photo_pref: step1Profile.photo_pref,
       })) as Record<string, unknown>;
   
-      const serverReply = String(resp.reply || "").trim();
+      const rawServerReply = String(resp.reply || "").trim();
       const step6PreviewMarkdown = String(resp.step6_preview_markdown || "").trim();
-      if (!serverReply && !step6PreviewMarkdown) {
+      if (!rawServerReply && !step6PreviewMarkdown) {
         throw new Error("Agent response missing reply");
       }
 
@@ -658,7 +683,25 @@ export function ResumeCraftPage() {
       if (resp.next_step_suggestion !== "stay" && resp.next_step_suggestion !== "next") {
         throw new Error("Agent response has invalid next_step_suggestion");
       }
-      const nextWizard = resp.wizard_state as ResumeCraftWizardState;
+      // The Agent contract returns a minimal wizard-state patch. Keep the
+      // previously confirmed preview and other step data when a response only
+      // includes the fields changed in this turn.
+      const nextWizard = mergeWizardState(wizardState, resp.wizard_state);
+      const prematureGeneration = requestBackendStep !== 6
+        && (resp.render_ready === true || resp.action === "confirm" || resp.action === "render_ready");
+      if (prematureGeneration) {
+        // A stale/runtime-mirrored Agent can claim generation during Step4 or
+        // Step5. That response must never unlock rendering or show a terminal
+        // generation message before the conversation reaches Step6.
+        nextWizard.collected_by_step.step6_confirmed = false;
+        nextWizard.step_states.step6.confirmed = false;
+        if (!(requestBackendStep === 5 && resp.step6_waiting_confirm === true)) {
+          nextWizard.step_states.step6.awaiting_confirm = false;
+        }
+      }
+      const serverReply = prematureGeneration && !step6PreviewMarkdown
+        ? "已收到这段信息，我会继续围绕当前阶段整理内容。"
+        : rawServerReply;
       const nextStep6 = nextWizard.step_states?.step6;
       const responseLooksLikePreview = looksLikeResumePreview({
         role: "assistant",
