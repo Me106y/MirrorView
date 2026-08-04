@@ -266,6 +266,34 @@ def test_step3_chat_route_does_not_turn_fenced_agent_json_into_502(monkeypatch):
     assert response.get_json()["reply"].startswith("已收到这段经历")
 
 
+def test_step3_chat_route_recovers_when_model_omits_state(monkeypatch):
+    Config.TURNSTILE_ENFORCE = False
+    Config.RATE_LIMIT_ENFORCE = False
+    agent = CareerForgeAgent(llm=_JsonModel('{"reply":"已收到项目描述。"}'))
+    monkeypatch.setattr(
+        routes.ai_service,
+        "run_resume_craft_chat_turn",
+        lambda payload, runtime=None: agent.run_resume_craft_chat_turn(payload),
+    )
+
+    response = _client().post(
+        "/api/careerforge/resume-craft/chat-turn",
+        json={
+            "message": "基于 LangChain 和 Agentic RAG 构建 AI 面试官，使用 Flask 和 SQLAlchemy，接口响应时间降低 42%。",
+            "current_step": 4,
+            "history": [],
+            "step1_profile": _profile(),
+            "wizard_state": {"current_step": 4},
+            "runtime": {"mode": "byok", "provider": "deepseek", "model": "deepseek-chat", "api_key": "test-key"},
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["reply"] == "已收到项目描述。"
+    assert body["wizard_state"]["current_step"] == 4
+
+
 def test_agent_merges_compact_state_patch_after_user_has_no_more_experience():
     model = _JsonModel(
         '{"reply":"好的，这段经历已记录。请点击页面的“下一步”，我们继续整理技能与证书。",'
@@ -723,19 +751,20 @@ def test_agent_render_ready_normalizes_step6_confirmation_state():
     assert step6["awaiting_confirm"] is False
 
 
-def test_agent_rejects_structurally_invalid_json_without_repair_retry():
+def test_agent_recovers_structurally_incomplete_json_response():
     model = _JsonModel("```json\n{\"reply\": \"需要修复\"}\n```")
     agent = CareerForgeAgent(llm=model)
 
-    with pytest.raises(RuntimeError, match="missing wizard_state"):
-        agent.run_resume_craft_chat_turn(
-            {
-                "message": "我做了一个检索服务。",
-                "current_step": 4,
-                "step1_profile": _profile(),
-                "wizard_state": {},
-                "history": [],
-            }
-        )
+    result = agent.run_resume_craft_chat_turn(
+        {
+            "message": "我做了一个检索服务。",
+            "current_step": 4,
+            "step1_profile": _profile(),
+            "wizard_state": {"current_step": 4},
+            "history": [],
+        }
+    )
 
     assert model.calls == 1
+    assert result["reply"] == "需要修复"
+    assert result["wizard_state"]["current_step"] == 4

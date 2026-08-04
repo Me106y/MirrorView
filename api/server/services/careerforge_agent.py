@@ -756,19 +756,31 @@ You MUST follow the provided Skill specification when answering.
                 "schema_json": schema_json,
             }
         )
+        previous_wizard_state = context["wizard_state"]
         raw_text = str(raw or "").strip()
         parsed = self._safe_json_loads(raw_text)
         if parsed is None or not isinstance(parsed, dict):
             parsed = self._repair_json_output("resume-craft", raw_text, schema_json)
         if parsed is None or not isinstance(parsed, dict):
-            raise RuntimeError("resume-craft agent returned invalid JSON")
-        if not isinstance(parsed, dict):
-            raise RuntimeError("resume-craft agent returned invalid JSON")
+            logger.warning("resume-craft agent returned an unusable structured response; using a safe state-preserving reply")
+            parsed = {}
+
+        # A model can return valid JSON while omitting one or more contract
+        # fields. Preserve the conversation instead of turning that response
+        # into a route-level 502; the next turn can continue from this state.
         if not isinstance(parsed.get("wizard_state"), dict):
-            raise RuntimeError("resume-craft agent response is missing wizard_state")
+            fallback_state = deepcopy(previous_wizard_state) if isinstance(previous_wizard_state, dict) else {}
+            if not fallback_state:
+                fallback_state = {"current_step": payload.get("current_step") or 4}
+            parsed["wizard_state"] = fallback_state
         if not str(parsed.get("reply") or "").strip() and not str(parsed.get("step6_preview_markdown") or "").strip():
-            raise RuntimeError("resume-craft agent response is missing reply")
-        previous_wizard_state = context["wizard_state"]
+            parsed["reply"] = "我已收到这段信息。请继续补充与项目相关的职责、关键行动和结果；如果已经没有更多内容，也可以直接告诉我。"
+        if parsed.get("action") not in {"collect", "advance", "preview", "revise", "confirm", "render_ready"}:
+            parsed["action"] = "collect"
+        if parsed.get("next_step_suggestion") not in {"stay", "next"}:
+            parsed["next_step_suggestion"] = "stay"
+        if not isinstance(parsed.get("missing_fields"), list):
+            parsed["missing_fields"] = []
         parsed["wizard_state"] = self._merge_state_patch(
             previous_wizard_state, parsed["wizard_state"]
         )
