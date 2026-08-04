@@ -1894,10 +1894,14 @@ def careerforge_resume_craft_render():
     wizard_state = data.get("wizard_state") if isinstance(data.get("wizard_state"), dict) else {}
     step_states = wizard_state.get("step_states") if isinstance(wizard_state.get("step_states"), dict) else {}
     step6_state = step_states.get("step6") if isinstance(step_states.get("step6"), dict) else {}
-    if wizard_state:
-        collected_by_step = wizard_state.get("collected_by_step") if isinstance(wizard_state.get("collected_by_step"), dict) else {}
-        if not bool(collected_by_step.get("step6_confirmed")) or not bool(step6_state.get("confirmed")):
-            return jsonify({"error": "not_ready_for_render", "message": "请先完成 Step6 确认后再生成简历。", "meta": meta}), 400
+    collected_by_step = wizard_state.get("collected_by_step") if isinstance(wizard_state.get("collected_by_step"), dict) else {}
+    if (
+        not wizard_state
+        or data.get("render_ready") is not True
+        or collected_by_step.get("step6_confirmed") is not True
+        or step6_state.get("confirmed") is not True
+    ):
+        return jsonify({"error": "not_ready_for_render", "message": "请先完成 Step6 预览确认后再生成简历。", "meta": meta}), 400
 
     input_draft_json = data.get("draft_json") if isinstance(data.get("draft_json"), dict) else step6_state.get("draft_json")
     if not isinstance(input_draft_json, dict) or not input_draft_json:

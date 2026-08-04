@@ -5,7 +5,7 @@ from flask import Flask
 from server import routes
 from server.config import Config
 from server.factories.llm_factory import ModelFactory
-from server.services.careerforge_agent import CareerForgeAgent
+from server.services.agents.resume_craft_agent import ResumeCraftAgent
 from server.services.ai_service import AIService
 
 
@@ -72,7 +72,7 @@ def test_resume_craft_runtime_does_not_force_json_for_html_render(monkeypatch):
 
     monkeypatch.setattr(ModelFactory, "get_model", fake_model)
     monkeypatch.setattr(
-        CareerForgeAgent,
+        ResumeCraftAgent,
         "run_resume_craft_html",
         lambda self, payload: "<!DOCTYPE html><html><body>ok</body></html>",
     )
@@ -187,7 +187,7 @@ def test_agent_loads_skill_and_returns_structured_state():
         '"wizard_state":{"current_step":4},"step6_preview_markdown":"",'
         '"step6_waiting_confirm":false,"step6_applied_changes":[]}'
     )
-    agent = CareerForgeAgent(llm=model)
+    agent = ResumeCraftAgent(llm=model)
 
     result = agent.run_resume_craft_chat_turn(
         {
@@ -216,7 +216,7 @@ def test_resume_craft_agent_accepts_fenced_json_response():
         '"step6_applied_changes":[]}\n'
         '```'
     )
-    agent = CareerForgeAgent(llm=model)
+    agent = ResumeCraftAgent(llm=model)
 
     result = agent.run_resume_craft_chat_turn({
         "message": "我负责实现面试问答服务。",
@@ -232,7 +232,7 @@ def test_resume_craft_agent_accepts_fenced_json_response():
 def test_step3_chat_route_does_not_turn_fenced_agent_json_into_502(monkeypatch):
     Config.TURNSTILE_ENFORCE = False
     Config.RATE_LIMIT_ENFORCE = False
-    agent = CareerForgeAgent(
+    agent = ResumeCraftAgent(
         llm=_JsonModel(
             '```json\n'
             '{"reply":"已收到这段经历，请继续补充关键结果。",'
@@ -269,7 +269,7 @@ def test_step3_chat_route_does_not_turn_fenced_agent_json_into_502(monkeypatch):
 def test_step3_chat_route_recovers_when_model_omits_state(monkeypatch):
     Config.TURNSTILE_ENFORCE = False
     Config.RATE_LIMIT_ENFORCE = False
-    agent = CareerForgeAgent(llm=_JsonModel('{"reply":"已收到项目描述。"}'))
+    agent = ResumeCraftAgent(llm=_JsonModel('{"reply":"已收到项目描述。"}'))
     monkeypatch.setattr(
         routes.ai_service,
         "run_resume_craft_chat_turn",
@@ -308,7 +308,7 @@ def test_agent_merges_compact_state_patch_after_user_has_no_more_experience():
         "chat_history_by_step": {"step4": ["很长的历史"], "step5": []},
         "step_states": {"step4": {"confirmed": False, "drafts": ["保留草稿"]}},
     }
-    agent = CareerForgeAgent(llm=model)
+    agent = ResumeCraftAgent(llm=model)
 
     result = agent.run_resume_craft_chat_turn(
         {
@@ -335,7 +335,7 @@ def test_agent_prompt_prevents_repeating_answered_grill_questions():
         '"wizard_state":{},"step6_preview_markdown":"",'
         '"step6_waiting_confirm":false,"step6_applied_changes":[]}'
     )
-    agent = CareerForgeAgent(llm=model)
+    agent = ResumeCraftAgent(llm=model)
 
     agent.run_resume_craft_chat_turn(
         {
@@ -365,7 +365,7 @@ def test_agent_prompt_adapts_technical_grill_to_project_domain():
         '"wizard_state":{},"step6_preview_markdown":"",'
         '"step6_waiting_confirm":false,"step6_applied_changes":[]}'
     )
-    agent = CareerForgeAgent(llm=model)
+    agent = ResumeCraftAgent(llm=model)
 
     agent.run_resume_craft_chat_turn(
         {
@@ -399,7 +399,7 @@ def test_agent_prompt_requires_question_level_grill_state_and_two_round_minimum(
         '"render_ready":false,"missing_fields":[],"wizard_state":{},'
         '"step6_preview_markdown":"","step6_waiting_confirm":false,"step6_applied_changes":[]}'
     )
-    agent = CareerForgeAgent(llm=model)
+    agent = ResumeCraftAgent(llm=model)
     agent.run_resume_craft_chat_turn({
         "message": "继续。",
         "current_step": 4,
@@ -428,7 +428,7 @@ def test_agent_grill_keeps_round_open_until_every_question_is_answered():
         '{"id":"q4","text":"结果如何？","dimension":"result","status":"open"}]}}}}},'
         '"step6_preview_markdown":"","step6_waiting_confirm":false,"step6_applied_changes":[]}'
     )
-    agent = CareerForgeAgent(llm=model)
+    agent = ResumeCraftAgent(llm=model)
     existing_state = {
         "current_step": 4,
         "step_states": {"step4": {"active_focus": {"grill": {
@@ -469,7 +469,7 @@ def test_agent_grill_completes_a_round_only_after_all_questions_close():
         '{"id":"q2","text":"你的职责？","dimension":"role","status":"answered"}]}}}}},'
         '"step6_preview_markdown":"","step6_waiting_confirm":false,"step6_applied_changes":[]}'
     )
-    agent = CareerForgeAgent(llm=model)
+    agent = ResumeCraftAgent(llm=model)
     result = agent.run_resume_craft_chat_turn({
         "message": "第2个问题也补充完了。",
         "current_step": 4,
@@ -498,7 +498,7 @@ def test_agent_grill_does_not_finish_before_two_rounds():
         '"pending_questions":[]}}}}},'
         '"step6_preview_markdown":"","step6_waiting_confirm":false,"step6_applied_changes":[]}'
     )
-    agent = CareerForgeAgent(llm=model)
+    agent = ResumeCraftAgent(llm=model)
     result = agent.run_resume_craft_chat_turn({
         "message": "这一轮没有更多补充了。",
         "current_step": 4,
@@ -525,7 +525,7 @@ def test_agent_grill_does_not_finish_with_open_questions_even_at_round_limit():
         '"pending_questions":[{"id":"q4","text":"结果如何？","dimension":"result","status":"open"}]}}}}},'
         '"step6_preview_markdown":"","step6_waiting_confirm":false,"step6_applied_changes":[]}'
     )
-    agent = CareerForgeAgent(llm=model)
+    agent = ResumeCraftAgent(llm=model)
     result = agent.run_resume_craft_chat_turn({
         "message": "还需要确认结果。",
         "current_step": 4,
@@ -553,7 +553,7 @@ def test_agent_grill_allows_semantic_skip_of_current_project():
         '"pending_questions":[]}}}}},'
         '"step6_preview_markdown":"","step6_waiting_confirm":false,"step6_applied_changes":[]}'
     )
-    agent = CareerForgeAgent(llm=model)
+    agent = ResumeCraftAgent(llm=model)
     result = agent.run_resume_craft_chat_turn({
         "message": "我不想继续回答这段项目的追问了，先跳过。",
         "current_step": 4,
@@ -579,7 +579,7 @@ def test_agent_render_ready_adds_generation_guidance_when_model_omits_it():
         '"draft_json":{"target_role":"AI应用开发"}}},"collected_by_step":{"step6_confirmed":true}},'
         '"step6_preview_markdown":"# 简历摘要","step6_waiting_confirm":false,"step6_applied_changes":[]}'
     )
-    agent = CareerForgeAgent(llm=model)
+    agent = ResumeCraftAgent(llm=model)
     result = agent.run_resume_craft_chat_turn({
         "message": "确认预览内容。",
         "current_step": 6,
@@ -587,7 +587,8 @@ def test_agent_render_ready_adds_generation_guidance_when_model_omits_it():
         "wizard_state": {"current_step": 6},
         "history": [],
     })
-    assert "点击“生成简历”" in result["reply"]
+    assert "生成 HTML 和 PDF" in result["reply"]
+    assert "点击“生成简历”" not in result["reply"]
 
 
 def test_agent_does_not_unlock_step6_from_step5_confirmation():
@@ -599,7 +600,7 @@ def test_agent_does_not_unlock_step6_from_step5_confirmation():
         '"collected_by_step":{"step6_confirmed":true}},"step6_preview_markdown":"# 摘要",'
         '"step6_waiting_confirm":false,"step6_applied_changes":[]}'
     )
-    agent = CareerForgeAgent(llm=model)
+    agent = ResumeCraftAgent(llm=model)
 
     result = agent.run_resume_craft_chat_turn({
         "message": "不用修改。",
@@ -631,7 +632,7 @@ def test_agent_step5_confirms_existing_preferences_and_prepares_preview():
         '"step6_preview_markdown":"# 简历摘要\\n\\n- 模板：极简主义\\n- 语言：中文\\n- 照片：不放照片",'
         '"step6_waiting_confirm":true,"step6_applied_changes":[]}'
     )
-    agent = CareerForgeAgent(llm=model)
+    agent = ResumeCraftAgent(llm=model)
 
     result = agent.run_resume_craft_chat_turn(
         {
@@ -674,7 +675,7 @@ def test_agent_closes_experience_when_user_has_no_more_to_add():
         '"missing_fields":[],"active_focus":{"stage":"done"}}}},'
         '"step6_preview_markdown":"","step6_waiting_confirm":false,"step6_applied_changes":[]}'
     )
-    agent = CareerForgeAgent(llm=model)
+    agent = ResumeCraftAgent(llm=model)
 
     result = agent.run_resume_craft_chat_turn(
         {
@@ -711,7 +712,7 @@ def test_agent_step5_preview_returns_structured_summary_without_render_ready():
         '"step6_preview_markdown":"# 简历摘要\\n\\n- 目标岗位：AI应用开发",'
         '"step6_waiting_confirm":true,"step6_applied_changes":[]}'
     )
-    agent = CareerForgeAgent(llm=model)
+    agent = ResumeCraftAgent(llm=model)
 
     result = agent.run_resume_craft_chat_turn(
         {
@@ -744,7 +745,7 @@ def test_agent_step5_revision_keeps_generation_locked_until_confirmation():
         '"step6_preview_markdown":"# 简历摘要\\n\\n- 重点：项目成果",'
         '"step6_waiting_confirm":true,"step6_applied_changes":["突出项目成果"]}'
     )
-    agent = CareerForgeAgent(llm=model)
+    agent = ResumeCraftAgent(llm=model)
 
     result = agent.run_resume_craft_chat_turn(
         {
@@ -776,7 +777,7 @@ def test_agent_step5_confirmation_unlocks_generation():
         '"step6_preview_markdown":"# 简历摘要","step6_waiting_confirm":false,'
         '"step6_applied_changes":[]}'
     )
-    agent = CareerForgeAgent(llm=model)
+    agent = ResumeCraftAgent(llm=model)
 
     result = agent.run_resume_craft_chat_turn(
         {
@@ -798,7 +799,7 @@ def test_agent_step5_confirmation_unlocks_generation():
     assert result["wizard_state"]["step_states"]["step6"]["confirmed"] is True
 
 
-def test_agent_render_ready_normalizes_step6_confirmation_state():
+def test_agent_render_ready_does_not_synthesize_step6_confirmation_state():
     model = _JsonModel(
         '{"reply":"预览已确认，可以生成简历。",'
         '"action":"confirm","next_step_suggestion":"stay","render_ready":true,'
@@ -807,7 +808,7 @@ def test_agent_render_ready_normalizes_step6_confirmation_state():
         '"step6_preview_markdown":"# 简历摘要",'
         '"step6_waiting_confirm":false,"step6_applied_changes":[]}'
     )
-    agent = CareerForgeAgent(llm=model)
+    agent = ResumeCraftAgent(llm=model)
 
     result = agent.run_resume_craft_chat_turn(
         {
@@ -824,15 +825,14 @@ def test_agent_render_ready_normalizes_step6_confirmation_state():
     )
 
     step6 = result["wizard_state"]["step_states"]["step6"]
-    assert result["render_ready"] is True
-    assert result["wizard_state"]["collected_by_step"]["step6_confirmed"] is True
-    assert step6["confirmed"] is True
-    assert step6["awaiting_confirm"] is False
+    assert result["render_ready"] is False
+    assert result["wizard_state"].get("collected_by_step", {}).get("step6_confirmed") is False
+    assert step6.get("confirmed") is not True
 
 
 def test_agent_recovers_structurally_incomplete_json_response():
     model = _JsonModel("```json\n{\"reply\": \"需要修复\"}\n```")
-    agent = CareerForgeAgent(llm=model)
+    agent = ResumeCraftAgent(llm=model)
 
     result = agent.run_resume_craft_chat_turn(
         {

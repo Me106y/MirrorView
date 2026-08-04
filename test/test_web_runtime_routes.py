@@ -93,6 +93,14 @@ def _resume_craft_draft_json():
     }
 
 
+def _confirmed_render_state():
+    return {
+        "current_step": 6,
+        "collected_by_step": {"step6_confirmed": True},
+        "step_states": {"step6": {"confirmed": True}},
+    }
+
+
 def test_resume_craft_chat_turn_returns_400_for_empty_message():
     Config.TURNSTILE_ENFORCE = False
     Config.RATE_LIMIT_ENFORCE = False
@@ -198,7 +206,8 @@ def test_resume_craft_render_requires_step6_confirmation_with_wizard_state(monke
     client = _client()
     resp = client.post(
         "/api/careerforge/resume-craft/render",
-        json={
+       json={
+            "render_ready": True,
             "draft_json": _resume_craft_draft_json(),
             "step1_profile": {
                 "template_code": "02",
@@ -248,7 +257,8 @@ def test_resume_craft_render_requires_both_step6_confirmation_fields(monkeypatch
     client = _client()
     resp = client.post(
         "/api/careerforge/resume-craft/render",
-        json={
+       json={
+            "render_ready": True,
             "draft_json": _resume_craft_draft_json(),
             "step1_profile": _resume_craft_profile(),
             "wizard_state": {
@@ -276,7 +286,9 @@ def test_resume_craft_render_works_with_step1_profile_and_finalized_experiences(
     client = _client()
     resp = client.post(
         "/api/careerforge/resume-craft/render",
-        json={
+       json={
+            "render_ready": True,
+            "wizard_state": _confirmed_render_state(),
             "draft_json": _resume_craft_draft_json(),
             "step1_profile": {
                 "template_code": "02",
@@ -310,7 +322,9 @@ def test_resume_craft_render_returns_html(monkeypatch):
     client = _client()
     resp = client.post(
         "/api/careerforge/resume-craft/render",
-        json={
+       json={
+            "render_ready": True,
+            "wizard_state": _confirmed_render_state(),
             "draft_json": _resume_craft_draft_json(),
             "history": [
                 {"role": "assistant", "content": "请提供你的项目经历。"},
@@ -340,7 +354,9 @@ def test_resume_craft_render_returns_400_when_photo_missing(monkeypatch):
     client = _client()
     resp = client.post(
         "/api/careerforge/resume-craft/render",
-        json={
+       json={
+            "render_ready": True,
+            "wizard_state": _confirmed_render_state(),
             "draft_json": _resume_craft_draft_json(),
             "history": [{"role": "user", "content": "请生成简历"}],
             "template_code": "02",
@@ -368,7 +384,9 @@ def test_resume_craft_render_injects_photo_data_url(monkeypatch):
     client = _client()
     resp = client.post(
         "/api/careerforge/resume-craft/render",
-        json={
+       json={
+            "render_ready": True,
+            "wizard_state": _confirmed_render_state(),
             "draft_json": _resume_craft_draft_json(),
             "history": [{"role": "user", "content": "请生成简历"}],
             "template_code": "02",
@@ -398,7 +416,9 @@ def test_resume_craft_render_returns_error_when_model_response_is_not_html(monke
     client = _client()
     resp = client.post(
         "/api/careerforge/resume-craft/render",
-        json={
+       json={
+            "render_ready": True,
+            "wizard_state": _confirmed_render_state(),
             "draft_json": _resume_craft_draft_json(),
             "history": [{"role": "user", "content": "请开始生成简历"}],
             "template_code": "06",
@@ -433,7 +453,9 @@ def test_resume_craft_render_extracts_html_from_second_fenced_block(monkeypatch)
     client = _client()
     resp = client.post(
         "/api/careerforge/resume-craft/render",
-        json={
+       json={
+            "render_ready": True,
+            "wizard_state": _confirmed_render_state(),
             "draft_json": _resume_craft_draft_json(),
             "history": [{"role": "user", "content": "请生成简历"}],
             "template_code": "02",
@@ -455,7 +477,9 @@ def test_resume_craft_render_returns_error_when_model_returns_empty(monkeypatch)
     client = _client()
     resp = client.post(
         "/api/careerforge/resume-craft/render",
-        json={
+       json={
+            "render_ready": True,
+            "wizard_state": _confirmed_render_state(),
             "draft_json": _resume_craft_draft_json(),
             "step1_profile": {
                 "template_code": "02",
@@ -495,7 +519,9 @@ def test_resume_craft_render_returns_pdf_payload_when_pdf_generation_succeeds(mo
     client = _client()
     resp = client.post(
         "/api/careerforge/resume-craft/render",
-        json={
+       json={
+            "render_ready": True,
+            "wizard_state": _confirmed_render_state(),
             "draft_json": _resume_craft_draft_json(),
             "history": [{"role": "user", "content": "请生成简历"}],
             "step1_profile": {
@@ -536,7 +562,8 @@ def test_resume_craft_render_rejects_jd_only_facts(monkeypatch):
     client = _client()
     resp = client.post(
         "/api/careerforge/resume-craft/render",
-        json={
+       json={
+            "render_ready": True,
             "step1_profile": {
                 "template_code": "02",
                 "language": "zh",
@@ -602,7 +629,9 @@ def test_resume_craft_render_repairs_unconfirmed_jd_facts_before_rejecting(monke
     client = _client()
     resp = client.post(
         "/api/careerforge/resume-craft/render",
-        json={
+       json={
+            "render_ready": True,
+            "wizard_state": _confirmed_render_state(),
             "draft_json": {
                 **_resume_craft_draft_json(),
                 "experiences": ["负责 Milvus 向量检索。"],
@@ -662,7 +691,8 @@ def test_resume_craft_render_accepts_facts_from_finalized_experiences(monkeypatc
     client = _client()
     resp = client.post(
         "/api/careerforge/resume-craft/render",
-        json={
+       json={
+            "render_ready": True,
             "draft_json": {
                 **_resume_craft_draft_json(),
                 "experiences": ["负责 Flask 后端开发。"],

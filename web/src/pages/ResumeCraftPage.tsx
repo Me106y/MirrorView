@@ -24,6 +24,14 @@ type ResultState = {
   message: string;
 };
 
+type RenderRequest = {
+  template_code?: string;
+  language?: string;
+  wizardState?: ResumeCraftWizardState;
+  conversationMessages?: ResumeCraftConversationMessage[];
+  activeBackendStep?: ResumeCraftBackendStep;
+};
+
 type ResumeCraftRouteState = {
   resumeCraftStep?: number;
   editorState?: ResumeCraftEditorState;
@@ -356,6 +364,7 @@ export function ResumeCraftPage() {
   const educationCarouselRef = useRef<HTMLDivElement | null>(null);
   const previousEducationIndexRef = useRef(0);
   const monthPickerWrapRef = useRef<HTMLDivElement | null>(null);
+  const pendingRenderRef = useRef<RenderRequest | null>(null);
   const rafRef = useRef<number>(0);
   const stepSnapshots = useRef<Record<number, {
     profile: Step1Profile;
@@ -391,14 +400,6 @@ export function ResumeCraftPage() {
   const edu = educationRows[educationIndex];
   const index = educationIndex;
   const activePhase = CHAT_PHASES.find((phase) => phase.step === activeBackendStep) ?? CHAT_PHASES[0];
-
-  const canGenerate = useMemo(() => {
-    const step6 = wizardState.step_states.step6;
-    const draft = step6?.draft_json;
-    const hasDraft = Boolean(draft && Object.keys(draft).length > 0);
-    const confirmed = wizardState.collected_by_step.step6_confirmed === true && step6?.confirmed === true;
-    return activeBackendStep === 6 && confirmed && hasDraft && !renderLoading;
-  }, [activeBackendStep, wizardState, renderLoading]);
 
   useEffect(() => {
     const card = stepRefs.current[step];
@@ -578,6 +579,7 @@ export function ResumeCraftPage() {
     setConversationMessages(nextMessages);
     setMessagesByStep(messagesByStepFromConversation(nextMessages));
     setChatInput("");
+    setResult({ kind: "idle", message: "" });
     setChatLoading(true);
   
     try {
@@ -598,7 +600,7 @@ export function ResumeCraftPage() {
       if (!serverReply && !step6PreviewMarkdown) {
         throw new Error("Agent response missing reply");
       }
-      const assistantReply = [serverReply, step6PreviewMarkdown]
+      const assistantReply = [step6PreviewMarkdown, serverReply]
         .filter(Boolean)
         .join("\n\n");
 
@@ -625,6 +627,21 @@ export function ResumeCraftPage() {
       setConversationMessages(completedMessages);
       setMessagesByStep(messagesByStepFromConversation(completedMessages));
       setActiveBackendStep(nextBackendStep);
+
+      const nextStep6 = nextWizard.step_states?.step6;
+      const nextDraft = nextStep6?.draft_json;
+      const renderReady = resp.render_ready === true
+        && nextBackendStep === 6
+        && nextWizard.collected_by_step?.step6_confirmed === true
+        && nextStep6?.confirmed === true
+        && Boolean(nextDraft && Object.keys(nextDraft).length > 0);
+      if (renderReady) {
+        await renderResume({
+          wizardState: nextWizard,
+          conversationMessages: completedMessages,
+          activeBackendStep: nextBackendStep,
+        });
+      }
     } catch (err) {
       const errorMessage: ResumeCraftConversationMessage = {
         role: "assistant",
@@ -720,29 +737,41 @@ export function ResumeCraftPage() {
     }));
   }, [profile.education]);
 
-  const renderResume = async (overrides?: { template_code?: string; language?: string }) => {
+  const renderResume = async (overrides?: RenderRequest) => {
+    const requested = overrides ?? pendingRenderRef.current ?? {};
+    const currentWizardState = requested.wizardState ?? wizardState;
+    const currentConversationMessages = requested.conversationMessages ?? conversationMessages;
+    const currentBackendStep = requested.activeBackendStep ?? activeBackendStep;
+    const currentStep6 = currentWizardState.step_states?.step6;
+    const currentDraft = currentStep6?.draft_json;
+    const hasDraft = Boolean(currentDraft && Object.keys(currentDraft).length > 0);
+    const confirmed = currentWizardState.collected_by_step?.step6_confirmed === true && currentStep6?.confirmed === true;
+
     if (!accepted) {
+      pendingRenderRef.current = requested;
       setShowConsentPrompt(true);
       return;
     }
-    if (!canGenerate) return;
+    pendingRenderRef.current = null;
+    if (currentBackendStep !== 6 || !confirmed || !hasDraft || renderLoading) return;
     setRenderLoading(true);
     try {
-      const history = toAgentHistory(conversationMessages);
+      const history = toAgentHistory(currentConversationMessages);
       const baseProfile = buildProfilePayload();
       const step1Profile = {
         ...baseProfile,
-        template_code: normalizeTemplateCodeForUI(overrides?.template_code || baseProfile.template_code),
-        language: normalizeLanguageForUI(overrides?.language || baseProfile.language),
+        template_code: normalizeTemplateCodeForUI(requested.template_code || baseProfile.template_code),
+        language: normalizeLanguageForUI(requested.language || baseProfile.language),
       };
       const payload: Record<string, unknown> = {
         history,
         step1_profile: step1Profile,
-        wizard_state: wizardState,
+        wizard_state: currentWizardState,
+        render_ready: true,
         template_code: step1Profile.template_code,
         language: step1Profile.language,
         photo_pref: step1Profile.photo_pref,
-        draft_json: (wizardState.step_states.step6?.draft_json || {}) as Record<string, unknown>,
+        draft_json: (currentDraft || {}) as Record<string, unknown>,
       };
       if (step1Profile.photo_pref === "with_photo") payload.photo_data_url = photoDataUrl;
 
@@ -758,7 +787,12 @@ export function ResumeCraftPage() {
         reportPdfBase64: nextPdfBase64,
         templateCode: step1Profile.template_code,
         language: step1Profile.language,
-        editorState: { wizardState, messagesByStep, conversationMessages, activeBackendStep },
+        editorState: {
+          wizardState: currentWizardState,
+          messagesByStep: messagesByStepFromConversation(currentConversationMessages),
+          conversationMessages: currentConversationMessages,
+          activeBackendStep: currentBackendStep,
+        },
       };
       saveResumeCraftResult(artifact);
       navigate("/resume-craft/result", { state: { artifact } });
@@ -1177,14 +1211,6 @@ export function ResumeCraftPage() {
                   ) : null}
                 </div>
 
-                {canGenerate ? (
-                  <div className="resume-craft-step-actions">
-                    <p className="resume-craft-render-ready-note">预览内容已确认，请点击“生成简历”生成 HTML 和 PDF。</p>
-                    <button type="button" className="primary-btn resume-craft-next-btn" onClick={() => void renderResume()}>
-                      {renderLoading ? "生成中..." : "生成简历"}
-                    </button>
-                  </div>
-                ) : null}
               </>
             )}
           </div>
@@ -1215,7 +1241,6 @@ export function ResumeCraftPage() {
         {result.kind === "error" ? (
           <section className="surface resume-craft-output resume-craft-result-error" style={{ marginTop: 14 }}>
             <p className="resume-result-error">{result.message}</p>
-            <button type="button" className="ghost-btn" onClick={() => void renderResume()}>重试</button>
           </section>
         ) : null}
       </div>

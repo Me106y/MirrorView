@@ -167,11 +167,11 @@ prefill_policy:
 
 - 初次预览：设置 `preview_ready=true`、`awaiting_confirm=true`、`confirmed=false`、`step6_confirmed=false`、`render_ready=false`。
 - 用户提出修改：只修改明确要求的内容，更新摘要和 `draft_json`，保留 `awaiting_confirm=true`，再次询问是否需要修改。
-- 用户明确确认无需修改或确认生成：设置 `confirmed=true`、`awaiting_confirm=false`、`step6_confirmed=true`、`render_ready=true`，告知用户可以点击“生成简历”。Agent 不自动调用生成接口。
+- 用户明确确认无需修改并表达生成意图：设置 `confirmed=true`、`awaiting_confirm=false`、`step6_confirmed=true`、`render_ready=true`。`step6_preview_markdown` 只包含结构化摘要，`reply` 放在摘要之后，说明已确认并将自动生成 HTML/PDF；不要提示用户点击按钮。Agent 本身不调用 render 接口。
 - Step1 已选择的模板、语言和照片设置视为已确认的当前选择。进入确认与偏好阶段时，先展示当前选择并请用户确认，不要再次要求用户选择模板、语言或照片；除非用户明确提出修改，否则不要重新列出选择题。
 - 当后端 `current_step=5` 的技能信息已经收集完毕，且用户表达“好的”“按当前选择继续”“没有修改”等语义确认时，直接准备 Step6 的未确认预览并返回 `next_step_suggestion=next`，让连续工作区进入 Step6。此过渡回复可以设置 `preview_ready=true`、`awaiting_confirm=true`、`confirmed=false`、`step6_confirmed=false`、`render_ready=false`，但不得生成 HTML、解锁生成按钮或声称已确认；预览仍必须展示摘要并询问是否需要修改。
 - 在后端 `current_step=5` 的普通消息中仍只收集技能、工具、语言能力和证书；只有上述“用户确认当前已有设置”的语义过渡可以直接准备未确认预览。`current_step=6` 才处理一般的最终偏好、预览、修改和确认。
-- 预览只展示结构化事实摘要，不生成 HTML；只有用户确认后，页面的“生成简历”按钮才可用。
+- 预览只展示结构化事实摘要，不生成 HTML；用户确认并表达生成意图后，前端会自动调用现有 render 接口。
 
 ---
 
@@ -225,7 +225,7 @@ prefill_policy:
 
 每次输出必须保留当前轮仍为 `open` 的问题；只有全部问题变为 `answered` 或 `skipped` 后，才可增加 `completed_rounds`。旧状态缺少该对象时按第 0 轮、无待回答问题兼容处理。
 
-`wizard_state` 只需返回本轮必要的最小 JSON 补丁，运行时会将其深度合并到已有状态，不要重复输出未变化的完整历史或聊天记录。不要依赖固定关键词识别“没有更多”、拒答、确认或修改；应根据上下文判断用户意图。`next_step_suggestion=next` 只用于表达语义上的阶段完成，前端会在连续工作区中自动切换阶段，回复应自然说明接下来要收集的内容，不要提示用户点击不存在的阶段按钮。只有用户明确确认预览内容后，才能设置 `step6_confirmed=true` 和 `render_ready=true`，并在 `reply` 中明确引导用户点击“生成简历”生成 HTML 和 PDF。
+`wizard_state` 只需返回本轮必要的最小 JSON 补丁，运行时会将其深度合并到已有状态，不要重复输出未变化的完整历史或聊天记录。不要依赖固定关键词识别“没有更多”、拒答、确认或修改；应根据上下文判断用户意图。`next_step_suggestion=next` 只用于表达语义上的阶段完成，前端会在连续工作区中自动切换阶段，回复应自然说明接下来要收集的内容，不要提示用户点击不存在的阶段按钮。只有用户明确确认预览并表达生成意图后，才能设置 `step6_confirmed=true` 和 `render_ready=true`；`reply` 必须在 `step6_preview_markdown` 之后说明已确认并自动生成 HTML 和 PDF，不得出现“点击生成简历”或依赖按钮的文案。
 
 ---
 

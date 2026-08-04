@@ -6,7 +6,11 @@ from langchain_core.messages import HumanMessage
 
 from server.config import Config
 from server.factories.llm_factory import ModelFactory
-from server.services.careerforge_agent import CareerForgeAgent
+from server.services.agents.cover_letter_agent import CoverLetterAgent
+from server.services.agents.job_hunt_agent import JobHuntAgent
+from server.services.agents.mock_interview_agent import MockInterviewAgent
+from server.services.agents.resume_craft_agent import ResumeCraftAgent
+from server.services.agents.resume_match_agent import ResumeMatchAgent
 from server.services.resume_service import ResumeService
 from utils.logger_handler import logger
 
@@ -23,10 +27,14 @@ class AIService:
             self.llm = None
             self._platform_llm_error = str(exc)
             logger.error("Platform LLM initialization failed: %s", exc)
-        self.careerforge_agent = CareerForgeAgent(
+        self.resume_match_agent = ResumeMatchAgent(
             llm=self.llm,
             llm_error=self._platform_llm_error,
         )
+        self.resume_craft_agent = ResumeCraftAgent(llm=self.llm, llm_error=self._platform_llm_error)
+        self.cover_letter_agent = CoverLetterAgent(llm=self.llm, llm_error=self._platform_llm_error)
+        self.job_hunt_agent = JobHuntAgent(llm=self.llm, llm_error=self._platform_llm_error)
+        self.mock_interview_agent = MockInterviewAgent(llm=self.llm, llm_error=self._platform_llm_error)
 
     @staticmethod
     def _runtime_text(value: Any) -> str:
@@ -59,9 +67,19 @@ class AIService:
         runtime: Optional[Dict[str, Any]] = None,
         *,
         json_output: bool = True,
-    ) -> CareerForgeAgent:
+        feature: str = "resume_craft",
+    ):
+        agents = {
+            "resume_match": getattr(self, "resume_match_agent", None),
+            "resume_craft": getattr(self, "resume_craft_agent", None),
+            "cover_letter": getattr(self, "cover_letter_agent", None),
+            "job_hunt": getattr(self, "job_hunt_agent", None),
+            "mock_interview": getattr(self, "mock_interview_agent", None),
+        }
+        if feature not in agents:
+            raise ValueError(f"Unsupported CareerForge feature: {feature}")
         if not runtime:
-            return self.careerforge_agent
+            return agents[feature]
 
         mode = self._runtime_text(runtime.get("mode") or "platform").lower()
         provider = self._runtime_text(runtime.get("provider")).lower()
@@ -84,7 +102,9 @@ class AIService:
                 or (requested_model and requested_model != default_model)
             )
             if not has_override:
-                return self.careerforge_agent
+                if agents[feature] is None:
+                    raise RuntimeError("Feature agent is not initialized")
+                return agents[feature]
         else:
             # Backward compatibility for legacy BYOK path.
             provider = provider or "deepseek"
@@ -119,7 +139,14 @@ class AIService:
             kwargs["base_url"] = base_url or Config.DEEPSEEK_BASE_URL
 
         llm = ModelFactory.get_model(provider, model_name, **kwargs)
-        return CareerForgeAgent(llm=llm)
+        agent_type = {
+            "resume_match": ResumeMatchAgent,
+            "resume_craft": ResumeCraftAgent,
+            "cover_letter": CoverLetterAgent,
+            "job_hunt": JobHuntAgent,
+            "mock_interview": MockInterviewAgent,
+        }[feature]
+        return agent_type(llm=llm)
 
     @staticmethod
     def _normalize_language(language):
@@ -368,7 +395,7 @@ class AIService:
         base_url = self._runtime_text(runtime.get("base_url"))
 
         try:
-            agent = self._build_runtime_agent(runtime)
+            agent = self._build_runtime_agent(runtime, feature="resume_craft")
             llm = agent.llm
             if llm is None:
                 raise RuntimeError(agent.llm_error or "模型初始化失败。")
@@ -388,7 +415,7 @@ class AIService:
             raise RuntimeError("resume-match 仅支持使用用户提供的 API Key 运行。")
 
         try:
-            agent = self._build_runtime_agent(runtime)
+            agent = self._build_runtime_agent(runtime, feature="resume_match")
             result = agent.run_resume_match(payload)
 
             if isinstance(result, dict) and result.get("error"):
@@ -403,14 +430,14 @@ class AIService:
             raise RuntimeError(f"分析请求失败: {str(e)}") from e
 
     def run_resume_craft_chat_turn(self, payload, runtime: Optional[Dict[str, Any]] = None):
-        return self._build_runtime_agent(runtime).run_resume_craft_chat_turn(payload)
+        return self._build_runtime_agent(runtime, feature="resume_craft").run_resume_craft_chat_turn(payload)
 
     def run_resume_craft_html(self, payload, runtime: Optional[Dict[str, Any]] = None):
-        return self._build_runtime_agent(runtime, json_output=False).run_resume_craft_html(payload)
+        return self._build_runtime_agent(runtime, json_output=False, feature="resume_craft").run_resume_craft_html(payload)
 
     def run_cover_letter(self, payload, runtime: Optional[Dict[str, Any]] = None):
         try:
-            return self._build_runtime_agent(runtime).run_cover_letter(payload)
+            return self._build_runtime_agent(runtime, feature="cover_letter").run_cover_letter(payload)
         except Exception as e:
             logger.error("run_cover_letter runtime error: %s", e)
             return {
@@ -420,7 +447,7 @@ class AIService:
 
     def run_job_hunt(self, payload, runtime: Optional[Dict[str, Any]] = None):
         try:
-            return self._build_runtime_agent(runtime).run_job_hunt(payload)
+            return self._build_runtime_agent(runtime, feature="job_hunt").run_job_hunt(payload)
         except Exception as e:
             logger.error("run_job_hunt runtime error: %s", e)
             return {
@@ -429,7 +456,7 @@ class AIService:
             }
 
     def generate_mock_interview_opening(self, job_position, resume_summary="", language="zh"):
-        return self.careerforge_agent.generate_mock_interview_opening(
+        return self.mock_interview_agent.generate_mock_interview_opening(
             job_position,
             resume_summary,
             language=language,
@@ -438,7 +465,7 @@ class AIService:
     def chat_response(self, messages_list, user_input, job_position="General", language="zh"):
         normalized_language = self._normalize_language(language)
         try:
-            return self.careerforge_agent.build_mock_interview_reply(
+            return self.mock_interview_agent.build_mock_interview_reply(
                 messages_list=messages_list,
                 user_input=user_input,
                 job_position=job_position,
@@ -456,7 +483,7 @@ class AIService:
         """
         normalized_language = self._normalize_language(language)
         try:
-            for chunk in self.careerforge_agent.stream_mock_interview_reply(
+            for chunk in self.mock_interview_agent.stream_mock_interview_reply(
                 messages_list=messages_list,
                 user_input=user_input,
                 job_position=job_position,

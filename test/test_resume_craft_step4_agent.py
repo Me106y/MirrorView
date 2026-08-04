@@ -1,4 +1,4 @@
-from server.services.careerforge_agent import CareerForgeAgent
+from server.services.agents.resume_craft_agent import ResumeCraftAgent
 
 
 class _JsonModel:
@@ -17,7 +17,7 @@ def test_resume_craft_agent_returns_skill_driven_state():
         '"wizard_state":{"current_step":4},"step6_preview_markdown":"",'
         '"step6_waiting_confirm":false,"step6_applied_changes":[]}'
     )
-    agent = CareerForgeAgent(llm=model)
+    agent = ResumeCraftAgent(llm=model)
 
     result = agent.run_resume_craft_chat_turn(
         {
