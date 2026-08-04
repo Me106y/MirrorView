@@ -1108,7 +1108,7 @@ export function ResumeCraftPage() {
               <>
                 <header className="resume-craft-chat-head resume-craft-combined-head">
                   <div className="resume-craft-chat-head-left">
-                    <h2>Step{activeBackendStep - 1} {activePhase.label}</h2>
+                    <h2>工作/项目/技能</h2>
                     <p>{CHAT_STEP_DESCRIPTIONS[activePhase.step]}</p>
                     <div className="resume-craft-head-divider" />
                   </div>
@@ -1117,15 +1117,6 @@ export function ResumeCraftPage() {
                     <button type="button" className="ghost-btn resume-craft-restart-btn resume-craft-chat-nav-btn" onClick={onRestartCurrentChat} disabled={chatLoading || renderLoading}>重新开始</button>
                   </div>
                 </header>
-
-                <div className="resume-craft-phase-indicator" aria-label="简历内容整理阶段">
-                  {CHAT_PHASES.map((phase) => (
-                    <div key={phase.step} className={`resume-craft-phase-item ${activeBackendStep === phase.step ? "is-active" : ""} ${activeBackendStep > phase.step ? "is-complete" : ""}`}>
-                      <span className="resume-craft-phase-dot" aria-hidden="true">{activeBackendStep > phase.step ? "✓" : phase.step - 3}</span>
-                      <span>{phase.label}</span>
-                    </div>
-                  ))}
-                </div>
 
                 <div className="resume-craft-param-brief">
                   <button type="button" className="resume-craft-pill-btn" aria-expanded={expandedPill === 'template'} onClick={() => setExpandedPill(expandedPill === 'template' ? null : 'template')}>{templateLabel(profile.template_code)}</button>
