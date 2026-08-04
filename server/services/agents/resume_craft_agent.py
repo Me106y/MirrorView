@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 from copy import deepcopy
 from typing import Any, Dict, Generator, List, Optional
 
@@ -15,6 +16,191 @@ from utils.logger_handler import logger
 
 class ResumeCraftAgent(BaseSkillAgent):
     SKILL_NAME = "resume-craft"
+
+    @staticmethod
+    def _is_generation_intent(message: Any) -> bool:
+        """Recognize a concise request to generate the confirmed resume.
+
+        This guard only runs when an existing preview is awaiting confirmation;
+        preview requests and requests that also ask for edits remain LLM-driven.
+        """
+        value = str(message or "").strip().lower()
+        compact = re.sub(r"[\s\u3000，。！？、；：:,.!?;\"'“”‘’]+", "", value)
+        if not compact or "预览" in compact or any(token in compact for token in ("修改", "补充", "调整", "改一下")):
+            return False
+        exact_phrases = {
+            "生成简历",
+            "请生成简历",
+            "请帮我生成简历",
+            "生成我的简历",
+            "开始生成简历",
+            "确认生成简历",
+            "确认并生成简历",
+            "generate resume",
+            "generateresume",
+        }
+        if compact in exact_phrases:
+            return True
+        return "生成简历" in compact and len(compact) <= 18
+
+    @staticmethod
+    def _history_has_visible_preview(history: Any) -> bool:
+        """Recognize preview bubbles from older snapshots without metadata."""
+        if not isinstance(history, list):
+            return False
+        field_markers = (
+            "目标岗位", "个人信息", "个人简介", "工作经历", "项目经历", "教育背景", "技能与证书", "技能",
+        )
+        preview_markers = ("简历预览", "简历摘要", "简历草稿")
+        generation_guidance_markers = (
+            "输入“生成简历”",
+            '输入"生成简历"',
+            "输入生成简历",
+            "generate resume",
+        )
+        for item in history:
+            if not isinstance(item, dict) or item.get("role") != "assistant":
+                continue
+            if item.get("isPreview") is True:
+                return True
+            content = str(item.get("content") or "")
+            if any(marker in content.lower() for marker in generation_guidance_markers):
+                return True
+            if not any(marker in content for marker in preview_markers):
+                continue
+            if sum(marker in content for marker in field_markers) >= 2:
+                return True
+        return False
+
+    @staticmethod
+    def _fallback_preview_draft(step1_profile: Any, wizard_state: Any) -> dict:
+        """Rebuild a minimal renderable draft for legacy preview snapshots."""
+        profile = step1_profile if isinstance(step1_profile, dict) else {}
+        wizard = wizard_state if isinstance(wizard_state, dict) else {}
+        collected = wizard.get("collected_by_step") if isinstance(wizard.get("collected_by_step"), dict) else {}
+        step_states = wizard.get("step_states") if isinstance(wizard.get("step_states"), dict) else {}
+        step4 = step_states.get("step4") if isinstance(step_states.get("step4"), dict) else {}
+
+        def unique_text(values: Any) -> list[str]:
+            items = values if isinstance(values, list) else [values]
+            output: list[str] = []
+            for value in items:
+                if isinstance(value, dict):
+                    value = " | ".join(
+                        str(value.get(key) or "").strip()
+                        for key in ("school", "major", "degree", "period", "highlights")
+                        if str(value.get(key) or "").strip()
+                    )
+                text = str(value or "").strip()
+                if text and text not in output:
+                    output.append(text[:2400])
+            return output
+
+        personal = profile.get("personal_info") if isinstance(profile.get("personal_info"), dict) else {}
+        education = unique_text(profile.get("education")) + unique_text(collected.get("education"))
+        experiences = unique_text(collected.get("experiences")) + unique_text(step4.get("finalized_experiences"))
+        skills = (
+            unique_text(collected.get("skills_and_certs"))
+            + unique_text(profile.get("skills"))
+            + unique_text(profile.get("certificates"))
+        )
+
+        def dedupe(values: list[str]) -> list[str]:
+            return list(dict.fromkeys(value for value in values if value))
+
+        draft = {
+            "target_role": str(profile.get("target_role") or "").strip(),
+            "personal_info": {
+                "name": str(personal.get("name") or "").strip(),
+                "phone": str(personal.get("phone") or "").strip(),
+                "email": str(personal.get("email") or "").strip(),
+                "city": str(personal.get("city") or "").strip(),
+                "links": unique_text(personal.get("links")),
+            },
+            "education": dedupe(education),
+            "experiences": dedupe(experiences),
+            "skills_and_certs": dedupe(skills),
+            "final_preferences": str(
+                collected.get("final_preferences") or profile.get("focus_points") or ""
+            ).strip(),
+        }
+        return draft if any(
+            value
+            for key, value in draft.items()
+            if key != "personal_info" and value
+        ) or any(draft["personal_info"].values()) else {}
+
+    @classmethod
+    def _normalize_existing_preview_generation(
+        cls,
+        result: dict,
+        previous_wizard_state: Any,
+        user_message: Any,
+        current_step: Any,
+        history: Any = None,
+        step1_profile: Any = None,
+    ) -> dict:
+        """Turn a failed model preview response into a generation response.
+
+        Once the user is looking at a confirmed preview, generating must not
+        create a second draft. The previous draft is authoritative because it
+        is the version the user actually reviewed.
+        """
+        if str(current_step) != "6" or not cls._is_generation_intent(user_message):
+            return result
+        if not isinstance(previous_wizard_state, dict):
+            return result
+        previous_step_states = previous_wizard_state.get("step_states")
+        previous_step6 = previous_step_states.get("step6") if isinstance(previous_step_states, dict) else None
+        history_has_preview = cls._history_has_visible_preview(history)
+        previous_step6 = previous_step6 if isinstance(previous_step6, dict) else {}
+        has_preview_state = (
+            previous_step6.get("preview_ready") is True
+            or bool(str(previous_step6.get("preview_markdown") or "").strip())
+            or history_has_preview
+        )
+        has_pending_preview = (
+            previous_step6.get("awaiting_confirm") is True
+            or previous_step6.get("preview_ready") is True
+            or bool(str(previous_step6.get("preview_markdown") or "").strip())
+            or history_has_preview
+        )
+        if not has_preview_state or not has_pending_preview:
+            return result
+        previous_draft = previous_step6.get("draft_json")
+        if not isinstance(previous_draft, dict) or not previous_draft:
+            previous_draft = cls._fallback_preview_draft(step1_profile, previous_wizard_state)
+        if not isinstance(previous_draft, dict) or not previous_draft:
+            return result
+
+        wizard_state = result.get("wizard_state")
+        if not isinstance(wizard_state, dict):
+            return result
+        step_states = wizard_state.get("step_states")
+        if not isinstance(step_states, dict):
+            step_states = {}
+            wizard_state["step_states"] = step_states
+        step6 = step_states.get("step6")
+        if not isinstance(step6, dict):
+            step6 = {}
+            step_states["step6"] = step6
+
+        step6["draft_json"] = deepcopy(previous_draft)
+        step6["preview_ready"] = True
+        step6["awaiting_confirm"] = False
+        step6["confirmed"] = True
+        wizard_state["current_step"] = 6
+        collected = wizard_state.get("collected_by_step")
+        if not isinstance(collected, dict):
+            collected = {}
+            wizard_state["collected_by_step"] = collected
+        collected["step6_confirmed"] = True
+        result["action"] = "render_ready"
+        result["next_step_suggestion"] = "stay"
+        result["render_ready"] = True
+        result["step6_preview_markdown"] = ""
+        result["step6_waiting_confirm"] = False
+        return result
 
     def run_resume_craft_chat_turn(self, payload: dict) -> dict:
         """Run one stateful resume-craft conversation turn through the loaded skill."""
@@ -63,7 +249,9 @@ class ResumeCraftAgent(BaseSkillAgent):
 4. 当前页面是 Step3/4/5 的连续对话工作区，但后端阶段必须严格区分：`current_step=4` 只处理工作/项目经历，`current_step=5` 只处理技能与证书，`current_step=6` 处理一般的确认、预览和生成前状态。Step1 已选择的模板、语言和照片设置视为已确认的当前选择；当 Step5 技能已收集完毕且用户语义确认按当前选择继续时，可以直接准备未确认的 Step6 预览并返回 `next_step_suggestion=next`，但不得设置确认或生成状态。前端会在 `next_step_suggestion=next` 后自动切换阶段，并将完整 history 传入下一轮；不要把连续页面理解为跳过阶段，也不要要求用户点击不存在的阶段按钮。
 5. Step4 工作/项目经历 Grill 必须维护 `step_states.step4.active_focus.grill`。一次 Agent 输出中的多个问题属于同一轮，必须逐个用 `pending_questions` 的 ID 标记为 answered 或 skipped；仍有 open 问题时不得增加 `completed_rounds`，不得结束项目。每个项目默认至少完成 2 轮、最多 3 轮；第 2 轮完成且事实足够时可以结束，第 3 轮完成后必须结束。只有用户明确表示不想继续回答当前项目时，才设置 `user_skipped=true`、`round_status=skipped` 并结束，不依赖固定关键词。每次生成新问题前，必须依据完整 history 建立并更新 `covered_dimensions` 事实账本，禁止对已回答事实进行同义、上下位或换例子式重复追问。
 6. 可以一次询问多个彼此相关的问题，也可以在问题集合全部回答后进入下一轮；问题应该像职业顾问对话，而不是表单提示。每个问题必须绑定仍缺失且影响简历准确性的高层维度，并将用户已确认的维度和证据写入 `covered_dimensions`；如果用户已经具体回答过某主题，即使没有使用原问题措辞，也必须将其标记为 answered，不得再次生成等价问题。没有 open 问题且核心事实已齐全时，用户语义表示没有更多补充应直接结束当前经历，不要用宽泛问题延长对话。
-7. 维度去重必须按语义覆盖范围执行，而不是按问题文字匹配：`result` 同时覆盖量化成果、效率提升、用户规模、部署效果和业务影响；`collaboration` 同时覆盖团队分工、跨团队沟通、需求变更和协作方式；`challenge` 同时覆盖技术难点、模型稳定性、并发处理、知识库维护、可靠性和解决过程。只要这些信息已经在 history、最新用户消息、`finalized_experiences` 或 `covered_dimensions` 中出现，就视为已覆盖，不能换成更细的例子继续询问。新问题必须绑定一个尚未覆盖的高层维度；如果没有真正缺失的维度，直接完成经历。
+7. 维度去重必须按语义覆盖范围执行，而不是按问题文字匹配：`result` 同时覆盖量化成果、效率提升、用户规模、部署效果和业务影响；`collaboration` 同时覆盖团队分工、跨团队沟通、需求变更和协作方式；`challenge` 同时覆盖技术难点、模型稳定性、并发处理、知识库维护、可靠性和解决过程。只要这些信息已经在 history、最新用户消息、`finalized_experiences` 或 `covered_dimensions` 中出现，就视为已覆盖，不能换成更细的例子继续询问。新问题必须绑定一个尚未覆盖的高层事实维度；如果没有真正缺失的维度，直接完成经历。
+7.1. 防止 Grill 循环：如果上一轮一次提出了“结果 + 团队协作 + 技术挑战”等问题，用户已经逐项回答，必须把这一整组问题标记为 `answered`，并把三个父维度写入 `covered_dimensions`；下一轮不得使用新问题 ID 再次询问同一组，也不得在 reply 中重复这组问题。生成新问题前，要同时检查当前及上一轮已关闭问题的 dimension、文本和完整 history；新 ID 不代表新事实维度。若候选问题全部属于已覆盖维度，且已完成至少 2 轮，直接将经历标记为完成；不要用“还有其他细节吗”或同义问题拖延。
+7.2. 如果历史记录中已经出现过 Grill 问题和用户对该问题的具体回答，即使当前 `wizard_state` 缺少或丢失 `pending_questions`、`covered_dimensions`，也必须将历史中的问题和回答视为只读兜底账本；禁止再次列出同一问题组。运行时会从历史恢复可识别的父维度并过滤模型重复输出，因此 reply 只能保留真正未覆盖的问题或阶段完成提示，不得泄漏已回答问题。
 8. 技术型项目必须先根据项目描述、目标岗位和 JD 的语义识别相关领域，再选择技术追问维度；不要用固定关键词或单一领域模板。每轮围绕一个主题提出 1-3 个相关问题，可从架构与数据流、技术选型、个人贡献、接口/协议、性能、可靠性、安全、监控和技术挑战中选择尚未覆盖且最有价值的维度。音视频项目可酌情提示 RTMP、WebRTC、信令、媒体传输、延迟或编解码；AI/RAG、后端/分布式、前端、数据和 DevOps 项目应优先使用各自相关的技术示例，不要把音视频问题套用到其他项目。
 9. 技术名只能作为候选提示，必须用“是否使用过/是否涉及”等方式向用户确认；用户确认前不得把候选技术写入简历或已确认事实。完整 history 和 `covered_dimensions` 已覆盖的技术或技术维度不得重复追问，即使只是改换技术名、上下位概念或示例。
 10. 严格遵守事实边界，不编造经历、技能、职责或成果。对不清楚的内容先追问或标记为缺失。
@@ -120,8 +308,30 @@ class ResumeCraftAgent(BaseSkillAgent):
         parsed["wizard_state"] = self._merge_state_patch(
             previous_wizard_state, parsed["wizard_state"]
         )
+        normalization_history = list(context["history"]) if isinstance(context["history"], list) else []
+        if context["message"]:
+            last_message = normalization_history[-1] if normalization_history else None
+            if not (
+                isinstance(last_message, dict)
+                and last_message.get("role") == "user"
+                and str(last_message.get("content") or "").strip() == context["message"]
+            ):
+                normalization_history.append({"role": "user", "content": context["message"]})
         parsed = self._normalize_grill_state(
-            previous_wizard_state, parsed["wizard_state"], parsed
+            previous_wizard_state,
+            parsed["wizard_state"],
+            parsed,
+            user_message=context["message"],
+            history=normalization_history,
+            current_step=payload.get("current_step"),
+        )
+        parsed = self._normalize_existing_preview_generation(
+            parsed,
+            previous_wizard_state,
+            context["message"],
+            payload.get("current_step"),
+            history=normalization_history,
+            step1_profile=context["step1_profile"],
         )
         return self._normalize_render_ready_state(parsed, payload.get("current_step"))
 

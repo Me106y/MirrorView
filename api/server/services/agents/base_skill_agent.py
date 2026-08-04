@@ -127,21 +127,305 @@ class BaseSkillAgent:
             seen.add(dimension)
         return dimensions
 
+    @staticmethod
+    def _canonical_grill_dimension(dimension: Any) -> str:
+        """Collapse question labels to the high-level dimensions used for de-duplication."""
+        value = str(dimension or "").strip().lower()
+        if not value:
+            return ""
+        compact = re.sub(r"[\s_\-./:：]+", "", value)
+        aliases = {
+            "result": {"result", "results", "outcome", "impact", "metric", "metrics", "achievement", "businessimpact", "businessvalue", "quantitativeresult", "quantifiedperformance", "userscale", "deploymenteffect", "成果", "结果", "效果", "影响", "量化成果", "业务影响", "用户规模", "部署效果"},
+            "collaboration": {"collaboration", "collaborations", "teamwork", "team", "communication", "coordination", "stakeholderalignment", "cross-team", "cross-teamcommunication", "teamcollaboration", "协作", "团队", "团队协作", "沟通", "跨团队", "需求变更"},
+            "challenge": {"challenge", "challenges", "technicalchallenge", "technicalproblem", "technicaldifficulty", "difficulty", "stability", "concurrency", "reliability", "maintenance", "modelstability", "modelrobustness", "knowledgebasemaintenance", "技术挑战", "挑战", "难点", "稳定性", "并发", "可靠性", "知识库维护"},
+        }
+        for canonical, candidates in aliases.items():
+            compact_candidates = {re.sub(r"[\s_\-./:：]+", "", item) for item in candidates}
+            if value in candidates or compact in compact_candidates:
+                return canonical
+            # Models may return a composite label such as "业务成果/用户规模"
+            # or "技术挑战与稳定性". Those are still the same parent
+            # dimension for de-duplication purposes.
+            if any(len(candidate) >= 2 and candidate in compact for candidate in compact_candidates):
+                return canonical
+        return value[:80]
+
+    @staticmethod
+    def _grill_question_signature(text: Any) -> str:
+        """Create a conservative signature for exact or near-exact repeated questions."""
+        value = str(text or "").strip().lower()
+        return re.sub(r"[\s\u3000，。！？、；：,.!?;:（）()“”\"'‘’]+", "", value)
+
+    @classmethod
+    def _infer_grill_dimension_from_text(cls, text: Any) -> str:
+        """Map a historical question to a broad fact dimension when possible."""
+        value = str(text or "").strip().lower()
+        patterns = {
+            "result": (
+                "成果", "结果", "效果", "影响", "指标", "效率", "响应", "用户", "部署", "上线",
+                "价值", "业务影响", "使用场景", "提升", "提高", "降低", "减少", "增长", "百分比", "%", "ms", "规模",
+            ),
+            "collaboration": (
+                "协作", "团队", "小组", "产品经理", "工程师", "算法", "沟通", "对齐", "分工",
+                "带领", "配合", "跨职能", "跨团队", "需求变更", "成员", "角色",
+            ),
+            "challenge": (
+                "挑战", "难点", "问题", "根因", "解决", "稳定", "并发", "维护", "死循环",
+                "难题", "技术难题", "故障", "排查", "修复", "可靠", "权限控制",
+            ),
+        }
+        for dimension, candidates in patterns.items():
+            if any(candidate.lower() in value for candidate in candidates):
+                return dimension
+        return ""
+
+    @classmethod
+    def _infer_grill_dimensions_from_text(cls, text: Any) -> set:
+        """Collect every broad dimension evidenced by a user answer."""
+        value = str(text or "").strip().lower()
+        patterns = {
+            "result": (
+                "成果", "结果", "效果", "影响", "指标", "效率", "响应", "用户", "部署", "上线",
+                "价值", "业务影响", "使用场景", "提升", "提高", "降低", "减少", "增长", "百分比", "%", "ms", "规模",
+            ),
+            "collaboration": (
+                "协作", "团队", "小组", "产品经理", "工程师", "算法", "沟通", "对齐", "分工",
+                "带领", "配合", "跨职能", "跨团队", "需求变更", "成员", "角色",
+            ),
+            "challenge": (
+                "挑战", "难点", "问题", "根因", "解决", "稳定", "并发", "维护", "死循环",
+                "难题", "技术难题", "故障", "排查", "修复", "可靠",
+            ),
+        }
+        labels = {
+            "result": ("成果", "结果", "效果", "业务影响", "用户规模", "量化指标"),
+            "collaboration": ("协作", "团队协作", "跨团队", "沟通", "对齐", "分工", "合作"),
+            "challenge": ("挑战", "技术挑战", "难点", "技术难题", "模型稳定性", "并发处理", "知识库维护"),
+        }
+        negative_markers = (
+            "还没回答", "尚未回答", "不知道", "不清楚", "不记得", "还需要补充", "需要补充",
+            "还需要确认", "需要确认", "仍需", "待补充", "待确认", "没有补充", "没有其他",
+        )
+        dimensions = set()
+        for dimension, candidates in patterns.items():
+            if not any(candidate.lower() in value for candidate in candidates):
+                continue
+            explicitly_unanswered = any(
+                marker in value[max(0, index - 12): index + len(label) + 12]
+                for label in labels[dimension]
+                for index in [value.find(label)]
+                if index >= 0
+                for marker in negative_markers
+            )
+            if not explicitly_unanswered:
+                dimensions.add(dimension)
+        return dimensions
+
+    @classmethod
+    def _infer_grill_dimensions_from_user_history(cls, history: Any) -> set:
+        """Recover fact dimensions stated before the Agent asked about them."""
+        if not isinstance(history, list):
+            return set()
+        dimensions = set()
+        for item in history:
+            if not isinstance(item, dict) or item.get("role") != "user":
+                continue
+            dimensions.update(cls._infer_grill_dimensions_from_text(item.get("content")))
+        return dimensions
+
+    @classmethod
+    def _infer_historical_completed_rounds(cls, history: Any) -> int:
+        """Recover completed Grill rounds when a model drops its state patch.
+
+        Each assistant turn is one question set. Count only sets whose
+        recognizable questions were answered, and de-duplicate sets that have
+        the same parent dimensions so an already repeated group cannot inflate
+        the round count.
+        """
+        historical_questions = cls._extract_historical_grill_questions(history)
+        if not historical_questions:
+            return 0
+
+        grouped: Dict[str, List[Dict[str, str]]] = {}
+        for question in historical_questions:
+            match = re.match(r"history-q-(\d+)-", question.get("id", ""))
+            if not match:
+                continue
+            grouped.setdefault(match.group(1), []).append(question)
+
+        completed_groups = []
+        seen_dimensions = set()
+        for questions in grouped.values():
+            if not questions or any(item["status"] == "open" for item in questions):
+                continue
+            dimensions = tuple(sorted(
+                dimension
+                for dimension in {
+                    cls._canonical_grill_dimension(item.get("dimension"))
+                    for item in questions
+                }
+                if dimension
+            ))
+            if not dimensions or dimensions in seen_dimensions:
+                continue
+            seen_dimensions.add(dimensions)
+            completed_groups.append(questions)
+        return min(len(completed_groups), 3)
+
+    @classmethod
+    def _extract_historical_grill_questions(cls, history: Any) -> List[Dict[str, str]]:
+        """Recover question-level Grill context when a model omitted its ledger.
+
+        The conversation history is an audit trail, not a replacement for the
+        structured state. This fallback only recovers recognizable technical
+        Grill questions and uses the user messages immediately following each
+        assistant turn to determine whether their parent dimension was answered.
+        """
+        if not isinstance(history, list):
+            return []
+
+        questions: List[Dict[str, str]] = []
+        seen_signatures = set()
+        for assistant_index, message in enumerate(history):
+            if not isinstance(message, dict) or message.get("role") != "assistant":
+                continue
+            content = str(message.get("content") or "").strip()
+            if not content or not re.search(r"[？?]", content):
+                continue
+
+            answer_parts: List[str] = []
+            for following in history[assistant_index + 1:]:
+                if not isinstance(following, dict):
+                    continue
+                if following.get("role") == "assistant":
+                    break
+                if following.get("role") == "user":
+                    answer_parts.append(str(following.get("content") or ""))
+            answer_text = " ".join(answer_parts).strip()
+
+            for question_index, chunk in enumerate(re.split(r"(?<=[？?])", content), start=1):
+                question_text = re.sub(r"\s+", " ", chunk).strip()
+                if not question_text or not re.search(r"[？?]", question_text):
+                    continue
+                dimension = cls._infer_grill_dimension_from_text(question_text)
+                if not dimension:
+                    continue
+                signature = cls._grill_question_signature(question_text)
+                if not signature or signature in seen_signatures:
+                    continue
+                question = {
+                    "id": f"history-q-{assistant_index + 1}-{question_index}",
+                    "text": question_text[:600],
+                    "dimension": dimension,
+                    "status": "open",
+                }
+                if answer_text and dimension in cls._infer_grill_answered_dimensions(answer_text, [question]):
+                    question["status"] = "answered"
+                questions.append(question)
+                seen_signatures.add(signature)
+        return questions
+
+    @classmethod
+    def _infer_grill_answered_dimensions(
+        cls,
+        message: Any,
+        questions: List[Dict[str, str]],
+    ) -> set:
+        """Infer obvious answer coverage only for duplicate-question recovery.
+
+        The LLM remains responsible for normal semantic question-to-answer
+        mapping. This conservative fallback is used when it emits a new open
+        copy of a question that was pending in the previous turn, so a model
+        failure cannot create an endless loop. Partial answers leave the
+        unmatched dimensions open.
+        """
+        text = str(message or "").strip().lower()
+        if not text:
+            return set()
+
+        evidence_patterns = {
+            "result": (
+                "成果", "结果", "效果", "影响", "指标", "效率", "响应", "用户", "部署", "上线",
+                "价值", "业务影响", "使用场景", "提升", "提高", "降低", "减少", "增长", "从", "到", "%", "ms", "万", "人次",
+            ),
+            "collaboration": (
+                "协作", "团队", "小组", "产品经理", "工程师", "算法", "沟通", "对齐", "分工",
+                "带领", "负责与", "配合", "跨职能", "跨团队", "成员", "角色",
+            ),
+            "challenge": (
+                "挑战", "难点", "问题", "根因", "解决", "通过", "优化", "稳定", "并发", "维护",
+                "死循环", "难题", "技术难题", "故障", "排查", "修复", "可靠",
+            ),
+        }
+        label_patterns = {
+            "result": ("成果", "结果", "效果", "业务影响", "用户规模", "量化指标"),
+            "collaboration": ("协作", "团队协作", "跨团队", "沟通", "对齐", "分工", "合作"),
+            "challenge": ("挑战", "技术挑战", "难点", "技术难题", "模型稳定性", "并发处理", "知识库维护"),
+        }
+        negative_markers = ("还没回答", "尚未回答", "不知道", "不清楚", "不记得", "还需要补充", "需要补充", "还需要确认", "需要确认", "仍需", "待补充", "待确认", "没有补充", "没有其他")
+        answered = set()
+        for question in questions:
+            dimension = cls._canonical_grill_dimension(question.get("dimension"))
+            if not dimension:
+                question_text = str(question.get("text") or "").lower()
+                dimension = next(
+                    (
+                        canonical
+                        for canonical, patterns in evidence_patterns.items()
+                        if any(pattern in question_text for pattern in patterns)
+                    ),
+                    "",
+                )
+            if dimension not in evidence_patterns or not any(pattern in text for pattern in evidence_patterns[dimension]):
+                continue
+            is_explicitly_unanswered = any(
+                marker in text[max(0, index - 12): index + len(label) + 12]
+                for label in label_patterns.get(dimension, ())
+                for index in [text.find(label)]
+                if index >= 0
+                for marker in negative_markers
+            )
+            if not is_explicitly_unanswered:
+                answered.add(dimension)
+        return answered
+
     @classmethod
     def _normalize_grill_state(
         cls,
         previous_wizard_state: Any,
         wizard_state: Any,
         result: dict,
+        user_message: Any = "",
+        history: Any = None,
+        current_step: Any = None,
     ) -> dict:
         if not isinstance(wizard_state, dict):
             return result
         step_states = wizard_state.get("step_states")
-        step4 = step_states.get("step4") if isinstance(step_states, dict) else None
-        active_focus = step4.get("active_focus") if isinstance(step4, dict) else None
-        grill = active_focus.get("grill") if isinstance(active_focus, dict) else None
-        if not isinstance(grill, dict):
+        request_is_step4 = str(current_step) == "4"
+        if not isinstance(step_states, dict):
+            if not request_is_step4:
+                return result
+            step_states = {}
+            wizard_state["step_states"] = step_states
+        step4 = step_states.get("step4")
+        if not isinstance(step4, dict):
+            if not request_is_step4:
+                return result
+            step4 = {}
+            step_states["step4"] = step4
+        active_focus = step4.get("active_focus")
+        if not isinstance(active_focus, dict):
+            if not request_is_step4:
+                return result
+            active_focus = {}
+            step4["active_focus"] = active_focus
+        if not isinstance(active_focus, dict):
             return result
+        grill = active_focus.get("grill")
+        if not isinstance(grill, dict):
+            grill = {}
+            active_focus["grill"] = grill
 
         previous_step_states = previous_wizard_state.get("step_states") if isinstance(previous_wizard_state, dict) else None
         previous_step4 = previous_step_states.get("step4") if isinstance(previous_step_states, dict) else None
@@ -149,28 +433,258 @@ class BaseSkillAgent:
         previous_grill = previous_focus.get("grill") if isinstance(previous_focus, dict) else {}
         previous_grill = previous_grill if isinstance(previous_grill, dict) else {}
 
+        def _bounded_count(value: Any, default: int = 0) -> int:
+            try:
+                return max(0, min(int(value), 3))
+            except (TypeError, ValueError):
+                return default
+
         previous_questions = cls._normalize_grill_questions(previous_grill.get("pending_questions"))
         questions = cls._normalize_grill_questions(grill.get("pending_questions"))
+        previous_completed = _bounded_count(previous_grill.get("completed_rounds"))
+        historical_questions = cls._extract_historical_grill_questions(history)
+        if not previous_questions and not previous_grill.get("covered_dimensions"):
+            previous_completed = max(
+                previous_completed,
+                cls._infer_historical_completed_rounds(history),
+            )
+        historical_answered_dimensions = {
+            cls._canonical_grill_dimension(item["dimension"])
+            for item in historical_questions
+            if item["status"] == "answered"
+        }
+        historical_user_answered_dimensions = {
+            cls._canonical_grill_dimension(item)
+            for item in cls._infer_grill_dimensions_from_user_history(history)
+            if cls._canonical_grill_dimension(item)
+        }
+        answered_dimensions = cls._infer_grill_answered_dimensions(
+            user_message,
+            previous_questions + [item for item in historical_questions if item["status"] == "open"],
+        )
+        if previous_completed >= 2:
+            answered_dimensions.update(cls._infer_grill_dimensions_from_text(user_message))
+        answered_dimensions.update(item for item in historical_answered_dimensions if item)
+        answered_dimensions.update(historical_user_answered_dimensions)
+        previous_questions_by_signature = {
+            cls._grill_question_signature(item["text"]): item
+            for item in previous_questions
+            if cls._grill_question_signature(item["text"])
+        }
+        previous_open_by_dimension = {}
+        for item in previous_questions:
+            if item["status"] != "open":
+                continue
+            dimension = cls._canonical_grill_dimension(item["dimension"])
+            if dimension:
+                previous_open_by_dimension.setdefault(dimension, item)
         previous_covered = cls._normalize_grill_covered_dimensions(
             previous_grill.get("covered_dimensions")
         )
         covered = cls._normalize_grill_covered_dimensions(grill.get("covered_dimensions"))
-        covered_by_dimension = {item["dimension"]: item for item in covered}
+        covered_by_dimension = {}
+        for item in covered:
+            canonical = cls._canonical_grill_dimension(item["dimension"])
+            if canonical:
+                item["dimension"] = canonical
+                covered_by_dimension.setdefault(canonical, item)
         for item in previous_covered:
-            covered_by_dimension.setdefault(item["dimension"], item)
+            canonical = cls._canonical_grill_dimension(item["dimension"])
+            if canonical:
+                item["dimension"] = canonical
+                covered_by_dimension.setdefault(canonical, item)
+        # A user answer must close the matching dimensions from an existing
+        # question set before the model's replacement questions are examined.
+        # This is important at the end of round 1: waiting until round 2 would
+        # let the model reopen the just-answered result/team/challenge group.
+        # With no previous questions, this remains a project description and
+        # must not be treated as a completed Grill answer set.
+        if previous_questions or previous_completed >= 2:
+            previous_question_evidence = {
+                cls._canonical_grill_dimension(item["dimension"]): item["text"]
+                for item in previous_questions
+                if item.get("dimension")
+            }
+            for dimension in answered_dimensions:
+                covered_by_dimension.setdefault(
+                    dimension,
+                    {
+                        "dimension": dimension,
+                        "evidence": previous_question_evidence.get(dimension)
+                        or str(user_message or "").strip()[:800]
+                        or "本轮用户回答已覆盖该事实维度",
+                    },
+                )
+        for item in historical_questions:
+            if item["status"] == "answered" and item["dimension"]:
+                canonical = cls._canonical_grill_dimension(item["dimension"])
+                if canonical:
+                    covered_by_dimension.setdefault(
+                        canonical,
+                        {"dimension": canonical, "evidence": "已在对话历史中回答该问题"},
+                    )
         # Closing a question also closes its high-level dimension. This keeps
         # old states useful before the model starts returning the ledger.
         for question in questions:
             if question["status"] in {"answered", "skipped"} and question["dimension"]:
+                question["dimension"] = cls._canonical_grill_dimension(question["dimension"])
                 covered_by_dimension.setdefault(
                     question["dimension"],
                     {"dimension": question["dimension"], "evidence": question["text"]},
                 )
+        for question in previous_questions:
+            if question["status"] in {"answered", "skipped"} and question["dimension"]:
+                canonical = cls._canonical_grill_dimension(question["dimension"])
+                if canonical:
+                    covered_by_dimension.setdefault(
+                        canonical,
+                        {"dimension": canonical, "evidence": question["text"]},
+                    )
+        for dimension in historical_user_answered_dimensions:
+            covered_by_dimension.setdefault(
+                dimension,
+                {"dimension": dimension, "evidence": "用户已在更早的对话中提供该事实"},
+            )
+
+        # Coalesce a model-generated replacement question with the pending
+        # question from the previous turn. New IDs must not create a second
+        # copy of the same prompt. If the user's latest answer clearly covers
+        # the parent dimension, close the old question; otherwise retain it as
+        # open and restore the original wording below.
+        coalesced_open_question = False
+        coalesced_question = False
+        previous_question_ids = {item["id"] for item in previous_questions}
+        has_new_question = False
+        for question in questions:
+            question["dimension"] = cls._canonical_grill_dimension(question["dimension"])
+            signature = cls._grill_question_signature(question["text"])
+            previous_match = previous_questions_by_signature.get(signature)
+            if previous_match is None:
+                previous_match = previous_open_by_dimension.get(question["dimension"])
+            if previous_match is None or previous_match["status"] != "open":
+                has_new_question = has_new_question or question["id"] not in previous_question_ids
+                continue
+            coalesced_question = True
+            question["id"] = previous_match["id"]
+            question["text"] = previous_match["text"]
+            question["dimension"] = cls._canonical_grill_dimension(previous_match["dimension"])
+            if question["status"] in {"answered", "skipped"} or question["dimension"] in answered_dimensions:
+                question["status"] = "skipped" if question["status"] == "skipped" else "answered"
+            else:
+                question["status"] = "open"
+                coalesced_open_question = True
+
         covered = list(covered_by_dimension.values())
         questions_by_id = {item["id"]: item for item in questions}
         previous_open = {
             item["id"]: item for item in previous_questions if item["status"] == "open"
         }
+
+        # A new model turn must not reopen a dimension that was already closed
+        # in the preceding turn. This is the runtime guard for a common loop:
+        # the model acknowledges a user's answers, then emits the same result,
+        # collaboration, and challenge questions with new IDs.
+        covered_dimensions = set(covered_by_dimension)
+        previous_question_signatures = {
+            cls._grill_question_signature(item["text"]): item
+            for item in previous_questions
+            if item["status"] in {"answered", "skipped"}
+        }
+        historical_answered_signatures = {
+            cls._grill_question_signature(item["text"]): item
+            for item in historical_questions
+            if item["status"] in {"answered", "skipped"}
+        }
+        previous_question_signatures.update(historical_answered_signatures)
+        historical_covered_dimensions = set(historical_answered_dimensions)
+        filtered_questions: List[Dict[str, str]] = []
+        filtered_duplicate_questions = False
+        historical_reply_questions = cls._extract_historical_grill_questions(
+            [{"role": "assistant", "content": str(result.get("reply") or "")}]
+        )
+        covered_parent_dimensions = covered_dimensions | historical_covered_dimensions
+        reply_question_dimensions = {
+            cls._canonical_grill_dimension(item["dimension"])
+            for item in historical_reply_questions
+            if cls._canonical_grill_dimension(item["dimension"])
+        }
+        # A model can rename a question's structured dimension on every turn,
+        # while the prose still asks the same covered parent fact. Treat the
+        # whole reply as a duplicate when every recognizable question belongs
+        # to an already covered parent dimension. This reply-level guard keeps
+        # a new question ID or label from leaking the old question group back
+        # into the chat.
+        historical_duplicate_questions = bool(reply_question_dimensions) and reply_question_dimensions.issubset(
+            covered_parent_dimensions
+        )
+        if historical_duplicate_questions:
+            filtered_duplicate_questions = True
+        seen_signatures = set()
+        for question in questions:
+            canonical_dimension = cls._canonical_grill_dimension(question["dimension"])
+            if canonical_dimension not in covered_parent_dimensions:
+                inferred_dimension = cls._infer_grill_dimension_from_text(question["text"])
+                if inferred_dimension in covered_parent_dimensions:
+                    canonical_dimension = inferred_dimension
+            question["dimension"] = canonical_dimension
+            signature = cls._grill_question_signature(question["text"])
+            is_previous_open = question["id"] in previous_open
+            is_repeated_closed_question = (
+                not is_previous_open
+                and signature
+                and signature in previous_question_signatures
+            )
+            is_covered_dimension = (
+                not is_previous_open
+                and question["status"] == "open"
+                and canonical_dimension
+                and canonical_dimension in covered_dimensions
+            )
+            is_historical_duplicate = (
+                not is_previous_open
+                and (
+                    (signature and signature in historical_answered_signatures)
+                    or canonical_dimension in historical_covered_dimensions
+                )
+            )
+            if is_repeated_closed_question or is_covered_dimension or (
+                signature and signature in seen_signatures
+            ):
+                filtered_duplicate_questions = True
+                historical_duplicate_questions = historical_duplicate_questions or is_historical_duplicate
+                continue
+            filtered_questions.append(question)
+            if signature:
+                seen_signatures.add(signature)
+        questions = filtered_questions
+        questions_by_id = {item["id"]: item for item in questions}
+
+        # The model may omit a pending question after the user answered it.
+        # Keep a closed copy so the round can be counted, while unmatched
+        # questions continue through the normal open-question restoration.
+        for previous_question in previous_questions:
+            if previous_question["status"] != "open":
+                continue
+            if previous_question["id"] in questions_by_id:
+                continue
+            dimension = cls._canonical_grill_dimension(previous_question["dimension"])
+            if dimension in answered_dimensions:
+                closed = dict(previous_question)
+                closed["dimension"] = dimension
+                closed["status"] = "answered"
+                questions.append(closed)
+                questions_by_id[closed["id"]] = closed
+
+        for question in questions:
+            if question["status"] in {"answered", "skipped"} and question["dimension"]:
+                dimension = cls._canonical_grill_dimension(question["dimension"])
+                if dimension:
+                    question["dimension"] = dimension
+                    covered_by_dimension.setdefault(
+                        dimension,
+                        {"dimension": dimension, "evidence": question["text"]},
+                    )
+        covered = list(covered_by_dimension.values())
 
         # An open question is never implicitly removed by a model patch. The
         # model must semantically mark it answered or skipped first.
@@ -182,13 +696,9 @@ class BaseSkillAgent:
                 questions.append(restored)
                 questions_by_id[question_id] = restored
 
-        def _bounded_count(value: Any, default: int = 0) -> int:
-            try:
-                return max(0, min(int(value), 3))
-            except (TypeError, ValueError):
-                return default
+        if coalesced_open_question:
+            filtered_duplicate_questions = True
 
-        previous_completed = _bounded_count(previous_grill.get("completed_rounds"))
         proposed_completed = _bounded_count(grill.get("completed_rounds"), previous_completed)
         # One user turn can close at most the currently pending question set.
         # This prevents a model response from skipping entire Grill rounds by
@@ -223,7 +733,25 @@ class BaseSkillAgent:
             result["action"] = "advance"
         else:
             requested_status = str(grill.get("round_status") or "").strip().lower()
-            if completed_rounds >= 3 and not remaining_open:
+            if filtered_duplicate_questions and not remaining_open and completed_rounds >= 2:
+                # The model tried to start another round using only dimensions
+                # that are already covered. Finish the project instead of
+                # showing the same question group again.
+                round_status = "project_completed"
+                if isinstance(active_focus, dict):
+                    active_focus["stage"] = "done"
+                result["next_step_suggestion"] = "next"
+                result["action"] = "advance"
+                result["reply"] = "感谢补充，相关项目事实已经记录完整。本段经历已完成；如果还有其他经历，可以继续描述。"
+            elif filtered_duplicate_questions and not remaining_open and completed_rounds < 2:
+                # Do not manufacture a repeated question to satisfy the
+                # minimum-round rule. Ask the model for an uncovered dimension
+                # on the next turn while keeping the current round open.
+                round_status = "round_completed"
+                result["next_step_suggestion"] = "stay"
+                result["action"] = "collect"
+                result["reply"] = "这部分信息已记录，本轮已完成。请补充一个尚未提到的技术实现、个人决策或项目结果细节。"
+            elif completed_rounds >= 3 and not remaining_open:
                 round_status = "project_completed"
                 if isinstance(active_focus, dict):
                     active_focus["stage"] = "done"
@@ -253,6 +781,26 @@ class BaseSkillAgent:
                 result["next_step_suggestion"] = "stay"
             else:
                 round_status = requested_status if requested_status in {"round_completed", "awaiting_answers"} else "round_completed"
+
+        # Do not expose the model's repeated wording after the state has been
+        # coalesced. A short state-aware reply keeps the conversation moving
+        # without asking the same question group again.
+        if historical_duplicate_questions:
+            if remaining_open:
+                open_text = "\n".join(
+                    f"{position}. {item['text']}"
+                    for position, item in enumerate(remaining_open, start=1)
+                )
+                result["reply"] = f"已记录已回答的项目事实。请继续补充尚未确认的内容：\n{open_text}"
+            elif result.get("action") == "advance" or round_status == "project_completed":
+                result["reply"] = "感谢补充，相关项目事实已经记录完整。本段经历已完成；如果还有其他经历，可以继续描述。"
+            else:
+                result["reply"] = "这部分信息已记录，本轮已完成。请补充一个尚未提到的技术实现、个人决策或项目结果细节。"
+        elif coalesced_question and not has_new_question:
+            if result.get("action") == "advance" or round_status == "project_completed":
+                result["reply"] = "感谢补充，相关项目事实已经记录完整。本段经历已完成；如果还有其他经历，可以继续描述。"
+            elif remaining_open:
+                result["reply"] = "已记录本轮信息，请继续补充尚未回答的项目事实。"
 
         grill["completed_rounds"] = completed_rounds
         grill["pending_questions"] = questions

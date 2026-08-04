@@ -3,10 +3,11 @@
   "buildCommand": "cd web && npm ci && npm run build && cd .. && bash scripts/sync_api_runtime.sh",
   "outputDirectory": "web/dist",
   "functions": {
-    "api/index.py": {
-      "maxDuration": 120,
-      "includeFiles": "api/**"
-    }
+      "api/index.py": {
+        "maxDuration": 120,
+        "includeFiles": "api/**",
+        "excludeFiles": ".conda/**"
+      }
   },
   "redirects": [
     {

@@ -268,6 +268,39 @@ function toAgentHistory(messages: ResumeCraftConversationMessage[]): Msg[] {
   return messages.map(({ backendStep: _backendStep, ...message }) => message);
 }
 
+function looksLikeResumePreview(message: Pick<ResumeCraftConversationMessage, "role" | "content" | "isPreview">): boolean {
+  if (message.role !== "assistant") return false;
+  if (message.isPreview === true) return true;
+  const content = String(message.content || "");
+  const generationGuidanceMarkers = [
+    "输入“生成简历”",
+    '输入"生成简历"',
+    "输入生成简历",
+    "generate resume",
+  ];
+  if (generationGuidanceMarkers.some((marker) => content.toLowerCase().includes(marker))) return true;
+  const previewMarkers = ["简历预览", "简历摘要", "简历草稿"];
+  const fieldMarkers = ["目标岗位", "个人信息", "个人简介", "工作经历", "项目经历", "教育背景", "技能与证书", "技能"];
+  return previewMarkers.some((marker) => content.includes(marker))
+    && fieldMarkers.filter((marker) => content.includes(marker)).length >= 2;
+}
+
+function hasPendingResumePreview(
+  wizardState: ResumeCraftWizardState,
+  messages: ResumeCraftConversationMessage[],
+): boolean {
+  const step6 = wizardState.step_states?.step6;
+  if (step6?.preview_ready === true && step6.awaiting_confirm === true) return true;
+  if (step6?.preview_ready === true && step6.confirmed !== true) return true;
+  if (String(step6?.preview_markdown || "").trim() && step6?.confirmed !== true) return true;
+
+  // Older editor snapshots can preserve the preview bubble but lose the
+  // nested Step6 awaiting_confirm flag or the active backend phase. A visible
+  // preview is still the version the user is confirming, so route the next
+  // semantic turn through Step6 and let the server validate its draft state.
+  return messages.some((message) => looksLikeResumePreview(message));
+}
+
 function normalizeTemplateCodeForUI(value: string) {
   const match = String(value || "").match(/[1-7]/);
   if (!match) return "02";
@@ -447,10 +480,13 @@ export function ResumeCraftPage() {
   }, [activeEducationIndex]);
 
   useEffect(() => {
-    const onPointerDown = (event: MouseEvent) => {
+    const onDocumentClick = (event: MouseEvent) => {
       if (!openMonthPicker) return;
-      const target = event.target as Node | null;
-      if (monthPickerWrapRef.current && target && monthPickerWrapRef.current.contains(target)) return;
+      const target = event.target as Element | null;
+      if (
+        target?.closest(".resume-craft-month-picker-field")
+        || (monthPickerWrapRef.current && target && monthPickerWrapRef.current.contains(target))
+      ) return;
       setOpenMonthPicker(null);
     };
     const onEscape = (event: KeyboardEvent) => {
@@ -458,10 +494,10 @@ export function ResumeCraftPage() {
         setOpenMonthPicker(null);
       }
     };
-    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("click", onDocumentClick);
     document.addEventListener("keydown", onEscape);
     return () => {
-      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("click", onDocumentClick);
       document.removeEventListener("keydown", onEscape);
     };
   }, [openMonthPicker]);
@@ -569,12 +605,26 @@ export function ResumeCraftPage() {
 
   const sendChatMessage = async (messageText: string) => {
     if (step !== 3 || !messageText.trim() || chatLoading) return;
-  
+
+    const storedStep6 = wizardState.step_states?.step6;
+    const hasAwaitingPreview = storedStep6?.preview_ready === true
+      && storedStep6?.awaiting_confirm === true;
+    const visiblePreviewCount = conversationMessages.filter(
+      (message) => looksLikeResumePreview(message),
+    ).length;
+    const hasPendingPreview = hasPendingResumePreview(wizardState, conversationMessages);
+    // A preview is a Step6 contract even when an older editor snapshot left
+    // the local phase pointer at Step4 or Step5. The preview state is the
+    // source of truth for the next turn. The preview bubble is a compatibility
+    // fallback for snapshots created before the nested state was persisted.
+    const requestBackendStep: ResumeCraftBackendStep = hasPendingPreview
+      ? 6
+      : activeBackendStep;
     const userMessage: ResumeCraftConversationMessage = {
       role: "user",
       content: messageText.trim(),
       timestamp: nowTimeLabel(),
-      backendStep: activeBackendStep,
+      backendStep: requestBackendStep,
     };
     const nextMessages = [...conversationMessages, userMessage];
     setConversationMessages(nextMessages);
@@ -588,7 +638,7 @@ export function ResumeCraftPage() {
       const resp = (await callCareerforgeSkill(settings, "/careerforge/resume-craft/chat-turn", {
         message: userMessage.content,
         history: toAgentHistory(nextMessages),
-        current_step: activeBackendStep,
+        current_step: requestBackendStep,
         step1_profile: step1Profile,
         wizard_state: wizardState,
         template_code: step1Profile.template_code,
@@ -609,39 +659,69 @@ export function ResumeCraftPage() {
         throw new Error("Agent response has invalid next_step_suggestion");
       }
       const nextWizard = resp.wizard_state as ResumeCraftWizardState;
-      const nextBackendStep = resp.next_step_suggestion === "next"
-        ? advanceBackendStep(activeBackendStep)
-        : activeBackendStep;
       const nextStep6 = nextWizard.step_states?.step6;
+      const responseLooksLikePreview = looksLikeResumePreview({
+        role: "assistant",
+        content: [step6PreviewMarkdown, serverReply].filter(Boolean).join("\n\n"),
+        isPreview: Boolean(step6PreviewMarkdown),
+      });
+      const responseHasPreview = (
+        nextStep6?.preview_ready === true
+        && nextStep6?.awaiting_confirm === true
+      ) || (
+        requestBackendStep === 5
+        && resp.step6_waiting_confirm === true
+        && Boolean(step6PreviewMarkdown)
+      ) || (requestBackendStep === 5 && responseLooksLikePreview);
+      const shouldEnterPreviewStep = resp.next_step_suggestion === "next"
+        || (requestBackendStep === 5 && responseHasPreview);
+      const nextBackendStep = shouldEnterPreviewStep
+        ? advanceBackendStep(requestBackendStep)
+        : requestBackendStep;
       const nextDraft = nextStep6?.draft_json;
-      const renderReady = resp.render_ready === true
-        && nextBackendStep === 6
+      // The nested confirmation state is the authoritative contract. The
+      // top-level render_ready flag is redundant and older/runtime-mirrored
+      // agents may omit or lag it even after confirming the current preview.
+      const responseClaimsGeneration = requestBackendStep === 6
+        && (resp.render_ready === true || resp.action === "confirm" || resp.action === "render_ready");
+      const renderReady = nextBackendStep === 6
+        && responseClaimsGeneration
         && nextWizard.collected_by_step?.step6_confirmed === true
         && nextStep6?.confirmed === true
         && Boolean(nextDraft && Object.keys(nextDraft).length > 0);
-      console.info("[resume-craft] chat response", {
+      console.info("[resume-craft] chat response", JSON.stringify({
         activeBackendStep,
+        requestBackendStep,
         nextBackendStep,
+        hasAwaitingPreview,
+        hasPendingPreview,
+        visiblePreviewCount,
         action: String(resp.action || ""),
         suggestion: String(resp.next_step_suggestion || ""),
+        responseHasPreview,
+        phaseTransitioned: nextBackendStep !== activeBackendStep,
         renderReady,
         responseRenderReady: resp.render_ready === true,
         step6Confirmed: nextWizard.collected_by_step?.step6_confirmed === true,
         step6ConfirmedState: nextStep6?.confirmed === true,
         hasDraft: Boolean(nextDraft && Object.keys(nextDraft).length > 0),
         previewChars: step6PreviewMarkdown.length,
-      });
-      const assistantReply = [renderReady ? "" : step6PreviewMarkdown, serverReply]
-        .filter(Boolean)
-        .join("\n\n");
-      const assistantMessage: ResumeCraftConversationMessage = {
-        role: "assistant",
-        content: assistantReply,
-        timestamp: nowTimeLabel(),
-        isPreview: Boolean(step6PreviewMarkdown),
-        backendStep: activeBackendStep,
-      };
-      const completedMessages = [...nextMessages, assistantMessage];
+      }));
+      // Generation is a terminal UI transition. Keep the confirmation turn
+      // out of the transcript so the old preview and progress copy cannot be
+      // mistaken for a second preview while the render request is running.
+      const completedMessages = renderReady
+        ? nextMessages
+        : [
+            ...nextMessages,
+            {
+              role: "assistant" as const,
+              content: [step6PreviewMarkdown, serverReply].filter(Boolean).join("\n\n"),
+              timestamp: nowTimeLabel(),
+              isPreview: responseLooksLikePreview,
+              backendStep: nextBackendStep,
+            },
+          ];
   
       setWizardState(nextWizard);
       setConversationMessages(completedMessages);
@@ -655,14 +735,15 @@ export function ResumeCraftPage() {
           activeBackendStep: nextBackendStep,
         });
       } else if (activeBackendStep === 6 || nextBackendStep === 6) {
-        console.warn("[resume-craft] render not triggered", {
+        console.warn("[resume-craft] render not triggered", JSON.stringify({
           activeBackendStep,
           nextBackendStep,
           responseRenderReady: resp.render_ready === true,
+          responseClaimsGeneration,
           step6Confirmed: nextWizard.collected_by_step?.step6_confirmed === true,
           step6ConfirmedState: nextStep6?.confirmed === true,
           hasDraft: Boolean(nextDraft && Object.keys(nextDraft).length > 0),
-        });
+        }));
       }
     } catch (err) {
       const errorMessage: ResumeCraftConversationMessage = {
@@ -769,14 +850,14 @@ export function ResumeCraftPage() {
     const hasDraft = Boolean(currentDraft && Object.keys(currentDraft).length > 0);
     const confirmed = currentWizardState.collected_by_step?.step6_confirmed === true && currentStep6?.confirmed === true;
 
-    console.info("[resume-craft] render decision", {
+    console.info("[resume-craft] render decision", JSON.stringify({
       accepted,
       bypassConsent: requested.bypassConsent === true,
       currentBackendStep,
       confirmed,
       hasDraft,
       renderLoading,
-    });
+    }));
 
     if (!accepted && !requested.bypassConsent) {
       console.info("[resume-craft] render deferred for consent");
@@ -815,11 +896,11 @@ export function ResumeCraftPage() {
       };
       if (step1Profile.photo_pref === "with_photo") payload.photo_data_url = photoDataUrl;
 
-      console.info("[resume-craft] render request started", {
+      console.info("[resume-craft] render request started", JSON.stringify({
         currentBackendStep,
         historyLength: history.length,
         hasDraft,
-      });
+      }));
       const resp = (await callCareerforgeSkill(settings, "/careerforge/resume-craft/render", payload)) as Record<string, unknown>;
       const reportHtml = String(resp.report_html || "").trim();
       if (!reportHtml) throw new Error(String(resp.message || "未返回有效简历 HTML"));
@@ -840,10 +921,10 @@ export function ResumeCraftPage() {
         },
       };
       saveResumeCraftResult(artifact);
-      console.info("[resume-craft] render completed", {
+      console.info("[resume-craft] render completed", JSON.stringify({
         htmlChars: reportHtml.length,
         pdfGenerated: Boolean(nextPdfBase64),
-      });
+      }));
       navigate("/resume-craft/result", { state: { artifact } });
     } catch (err) {
       console.error("[resume-craft] render failed", err);
@@ -1081,7 +1162,7 @@ export function ResumeCraftPage() {
                                 {formatMonthDisplay(splitPeriod(edu.period).start) || "开始时间"}
                               </button>
                               {openMonthPicker?.index === index && openMonthPicker?.part === "start" ? (
-                                <div className="resume-craft-month-popover" role="dialog" aria-label="开始时间选择">
+                                <div className="resume-craft-month-popover" role="dialog" aria-label="开始时间选择" onMouseDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}>
                                   <div className="resume-craft-month-popover-head">
                                     <span>年份</span>
                                     <select
@@ -1128,7 +1209,7 @@ export function ResumeCraftPage() {
                                 {formatMonthDisplay(splitPeriod(edu.period).end) || "结束时间"}
                               </button>
                               {openMonthPicker?.index === index && openMonthPicker?.part === "end" ? (
-                                <div className="resume-craft-month-popover" role="dialog" aria-label="结束时间选择">
+                                <div className="resume-craft-month-popover" role="dialog" aria-label="结束时间选择" onMouseDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}>
                                   <div className="resume-craft-month-popover-head">
                                     <span>年份</span>
                                     <select
