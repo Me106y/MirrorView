@@ -699,8 +699,10 @@ export function ResumeCraftPage() {
           nextWizard.step_states.step6.awaiting_confirm = false;
         }
       }
-      const serverReply = prematureGeneration && !step6PreviewMarkdown
-        ? "已收到这段信息，我会继续围绕当前阶段整理内容。"
+      const serverReply = prematureGeneration
+        ? step6PreviewMarkdown
+          ? "请确认以上预览内容是否需要修改；如果没有问题，请输入“生成简历”。"
+          : "已收到这段信息，我会继续围绕当前阶段整理内容。"
         : rawServerReply;
       const nextStep6 = nextWizard.step_states?.step6;
       const responseLooksLikePreview = looksLikeResumePreview({
