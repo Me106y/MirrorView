@@ -243,7 +243,7 @@ class BaseSkillAgent:
 
         reply = str(result.get("reply") or "").strip()
         if re.search(r"[\u4e00-\u9fff]", reply) or not reply:
-            result["reply"] = "请确认以上信息是否需要修改？如果没有问题，可以输入“生成简历”来生成您的简历。"
+            result["reply"] = "请确认以上信息是否需要补充或修改？如果没有问题，可以输入“生成简历”来生成您的简历。"
         else:
             result["reply"] = 'Please confirm whether the information above needs changes. If everything looks good, type "generate resume" to create your resume.'
         return result
