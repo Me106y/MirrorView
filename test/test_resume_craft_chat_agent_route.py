@@ -358,6 +358,41 @@ def test_agent_prompt_prevents_repeating_answered_grill_questions():
     assert "同义" in prompt
 
 
+def test_agent_prompt_adapts_technical_grill_to_project_domain():
+    model = _JsonModel(
+        '{"reply":"请继续补充技术细节。","action":"collect",'
+        '"next_step_suggestion":"stay","render_ready":false,"missing_fields":[], '
+        '"wizard_state":{},"step6_preview_markdown":"",'
+        '"step6_waiting_confirm":false,"step6_applied_changes":[]}'
+    )
+    agent = CareerForgeAgent(llm=model)
+
+    agent.run_resume_craft_chat_turn(
+        {
+            "message": "项目负责实时音视频通话，后端处理房间和媒体流，使用 WebRTC 建立连接并通过 RTMP 推流。",
+            "current_step": 4,
+            "step1_profile": {**_profile(), "target_role": "音视频后端开发"},
+            "wizard_state": {"current_step": 4},
+            "history": [
+                {"role": "assistant", "content": "是否使用过 WebRTC 或 RTMP？"},
+                {"role": "user", "content": "确认使用过 WebRTC 和 RTMP，这部分已经说明。"},
+            ],
+        }
+    )
+
+    prompt = str(model.prompt)
+    assert "根据项目描述、目标岗位和 JD" in prompt
+    assert "1-3 个相关问题" in prompt
+    assert "RTMP" in prompt
+    assert "WebRTC" in prompt
+    for domain_example in ("AI/RAG", "后端/分布式", "前端", "数据", "DevOps"):
+        assert domain_example in prompt
+    assert "候选技术" in prompt
+    assert "用户确认前不得把候选技术" in prompt
+    assert "不得把音视频示例套用到" in prompt
+    assert "完整 history" in prompt
+
+
 def test_agent_prompt_requires_question_level_grill_state_and_two_round_minimum():
     model = _JsonModel(
         '{"reply":"继续补充。","action":"collect","next_step_suggestion":"stay",'
