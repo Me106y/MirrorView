@@ -1108,7 +1108,7 @@ export function ResumeCraftPage() {
               <>
                 <header className="resume-craft-chat-head resume-craft-combined-head">
                   <div className="resume-craft-chat-head-left">
-                    <h2>工作/项目/技能</h2>
+                    <h2>Step3 工作/项目/技能</h2>
                     <p>{CHAT_STEP_DESCRIPTIONS[activePhase.step]}</p>
                     <div className="resume-craft-head-divider" />
                   </div>
