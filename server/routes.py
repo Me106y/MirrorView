@@ -1874,6 +1874,22 @@ def careerforge_resume_craft_chat_turn():
             }
         ), 502
 
+    chat_step_states = result.get("wizard_state", {}).get("step_states", {}) if isinstance(result.get("wizard_state"), dict) else {}
+    chat_step6 = chat_step_states.get("step6", {}) if isinstance(chat_step_states, dict) else {}
+    chat_collected = result.get("wizard_state", {}).get("collected_by_step", {}) if isinstance(result.get("wizard_state"), dict) else {}
+    logger.info(
+        "resume-craft chat response: current_step=%s action=%s suggestion=%s render_ready=%s "
+        "step6_confirmed=%s step6_confirmed_state=%s draft_valid=%s preview_chars=%s",
+        data.get("current_step"),
+        result.get("action"),
+        result.get("next_step_suggestion"),
+        result.get("render_ready") is True,
+        chat_collected.get("step6_confirmed") is True if isinstance(chat_collected, dict) else False,
+        chat_step6.get("confirmed") is True if isinstance(chat_step6, dict) else False,
+        bool(chat_step6.get("draft_json")) if isinstance(chat_step6, dict) else False,
+        len(str(result.get("step6_preview_markdown") or "")),
+    )
+
     return jsonify({"skill": "resume-craft", **result, "meta": meta, "error": ""}), 200
 
 
@@ -1895,12 +1911,31 @@ def careerforge_resume_craft_render():
     step_states = wizard_state.get("step_states") if isinstance(wizard_state.get("step_states"), dict) else {}
     step6_state = step_states.get("step6") if isinstance(step_states.get("step6"), dict) else {}
     collected_by_step = wizard_state.get("collected_by_step") if isinstance(wizard_state.get("collected_by_step"), dict) else {}
+    logger.info(
+        "resume-craft render request: current_step=%s render_ready=%s step6_confirmed=%s "
+        "step6_confirmed_state=%s draft_valid=%s history_len=%s",
+        wizard_state.get("current_step"),
+        data.get("render_ready") is True,
+        collected_by_step.get("step6_confirmed") is True,
+        step6_state.get("confirmed") is True,
+        bool(data.get("draft_json") or step6_state.get("draft_json")),
+        len(data.get("history") or []) if isinstance(data.get("history"), list) else 0,
+    )
     if (
         not wizard_state
         or data.get("render_ready") is not True
         or collected_by_step.get("step6_confirmed") is not True
         or step6_state.get("confirmed") is not True
     ):
+        logger.warning(
+            "resume-craft render rejected: missing confirmed generation state "
+            "wizard_state=%s render_ready=%s step6_confirmed=%s step6_confirmed_state=%s draft_valid=%s",
+            bool(wizard_state),
+            data.get("render_ready") is True,
+            collected_by_step.get("step6_confirmed") is True,
+            step6_state.get("confirmed") is True,
+            bool(data.get("draft_json") or step6_state.get("draft_json")),
+        )
         return jsonify({"error": "not_ready_for_render", "message": "请先完成 Step6 预览确认后再生成简历。", "meta": meta}), 400
 
     input_draft_json = data.get("draft_json") if isinstance(data.get("draft_json"), dict) else step6_state.get("draft_json")
@@ -2033,6 +2068,13 @@ def careerforge_resume_craft_render():
         response_meta["resume_craft_pdf_error"] = pdf_error
     if photo_process_warning:
         response_meta["resume_craft_photo_process_warning"] = photo_process_warning
+
+    logger.info(
+        "resume-craft render completed: html_chars=%s pdf_generated=%s pdf_error=%s",
+        len(report_html),
+        bool(pdf_base64),
+        bool(pdf_error),
+    )
 
     return jsonify(
         {

@@ -619,6 +619,18 @@ export function ResumeCraftPage() {
         && nextWizard.collected_by_step?.step6_confirmed === true
         && nextStep6?.confirmed === true
         && Boolean(nextDraft && Object.keys(nextDraft).length > 0);
+      console.info("[resume-craft] chat response", {
+        activeBackendStep,
+        nextBackendStep,
+        action: String(resp.action || ""),
+        suggestion: String(resp.next_step_suggestion || ""),
+        renderReady,
+        responseRenderReady: resp.render_ready === true,
+        step6Confirmed: nextWizard.collected_by_step?.step6_confirmed === true,
+        step6ConfirmedState: nextStep6?.confirmed === true,
+        hasDraft: Boolean(nextDraft && Object.keys(nextDraft).length > 0),
+        previewChars: step6PreviewMarkdown.length,
+      });
       const assistantReply = [renderReady ? "" : step6PreviewMarkdown, serverReply]
         .filter(Boolean)
         .join("\n\n");
@@ -641,6 +653,15 @@ export function ResumeCraftPage() {
           wizardState: nextWizard,
           conversationMessages: completedMessages,
           activeBackendStep: nextBackendStep,
+        });
+      } else if (activeBackendStep === 6 || nextBackendStep === 6) {
+        console.warn("[resume-craft] render not triggered", {
+          activeBackendStep,
+          nextBackendStep,
+          responseRenderReady: resp.render_ready === true,
+          step6Confirmed: nextWizard.collected_by_step?.step6_confirmed === true,
+          step6ConfirmedState: nextStep6?.confirmed === true,
+          hasDraft: Boolean(nextDraft && Object.keys(nextDraft).length > 0),
         });
       }
     } catch (err) {
@@ -748,13 +769,31 @@ export function ResumeCraftPage() {
     const hasDraft = Boolean(currentDraft && Object.keys(currentDraft).length > 0);
     const confirmed = currentWizardState.collected_by_step?.step6_confirmed === true && currentStep6?.confirmed === true;
 
+    console.info("[resume-craft] render decision", {
+      accepted,
+      bypassConsent: requested.bypassConsent === true,
+      currentBackendStep,
+      confirmed,
+      hasDraft,
+      renderLoading,
+    });
+
     if (!accepted && !requested.bypassConsent) {
+      console.info("[resume-craft] render deferred for consent");
       pendingRenderRef.current = requested;
       setShowConsentPrompt(true);
       return;
     }
     pendingRenderRef.current = null;
-    if (currentBackendStep !== 6 || !confirmed || !hasDraft || renderLoading) return;
+    if (currentBackendStep !== 6 || !confirmed || !hasDraft || renderLoading) {
+      console.warn("[resume-craft] render skipped", {
+        currentBackendStep,
+        confirmed,
+        hasDraft,
+        renderLoading,
+      });
+      return;
+    }
     setRenderLoading(true);
     try {
       const history = toAgentHistory(currentConversationMessages);
@@ -776,6 +815,11 @@ export function ResumeCraftPage() {
       };
       if (step1Profile.photo_pref === "with_photo") payload.photo_data_url = photoDataUrl;
 
+      console.info("[resume-craft] render request started", {
+        currentBackendStep,
+        historyLength: history.length,
+        hasDraft,
+      });
       const resp = (await callCareerforgeSkill(settings, "/careerforge/resume-craft/render", payload)) as Record<string, unknown>;
       const reportHtml = String(resp.report_html || "").trim();
       if (!reportHtml) throw new Error(String(resp.message || "未返回有效简历 HTML"));
@@ -796,8 +840,13 @@ export function ResumeCraftPage() {
         },
       };
       saveResumeCraftResult(artifact);
+      console.info("[resume-craft] render completed", {
+        htmlChars: reportHtml.length,
+        pdfGenerated: Boolean(nextPdfBase64),
+      });
       navigate("/resume-craft/result", { state: { artifact } });
     } catch (err) {
+      console.error("[resume-craft] render failed", err);
       setResult({ kind: "error", message: (err as Error).message || "生成失败" });
     } finally {
       setRenderLoading(false);

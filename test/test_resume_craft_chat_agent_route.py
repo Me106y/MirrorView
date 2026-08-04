@@ -740,6 +740,30 @@ def test_agent_step5_confirms_existing_preferences_and_prepares_preview():
     assert "不要先询问偏好" in prompt
 
 
+def test_agent_prompt_prioritizes_generation_over_preview_when_preview_is_waiting_confirmation():
+    model = _JsonModel(
+        '{"reply":"好的，正在生成。","action":"confirm","next_step_suggestion":"stay",'
+        '"render_ready":true,"missing_fields":[],"wizard_state":{},'
+        '"step6_preview_markdown":"","step6_waiting_confirm":false,"step6_applied_changes":[]}'
+    )
+    agent = ResumeCraftAgent(llm=model)
+
+    agent.run_resume_craft_chat_turn({
+        "message": "生成简历",
+        "current_step": 6,
+        "step1_profile": _profile(),
+        "wizard_state": {
+            "current_step": 6,
+            "step_states": {"step6": {"preview_ready": True, "awaiting_confirm": True}},
+        },
+        "history": [{"role": "assistant", "content": "简历预览已展示。"}],
+    })
+
+    prompt = str(model.prompt)
+    assert "只能解释为确认当前预览并生成文件" in prompt
+    assert "禁止重新生成或返回 `step6_preview_markdown`" in prompt
+
+
 def test_agent_step5_preview_forces_transition_to_step6_even_when_model_says_stay():
     model = _JsonModel(
         '{"reply":"请确认简历摘要。","action":"preview","next_step_suggestion":"stay",'
