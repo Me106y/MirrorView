@@ -579,6 +579,47 @@ def test_resume_craft_render_rejects_jd_only_facts(monkeypatch):
     assert body["error"] == "unsupported_fact_detected"
 
 
+def test_resume_craft_render_repairs_unconfirmed_jd_facts_before_rejecting(monkeypatch):
+    Config.TURNSTILE_ENFORCE = False
+    Config.RATE_LIMIT_ENFORCE = False
+    rendered = [
+        "<!DOCTYPE html><html><body><p>熟悉 Pinecone 和 Milvus。</p></body></html>",
+        "<!DOCTYPE html><html><body><p>使用 Milvus。</p></body></html>",
+    ]
+    captured = []
+
+    def _fake_render(payload, runtime=None):
+        captured.append(payload)
+        return rendered.pop(0)
+
+    monkeypatch.setattr(routes.ai_service, "run_resume_craft_html", _fake_render)
+    monkeypatch.setattr(
+        routes,
+        "_generate_resume_craft_pdf_artifact",
+        lambda report_html, report_name: ("resume.pdf", "UERG", ""),
+    )
+
+    client = _client()
+    resp = client.post(
+        "/api/careerforge/resume-craft/render",
+        json={
+            "draft_json": {
+                **_resume_craft_draft_json(),
+                "experiences": ["负责 Milvus 向量检索。"],
+            },
+            "step1_profile": {
+                **_resume_craft_profile(),
+                "jd_summary": "熟悉 Pinecone 或 Milvus",
+            },
+        },
+    )
+
+    assert resp.status_code == 200
+    assert resp.get_json()["report_pdf_base64"] == "UERG"
+    assert len(captured) == 2
+    assert "pinecone" in captured[1]["extra_instruction"].lower()
+
+
 def test_resume_craft_fact_audit_accepts_confirmed_text_with_jd_formatting():
     result = routes._audit_resume_fact_integrity(
         "<!DOCTYPE html><html><body><p>熟悉大模型应用开发经验</p></body></html>",

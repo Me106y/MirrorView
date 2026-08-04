@@ -1345,7 +1345,7 @@ def _build_step1_profile_context(profile: Dict[str, Any], template_code: str, la
         f"- 语言: {language}",
         f"- 照片偏好: {photo_pref}",
         f"- 目标岗位: {profile.get('target_role') or '未填写'}",
-        f"- JD摘要: {profile.get('jd_summary') or '无'}",
+        f"- JD摘要（仅用于方向排序，不是已确认事实）: {profile.get('jd_summary') or '无'}",
         f"- 姓名: {personal.get('name') or '未填写'}",
         f"- 联系方式: 手机={personal.get('phone') or '未填写'} 邮箱={personal.get('email') or '未填写'} 城市={personal.get('city') or '未填写'}",
         f"- 链接: {', '.join(personal.get('links') or []) or '无'}",
@@ -1950,8 +1950,24 @@ def careerforge_resume_craft_render():
 
     fact_audit = {"passed": True, "unsupported_tokens": []}
 
+    def render_and_audit(payload: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
+        raw_html = ai_service.run_resume_craft_html(payload, runtime=runtime)
+        rendered_html = _extract_html_document(raw_html)
+        if rendered_html and photo_pref == "放照片":
+            rendered_html = _inject_photo_data_url_into_html(
+                rendered_html,
+                processed_photo_data_url,
+                RESUME_CRAFT_PHOTO_TOKEN,
+            )
+        audit = (
+            _audit_resume_fact_integrity(rendered_html, confirmed_facts_context, jd_direction_context)
+            if rendered_html
+            else {"passed": True, "unsupported_tokens": []}
+        )
+        return rendered_html, audit
+
     try:
-        raw_html = ai_service.run_resume_craft_html(html_payload, runtime=runtime)
+        report_html, fact_audit = render_and_audit(html_payload)
     except Exception as e:
         logger.exception("resume-craft render failed")
         return jsonify(
@@ -1961,12 +1977,6 @@ def careerforge_resume_craft_render():
                 "meta": meta,
             }
         ), 502
-
-    report_html = _extract_html_document(raw_html)
-    if report_html and photo_pref == "放照片":
-        report_html = _inject_photo_data_url_into_html(report_html, processed_photo_data_url, RESUME_CRAFT_PHOTO_TOKEN)
-    if report_html:
-        fact_audit = _audit_resume_fact_integrity(report_html, confirmed_facts_context, jd_direction_context)
 
     if not report_html:
         return jsonify(
@@ -1978,14 +1988,36 @@ def careerforge_resume_craft_render():
         ), 502
 
     if not fact_audit["passed"]:
-        return jsonify(
-            {
-                "error": "unsupported_fact_detected",
-                "message": "检测到疑似超出已确认事实的内容，请在 Step6 继续修订并再次确认后生成。",
-                "unsupported_tokens": fact_audit.get("unsupported_tokens", []),
-                "meta": meta,
-            }
-        ), 400
+        unsupported_tokens = [str(token) for token in fact_audit.get("unsupported_tokens", []) if str(token).strip()]
+        repair_payload = {
+            **html_payload,
+            "extra_instruction": (
+                "上一版 HTML 未通过事实审计。以下词语或短语没有出现在事实白名单中："
+                f"{', '.join(unsupported_tokens)}。请重新输出完整 HTML，删除这些未确认内容及其衍生推断，"
+                "只保留事实白名单中的已确认技术、职责、经历和结果；不要把 JD 中的示例技术、候选方案或要求改写成用户事实。"
+            ),
+        }
+        try:
+            report_html, fact_audit = render_and_audit(repair_payload)
+        except Exception as e:
+            logger.exception("resume-craft fact-bound repair failed")
+            return jsonify(
+                {
+                    "error": "resume_craft_render_failed",
+                    "message": f"简历生成失败，请稍后重试：{str(e)[:240]}",
+                    "meta": meta,
+                }
+            ), 502
+
+        if not fact_audit["passed"]:
+            return jsonify(
+                {
+                    "error": "unsupported_fact_detected",
+                    "message": "检测到疑似超出已确认事实的内容，请在 Step6 继续修订并再次确认后生成。",
+                    "unsupported_tokens": fact_audit.get("unsupported_tokens", []),
+                    "meta": meta,
+                }
+            ), 400
 
     report_name = f"{_build_resume_artifact_stem(step1_profile)}.html"
     pdf_name, pdf_base64, pdf_error = _generate_resume_craft_pdf_artifact(report_html, report_name)
