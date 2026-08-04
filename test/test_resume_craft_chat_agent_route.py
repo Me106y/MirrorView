@@ -358,6 +358,46 @@ def test_agent_prompt_prevents_repeating_answered_grill_questions():
     assert "同义" in prompt
 
 
+def test_agent_prompt_treats_result_collaboration_and_challenge_as_covered_parent_dimensions():
+    model = _JsonModel(
+        '{"reply":"请补充项目结果、用户规模、跨团队沟通和模型稳定性。",'
+        '"action":"collect","next_step_suggestion":"stay","render_ready":false,'
+        '"missing_fields":[],"wizard_state":{},"step6_preview_markdown":"",'
+        '"step6_waiting_confirm":false,"step6_applied_changes":[]}'
+    )
+    agent = ResumeCraftAgent(llm=model)
+
+    agent.run_resume_craft_chat_turn({
+        "message": "响应时间从218ms降到126ms，重复追问率从37%降到4%以下；我带3人小组并负责和产品经理对齐；通过Redis已考查集合、覆盖度评分和Few-shot解决检索死循环。",
+        "current_step": 4,
+        "step1_profile": _profile(),
+        "wizard_state": {
+            "current_step": 4,
+            "step_states": {"step4": {"active_focus": {"grill": {
+                "covered_dimensions": [
+                    {"dimension": "result", "evidence": "响应时间和重复追问率均有量化结果"},
+                    {"dimension": "collaboration", "evidence": "带领3人小组并与产品经理对齐"},
+                    {"dimension": "challenge", "evidence": "解决Agentic RAG检索死循环"},
+                ],
+                "pending_questions": [],
+                "completed_rounds": 2,
+                "round_status": "round_completed",
+            }}}},
+        },
+        "history": [
+            {"role": "assistant", "content": "请补充项目结果、团队协作和技术挑战。"},
+            {"role": "user", "content": "以上三部分都已经详细说明，没有其他补充。"},
+        ],
+    })
+
+    prompt = str(model.prompt)
+    assert "covered_dimensions" in prompt
+    assert "量化成果、效率提升、用户规模、部署效果和业务影响" in prompt
+    assert "团队分工、跨团队沟通、需求变更和协作方式" in prompt
+    assert "模型稳定性、并发处理、知识库维护" in prompt
+    assert "没有真正缺失的维度，直接完成经历" in prompt
+
+
 def test_agent_prompt_adapts_technical_grill_to_project_domain():
     model = _JsonModel(
         '{"reply":"请继续补充技术细节。","action":"collect",'
@@ -487,6 +527,35 @@ def test_agent_grill_completes_a_round_only_after_all_questions_close():
     grill = result["wizard_state"]["step_states"]["step4"]["active_focus"]["grill"]
     assert grill["completed_rounds"] == 1
     assert grill["round_status"] == "round_completed"
+
+
+def test_agent_grill_backfills_covered_dimension_from_answered_question():
+    model = _JsonModel(
+        '{"reply":"已记录。","action":"collect","next_step_suggestion":"stay",'
+        '"render_ready":false,"missing_fields":[],"wizard_state":{"step_states":{"step4":{"active_focus":{"grill":{'
+        '"completed_rounds":1,"round_status":"round_completed","pending_questions":['
+        '{"id":"q-result","text":"项目结果是什么？","dimension":"result","status":"answered"}'
+        ']}}}}},"step6_preview_markdown":"","step6_waiting_confirm":false,"step6_applied_changes":[]}'
+    )
+    agent = ResumeCraftAgent(llm=model)
+
+    result = agent.run_resume_craft_chat_turn({
+        "message": "响应时间下降了42%。",
+        "current_step": 4,
+        "step1_profile": _profile(),
+        "wizard_state": {"current_step": 4, "step_states": {"step4": {"active_focus": {"grill": {
+            "completed_rounds": 0,
+            "round_status": "awaiting_answers",
+            "pending_questions": [
+                {"id": "q-result", "text": "项目结果是什么？", "dimension": "result", "status": "open"},
+            ],
+        }}}}},
+        "history": [],
+    })
+
+    grill = result["wizard_state"]["step_states"]["step4"]["active_focus"]["grill"]
+    assert grill["completed_rounds"] == 1
+    assert grill["covered_dimensions"] == [{"dimension": "result", "evidence": "项目结果是什么？"}]
 
 
 def test_agent_grill_does_not_finish_before_two_rounds():

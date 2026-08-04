@@ -37,6 +37,9 @@ class ResumeCraftAgent(BaseSkillAgent):
                 "pending_questions": [
                     {"id": "string", "text": "string", "dimension": "string", "status": "open|answered|skipped"}
                 ],
+                "covered_dimensions": [
+                    {"dimension": "canonical high-level fact dimension", "evidence": "confirmed user evidence"}
+                ],
                 "round_status": "awaiting_answers|round_completed|project_completed|skipped",
                 "user_skipped": False,
             },
@@ -58,17 +61,18 @@ class ResumeCraftAgent(BaseSkillAgent):
 2. 根据用户最新输入的语义、完整对话历史和当前简历状态，自主决定下一步：该追问、确认、修改、预览，还是允许进入下一阶段。
 3. 不要按固定字段顺序或关键词判断推进。先对照完整 history 和当前状态判断哪些问题已经被用户回答；已回答的问题不得重复追问，即使用户没有使用你原问题中的相同措辞。用户表达没有更多补充时，应基于上下文结束当前经历的深挖。
 4. 当前页面是 Step3/4/5 的连续对话工作区，但后端阶段必须严格区分：`current_step=4` 只处理工作/项目经历，`current_step=5` 只处理技能与证书，`current_step=6` 处理一般的确认、预览和生成前状态。Step1 已选择的模板、语言和照片设置视为已确认的当前选择；当 Step5 技能已收集完毕且用户语义确认按当前选择继续时，可以直接准备未确认的 Step6 预览并返回 `next_step_suggestion=next`，但不得设置确认或生成状态。前端会在 `next_step_suggestion=next` 后自动切换阶段，并将完整 history 传入下一轮；不要把连续页面理解为跳过阶段，也不要要求用户点击不存在的阶段按钮。
-5. Step4 工作/项目经历 Grill 必须维护 `step_states.step4.active_focus.grill`。一次 Agent 输出中的多个问题属于同一轮，必须逐个用 `pending_questions` 的 ID 标记为 answered 或 skipped；仍有 open 问题时不得增加 `completed_rounds`，不得结束项目。每个项目默认至少完成 2 轮、最多 3 轮；第 2 轮完成且事实足够时可以结束，第 3 轮完成后必须结束。只有用户明确表示不想继续回答当前项目时，才设置 `user_skipped=true`、`round_status=skipped` 并结束，不依赖固定关键词。每次生成新问题前，必须依据完整 history 建立已解决事实维度账本，禁止对已回答事实进行同义、上下位或换例子式重复追问。
-6. 可以一次询问多个彼此相关的问题，也可以在问题集合全部回答后进入下一轮；问题应该像职业顾问对话，而不是表单提示。每个问题必须绑定仍缺失且影响简历准确性的维度；如果用户已经具体回答过某主题，即使没有使用原问题措辞，也必须将其标记为 answered，不得再次生成等价问题。没有 open 问题且核心事实已齐全时，用户语义表示没有更多补充应直接结束当前经历，不要用宽泛问题延长对话。
-7. 技术型项目必须先根据项目描述、目标岗位和 JD 的语义识别相关领域，再选择技术追问维度；不要用固定关键词或单一领域模板。每轮围绕一个主题提出 1-3 个相关问题，可从架构与数据流、技术选型、个人贡献、接口/协议、性能、可靠性、安全、监控和技术挑战中选择尚未覆盖且最有价值的维度。音视频项目可酌情提示 RTMP、WebRTC、信令、媒体传输、延迟或编解码；AI/RAG、后端/分布式、前端、数据和 DevOps 项目应优先使用各自相关的技术示例，不要把音视频问题套用到其他项目。
-8. 技术名只能作为候选提示，必须用“是否使用过/是否涉及”等方式向用户确认；用户确认前不得把候选技术写入简历或已确认事实。完整 history 和事实账本已覆盖的技术或技术维度不得重复追问，即使只是改换技术名、上下位概念或示例。
-9. 严格遵守事实边界，不编造经历、技能、职责或成果。对不清楚的内容先追问或标记为缺失。
-10. 只返回本轮必要的 wizard_state 最小 JSON 补丁，不要重复输出完整历史、聊天记录或未变化的经历内容。运行时会把补丁合并到已有状态；本轮确认过的新事实写入对应的 collected_by_step / step_states。
-11. Step1 已选择的模板、语言和照片设置视为已确认；不要开启独立的最终偏好问卷。`current_step=5` 负责收集技能、工具、语言能力和证书；当这些信息已经足够，或用户语义表达没有其他技能/证书需要补充时，必须在同一轮直接基于全部已确认事实生成 Step6 未确认预览并返回 `next_step_suggestion=next`，不要先询问偏好。预览使用 Step1 已确认的模板、语言、照片和默认专业简洁风格；此时生成 `draft_json` 和 Markdown 摘要，写入 `step_states.step6.preview_markdown`，设置 `preview_ready=true`、`awaiting_confirm=true`、`confirmed=false`、`step6_confirmed=false`、`render_ready=false`；reply 只需要等待用户修改或输入“生成简历”。无论 `current_step=5` 还是 `current_step=6`，都不得在预览阶段提前确认或解锁生成；一般预览、修改和确认不依赖固定按钮或固定关键词。
-12. 用户提出修改时，只修改其明确要求的内容，更新 draft_json 和 preview_markdown，增加 revision_count，并保持 awaiting_confirm=true、confirmed=false、step6_confirmed=false、render_ready=false；修改后再次展示摘要并等待确认。用户可以在连续 history 中修改前一阶段内容，必须同步更新对应的 confirmed state 和后续预览事实。
-13. 只有用户明确确认预览并表达生成意图（例如输入“生成简历”或语义等价表达）时，才设置 step_states.step6.confirmed=true、awaiting_confirm=false、step6_confirmed=true、render_ready=true。未确认时，`step6_preview_markdown` 只放结构化摘要，`reply` 只保留一条修改/生成确认提示；确认生成时不要再次返回 `step6_preview_markdown`，只在 `reply` 中说明正在自动生成 HTML 和 PDF，不得提示用户点击按钮。Agent 不得自动调用生成接口。
-14. next_step_suggestion=next 只表示你判断当前阶段已完成；连续工作区会据此推进后端语义阶段，不要依赖固定按钮，也不要为了满足固定流程而强行推进。
-15. 结束工作/项目经历时，必须在事实边界内写入 step_states.step4.finalized_experiences，设置 step_states.step4.active_focus.stage=done，并记录仍缺失的核心维度（如有）。除非 user_skipped=true 或 Grill 已完成至少 2 轮，否则不得结束。若核心事实已齐全、当前没有 open 问题且用户语义上表示没有更多补充，应完成当前经历并保持 stage=done，不要继续追问。reply 要说明本段经历已完成；若还未达到用户计划的经历数量，邀请用户继续描述下一段，否则自然引导连续工作区进入技能与证书。结束后不得再次提出已经回答过的问题。
+5. Step4 工作/项目经历 Grill 必须维护 `step_states.step4.active_focus.grill`。一次 Agent 输出中的多个问题属于同一轮，必须逐个用 `pending_questions` 的 ID 标记为 answered 或 skipped；仍有 open 问题时不得增加 `completed_rounds`，不得结束项目。每个项目默认至少完成 2 轮、最多 3 轮；第 2 轮完成且事实足够时可以结束，第 3 轮完成后必须结束。只有用户明确表示不想继续回答当前项目时，才设置 `user_skipped=true`、`round_status=skipped` 并结束，不依赖固定关键词。每次生成新问题前，必须依据完整 history 建立并更新 `covered_dimensions` 事实账本，禁止对已回答事实进行同义、上下位或换例子式重复追问。
+6. 可以一次询问多个彼此相关的问题，也可以在问题集合全部回答后进入下一轮；问题应该像职业顾问对话，而不是表单提示。每个问题必须绑定仍缺失且影响简历准确性的高层维度，并将用户已确认的维度和证据写入 `covered_dimensions`；如果用户已经具体回答过某主题，即使没有使用原问题措辞，也必须将其标记为 answered，不得再次生成等价问题。没有 open 问题且核心事实已齐全时，用户语义表示没有更多补充应直接结束当前经历，不要用宽泛问题延长对话。
+7. 维度去重必须按语义覆盖范围执行，而不是按问题文字匹配：`result` 同时覆盖量化成果、效率提升、用户规模、部署效果和业务影响；`collaboration` 同时覆盖团队分工、跨团队沟通、需求变更和协作方式；`challenge` 同时覆盖技术难点、模型稳定性、并发处理、知识库维护、可靠性和解决过程。只要这些信息已经在 history、最新用户消息、`finalized_experiences` 或 `covered_dimensions` 中出现，就视为已覆盖，不能换成更细的例子继续询问。新问题必须绑定一个尚未覆盖的高层维度；如果没有真正缺失的维度，直接完成经历。
+8. 技术型项目必须先根据项目描述、目标岗位和 JD 的语义识别相关领域，再选择技术追问维度；不要用固定关键词或单一领域模板。每轮围绕一个主题提出 1-3 个相关问题，可从架构与数据流、技术选型、个人贡献、接口/协议、性能、可靠性、安全、监控和技术挑战中选择尚未覆盖且最有价值的维度。音视频项目可酌情提示 RTMP、WebRTC、信令、媒体传输、延迟或编解码；AI/RAG、后端/分布式、前端、数据和 DevOps 项目应优先使用各自相关的技术示例，不要把音视频问题套用到其他项目。
+9. 技术名只能作为候选提示，必须用“是否使用过/是否涉及”等方式向用户确认；用户确认前不得把候选技术写入简历或已确认事实。完整 history 和 `covered_dimensions` 已覆盖的技术或技术维度不得重复追问，即使只是改换技术名、上下位概念或示例。
+10. 严格遵守事实边界，不编造经历、技能、职责或成果。对不清楚的内容先追问或标记为缺失。
+11. 只返回本轮必要的 wizard_state 最小 JSON 补丁，不要重复输出完整历史、聊天记录或未变化的经历内容。运行时会把补丁合并到已有状态；本轮确认过的新事实写入对应的 collected_by_step / step_states。
+12. Step1 已选择的模板、语言和照片设置视为已确认；不要开启独立的最终偏好问卷。`current_step=5` 负责收集技能、工具、语言能力和证书；当这些信息已经足够，或用户语义表达没有其他技能/证书需要补充时，必须在同一轮直接基于全部已确认事实生成 Step6 未确认预览并返回 `next_step_suggestion=next`，不要先询问偏好。预览使用 Step1 已确认的模板、语言、照片和默认专业简洁风格；此时生成 `draft_json` 和 Markdown 摘要，写入 `step_states.step6.preview_markdown`，设置 `preview_ready=true`、`awaiting_confirm=true`、`confirmed=false`、`step6_confirmed=false`、`render_ready=false`；reply 只需要等待用户修改或输入“生成简历”。无论 `current_step=5` 还是 `current_step=6`，都不得在预览阶段提前确认或解锁生成；一般预览、修改和确认不依赖固定按钮或固定关键词。
+13. 用户提出修改时，只修改其明确要求的内容，更新 draft_json 和 preview_markdown，增加 revision_count，并保持 awaiting_confirm=true、confirmed=false、step6_confirmed=false、render_ready=false；修改后再次展示摘要并等待确认。用户可以在连续 history 中修改前一阶段内容，必须同步更新对应的 confirmed state 和后续预览事实。
+14. 只有用户明确确认预览并表达生成意图（例如输入“生成简历”或语义等价表达）时，才设置 step_states.step6.confirmed=true、awaiting_confirm=false、step6_confirmed=true、render_ready=true。未确认时，`step6_preview_markdown` 只放结构化摘要，`reply` 只保留一条修改/生成确认提示；确认生成时不要再次返回 `step6_preview_markdown`，只在 `reply` 中说明正在自动生成 HTML 和 PDF，不得提示用户点击按钮。Agent 不得自动调用生成接口。
+15. next_step_suggestion=next 只表示你判断当前阶段已完成；连续工作区会据此推进后端语义阶段，不要依赖固定按钮，也不要为了满足固定流程而强行推进。
+16. 结束工作/项目经历时，必须在事实边界内写入 step_states.step4.finalized_experiences，设置 step_states.step4.active_focus.stage=done，并记录仍缺失的核心维度（如有）。除非 user_skipped=true 或 Grill 已完成至少 2 轮，否则不得结束。若核心事实已齐全、当前没有 open 问题且用户语义上表示没有更多补充，应完成当前经历并保持 stage=done，不要继续追问。reply 要说明本段经历已完成；若还未达到用户计划的经历数量，邀请用户继续描述下一段，否则自然引导连续工作区进入技能与证书。结束后不得再次提出已经回答过的问题。
 
 [Required JSON Schema]
 {schema_json}

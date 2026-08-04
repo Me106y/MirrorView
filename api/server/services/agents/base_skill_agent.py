@@ -105,6 +105,28 @@ class BaseSkillAgent:
             seen_ids.add(question_id)
         return questions
 
+    @staticmethod
+    def _normalize_grill_covered_dimensions(raw: Any) -> List[Dict[str, str]]:
+        """Normalize the model-maintained ledger of facts already covered."""
+        dimensions: List[Dict[str, str]] = []
+        seen = set()
+        if not isinstance(raw, list):
+            return dimensions
+        for item in raw:
+            if isinstance(item, str):
+                dimension = item.strip()[:80]
+                evidence = ""
+            elif isinstance(item, dict):
+                dimension = str(item.get("dimension") or item.get("id") or "").strip()[:80]
+                evidence = str(item.get("evidence") or "").strip()[:800]
+            else:
+                continue
+            if not dimension or dimension in seen:
+                continue
+            dimensions.append({"dimension": dimension, "evidence": evidence})
+            seen.add(dimension)
+        return dimensions
+
     @classmethod
     def _normalize_grill_state(
         cls,
@@ -129,6 +151,22 @@ class BaseSkillAgent:
 
         previous_questions = cls._normalize_grill_questions(previous_grill.get("pending_questions"))
         questions = cls._normalize_grill_questions(grill.get("pending_questions"))
+        previous_covered = cls._normalize_grill_covered_dimensions(
+            previous_grill.get("covered_dimensions")
+        )
+        covered = cls._normalize_grill_covered_dimensions(grill.get("covered_dimensions"))
+        covered_by_dimension = {item["dimension"]: item for item in covered}
+        for item in previous_covered:
+            covered_by_dimension.setdefault(item["dimension"], item)
+        # Closing a question also closes its high-level dimension. This keeps
+        # old states useful before the model starts returning the ledger.
+        for question in questions:
+            if question["status"] in {"answered", "skipped"} and question["dimension"]:
+                covered_by_dimension.setdefault(
+                    question["dimension"],
+                    {"dimension": question["dimension"], "evidence": question["text"]},
+                )
+        covered = list(covered_by_dimension.values())
         questions_by_id = {item["id"]: item for item in questions}
         previous_open = {
             item["id"]: item for item in previous_questions if item["status"] == "open"
@@ -218,6 +256,7 @@ class BaseSkillAgent:
 
         grill["completed_rounds"] = completed_rounds
         grill["pending_questions"] = questions
+        grill["covered_dimensions"] = covered
         grill["round_status"] = round_status
         grill["user_skipped"] = user_skipped
         return result
