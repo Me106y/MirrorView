@@ -756,10 +756,12 @@ You MUST follow the provided Skill specification when answering.
                 "schema_json": schema_json,
             }
         )
-        try:
-            parsed = json.loads(str(raw or "").strip())
-        except json.JSONDecodeError as exc:
-            raise RuntimeError("resume-craft agent returned invalid JSON") from exc
+        raw_text = str(raw or "").strip()
+        parsed = self._safe_json_loads(raw_text)
+        if parsed is None or not isinstance(parsed, dict):
+            parsed = self._repair_json_output("resume-craft", raw_text, schema_json)
+        if parsed is None or not isinstance(parsed, dict):
+            raise RuntimeError("resume-craft agent returned invalid JSON")
         if not isinstance(parsed, dict):
             raise RuntimeError("resume-craft agent returned invalid JSON")
         if not isinstance(parsed.get("wizard_state"), dict):

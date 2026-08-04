@@ -1523,13 +1523,14 @@ a {
   min-width: 120px;
   min-height: 44px;
   border-radius: 12px;
-  background: #534a41;
+  background: #111111;
   color: #ffffff;
   transition: transform 220ms ease-out, box-shadow 220ms ease-out, filter 220ms ease-out, background-color 220ms ease-out;
 }
 
 .resume-craft-step1-card .resume-craft-next-btn:hover:not(:disabled) {
-  filter: brightness(1.06);
+  background: #2d2d2d;
+  filter: none;
   transform: translateY(-2px);
   box-shadow: 0 12px 22px rgba(101, 82, 60, 0.22);
 }

@@ -255,6 +255,10 @@ function messagesByStepFromConversation(messages: ResumeCraftConversationMessage
   return result;
 }
 
+function toAgentHistory(messages: ResumeCraftConversationMessage[]): Msg[] {
+  return messages.map(({ backendStep: _backendStep, ...message }) => message);
+}
+
 function normalizeTemplateCodeForUI(value: string) {
   const match = String(value || "").match(/[1-7]/);
   if (!match) return "02";
@@ -580,7 +584,7 @@ export function ResumeCraftPage() {
       const step1Profile = buildProfilePayload();
       const resp = (await callCareerforgeSkill(settings, "/careerforge/resume-craft/chat-turn", {
         message: userMessage.content,
-        history: nextMessages,
+        history: toAgentHistory(nextMessages),
         current_step: activeBackendStep,
         step1_profile: step1Profile,
         wizard_state: wizardState,
@@ -724,7 +728,7 @@ export function ResumeCraftPage() {
     if (!canGenerate) return;
     setRenderLoading(true);
     try {
-      const history = conversationMessages;
+      const history = toAgentHistory(conversationMessages);
       const baseProfile = buildProfilePayload();
       const step1Profile = {
         ...baseProfile,

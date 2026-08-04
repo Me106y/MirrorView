@@ -205,6 +205,67 @@ def test_agent_loads_skill_and_returns_structured_state():
     assert "最多 3 轮" in str(model.prompt)
 
 
+def test_resume_craft_agent_accepts_fenced_json_response():
+    model = _JsonModel(
+        '```json\n'
+        '{"reply":"已收到这段经历，请继续补充关键结果。",'
+        '"action":"collect","next_step_suggestion":"stay",'
+        '"render_ready":false,"missing_fields":["result"],'
+        '"wizard_state":{"current_step":4},'
+        '"step6_preview_markdown":"","step6_waiting_confirm":false,'
+        '"step6_applied_changes":[]}\n'
+        '```'
+    )
+    agent = CareerForgeAgent(llm=model)
+
+    result = agent.run_resume_craft_chat_turn({
+        "message": "我负责实现面试问答服务。",
+        "current_step": 4,
+        "step1_profile": _profile(),
+        "wizard_state": {"current_step": 4},
+        "history": [],
+    })
+
+    assert result["reply"].startswith("已收到这段经历")
+
+
+def test_step3_chat_route_does_not_turn_fenced_agent_json_into_502(monkeypatch):
+    Config.TURNSTILE_ENFORCE = False
+    Config.RATE_LIMIT_ENFORCE = False
+    agent = CareerForgeAgent(
+        llm=_JsonModel(
+            '```json\n'
+            '{"reply":"已收到这段经历，请继续补充关键结果。",'
+            '"action":"collect","next_step_suggestion":"stay",'
+            '"render_ready":false,"missing_fields":["result"],'
+            '"wizard_state":{"current_step":4},'
+            '"step6_preview_markdown":"","step6_waiting_confirm":false,'
+            '"step6_applied_changes":[]}\n'
+            '```'
+        )
+    )
+    monkeypatch.setattr(
+        routes.ai_service,
+        "run_resume_craft_chat_turn",
+        lambda payload, runtime=None: agent.run_resume_craft_chat_turn(payload),
+    )
+
+    response = _client().post(
+        "/api/careerforge/resume-craft/chat-turn",
+        json={
+            "message": "我负责实现面试问答服务。",
+            "current_step": 4,
+            "history": [{"role": "assistant", "content": "请描述一段经历。", "backendStep": 4}],
+            "step1_profile": _profile(),
+            "wizard_state": {"current_step": 4},
+            "runtime": {"mode": "byok", "provider": "deepseek", "model": "deepseek-chat", "api_key": "test-key"},
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["reply"].startswith("已收到这段经历")
+
+
 def test_agent_merges_compact_state_patch_after_user_has_no_more_experience():
     model = _JsonModel(
         '{"reply":"好的，这段经历已记录。请点击页面的“下一步”，我们继续整理技能与证书。",'
@@ -662,11 +723,11 @@ def test_agent_render_ready_normalizes_step6_confirmation_state():
     assert step6["awaiting_confirm"] is False
 
 
-def test_agent_exposes_invalid_json_without_repair_retry():
+def test_agent_rejects_structurally_invalid_json_without_repair_retry():
     model = _JsonModel("```json\n{\"reply\": \"需要修复\"}\n```")
     agent = CareerForgeAgent(llm=model)
 
-    with pytest.raises(RuntimeError, match="invalid JSON"):
+    with pytest.raises(RuntimeError, match="missing wizard_state"):
         agent.run_resume_craft_chat_turn(
             {
                 "message": "我做了一个检索服务。",
