@@ -223,6 +223,39 @@ class BaseSkillAgent:
         return result
 
     @staticmethod
+    def _ensure_preview_confirmation_guidance(result: dict) -> dict:
+        """Make the single preview-and-preferences confirmation actionable."""
+        wizard_state = result.get("wizard_state")
+        if not isinstance(wizard_state, dict):
+            return result
+        step_states = wizard_state.get("step_states")
+        step6 = step_states.get("step6") if isinstance(step_states, dict) else None
+        if not isinstance(step6, dict):
+            return result
+
+        preview = str(result.get("step6_preview_markdown") or step6.get("preview_markdown") or "").strip()
+        awaiting_confirm = (
+            result.get("step6_waiting_confirm") is True
+            or step6.get("awaiting_confirm") is True
+        )
+        if not preview or not awaiting_confirm:
+            return result
+
+        reply = str(result.get("reply") or "").strip()
+        explicit_chinese_guidance = "修改" in reply and "输入" in reply and "生成简历" in reply
+        explicit_english_guidance = (
+            "修改" not in reply
+            and "type" in reply.lower()
+            and "generate" in reply.lower()
+        )
+        if explicit_chinese_guidance or explicit_english_guidance:
+            return result
+
+        guidance = "请确认以上信息是否需要修改？如果没有问题，可以输入“生成简历”来生成您的简历。"
+        result["reply"] = f"{reply}\n\n{guidance}".strip()
+        return result
+
+    @staticmethod
     def _normalize_render_ready_state(result: dict, current_step: Any = 6) -> dict:
         """Keep the UI confirmation state aligned with the render-ready contract."""
         if str(current_step) != "6":
@@ -250,7 +283,7 @@ class BaseSkillAgent:
                     if not step5_preview_transition:
                         step6["awaiting_confirm"] = False
             if result.get("render_ready") is not True and not premature_confirmation:
-                return result
+                return BaseSkillAgent._ensure_preview_confirmation_guidance(result)
             result["render_ready"] = False
             result["action"] = "advance"
             result["next_step_suggestion"] = "next"
@@ -258,19 +291,19 @@ class BaseSkillAgent:
             return result
 
         if result.get("render_ready") is not True:
-            return result
+            return BaseSkillAgent._ensure_preview_confirmation_guidance(result)
 
         wizard_state = result.get("wizard_state")
         if not isinstance(wizard_state, dict):
             result["render_ready"] = False
-            return result
+            return BaseSkillAgent._ensure_preview_confirmation_guidance(result)
 
         step_states = wizard_state.get("step_states")
         step6 = step_states.get("step6") if isinstance(step_states, dict) else None
         draft_json = step6.get("draft_json") if isinstance(step6, dict) else None
         if not isinstance(draft_json, dict) or not draft_json:
             result["render_ready"] = False
-            return result
+            return BaseSkillAgent._ensure_preview_confirmation_guidance(result)
 
         collected = wizard_state.get("collected_by_step")
         explicitly_confirmed = (
@@ -283,7 +316,7 @@ class BaseSkillAgent:
             # Do not turn a malformed model response into a confirmation. The
             # user must have confirmed the preview in the Agent state first.
             result["render_ready"] = False
-            return result
+            return BaseSkillAgent._ensure_preview_confirmation_guidance(result)
 
         if isinstance(collected, dict):
             collected["step6_confirmed"] = True
@@ -502,4 +535,3 @@ You MUST follow the provided Skill specification to process user input.
                 },
                 ensure_ascii=False,
             )
-

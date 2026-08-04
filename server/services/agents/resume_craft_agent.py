@@ -64,9 +64,9 @@ class ResumeCraftAgent(BaseSkillAgent):
 8. 技术名只能作为候选提示，必须用“是否使用过/是否涉及”等方式向用户确认；用户确认前不得把候选技术写入简历或已确认事实。完整 history 和事实账本已覆盖的技术或技术维度不得重复追问，即使只是改换技术名、上下位概念或示例。
 9. 严格遵守事实边界，不编造经历、技能、职责或成果。对不清楚的内容先追问或标记为缺失。
 10. 只返回本轮必要的 wizard_state 最小 JSON 补丁，不要重复输出完整历史、聊天记录或未变化的经历内容。运行时会把补丁合并到已有状态；本轮确认过的新事实写入对应的 collected_by_step / step_states。
-11. Step1 已选择的模板、语言和照片设置视为已确认；进入确认与偏好阶段时先展示当前设置并请用户确认，不要再次要求用户选择模板、语言或照片。`current_step=5` 的普通消息只能收集技能、工具、语言能力和证书；但当技能已收集完毕且用户语义表达“好的”“按当前选择继续”“没有修改”等确认时，直接准备 Step6 未确认预览并返回 `next_step_suggestion=next`，不要停留在偏好选择。此时可以生成 `draft_json` 和 Markdown 摘要，写入 `step_states.step6.preview_markdown`，设置 `preview_ready=true`、`awaiting_confirm=true`、`confirmed=false`、`step6_confirmed=false`、`render_ready=false`；reply 必须展示摘要并询问是否需要修改。无论 `current_step=5` 还是 `current_step=6`，都不得在预览阶段提前确认或解锁生成；一般预览、修改和确认不依赖固定按钮或固定关键词。
+11. Step1 已选择的模板、语言和照片设置视为已确认；进入确认与偏好阶段时不要先开启独立的偏好问卷。`current_step=5` 的普通消息只能收集技能、工具、语言能力和证书；当技能已收集完毕且用户语义表达“好的”“按当前选择继续”“没有修改”等确认时，在同一轮同时整理最终偏好、生成 Step6 未确认预览并返回 `next_step_suggestion=next`，不要停留在偏好选择。将用户已表达的 `final_preferences` 写入 draft；用户未提供额外偏好时沿用 Step1 已确认设置和默认专业简洁风格。此时可以生成 `draft_json` 和 Markdown 摘要，写入 `step_states.step6.preview_markdown`，设置 `preview_ready=true`、`awaiting_confirm=true`、`confirmed=false`、`step6_confirmed=false`、`render_ready=false`；reply 必须在摘要之后明确询问是否需要修改，并引导用户输入“生成简历”来确认生成。无论 `current_step=5` 还是 `current_step=6`，都不得在预览阶段提前确认或解锁生成；一般预览、修改和确认不依赖固定按钮或固定关键词。
 12. 用户提出修改时，只修改其明确要求的内容，更新 draft_json 和 preview_markdown，增加 revision_count，并保持 awaiting_confirm=true、confirmed=false、step6_confirmed=false、render_ready=false；修改后再次展示摘要并等待确认。用户可以在连续 history 中修改前一阶段内容，必须同步更新对应的 confirmed state 和后续预览事实。
-13. 只有用户明确确认预览并表达生成意图时，才设置 step_states.step6.confirmed=true、awaiting_confirm=false、step6_confirmed=true、render_ready=true。`step6_preview_markdown` 只放结构化摘要，`reply` 放在摘要之后，明确说明已确认并将自动生成 HTML 和 PDF；不得提示用户点击按钮。Agent 不得自动调用生成接口。
+13. 只有用户明确确认预览并表达生成意图（例如输入“生成简历”或语义等价表达）时，才设置 step_states.step6.confirmed=true、awaiting_confirm=false、step6_confirmed=true、render_ready=true。`step6_preview_markdown` 只放结构化摘要，`reply` 放在摘要之后；未确认时必须明确引导用户输入“生成简历”来确认生成。确认后说明正在自动生成 HTML 和 PDF，不得提示用户点击按钮。Agent 不得自动调用生成接口。
 14. next_step_suggestion=next 只表示你判断当前阶段已完成；连续工作区会据此推进后端语义阶段，不要依赖固定按钮，也不要为了满足固定流程而强行推进。
 15. 结束工作/项目经历时，必须在事实边界内写入 step_states.step4.finalized_experiences，设置 step_states.step4.active_focus.stage=done，并记录仍缺失的核心维度（如有）。除非 user_skipped=true 或 Grill 已完成至少 2 轮，否则不得结束。若核心事实已齐全、当前没有 open 问题且用户语义上表示没有更多补充，应完成当前经历并保持 stage=done，不要继续追问。reply 要说明本段经历已完成；若还未达到用户计划的经历数量，邀请用户继续描述下一段，否则自然引导连续工作区进入技能与证书。结束后不得再次提出已经回答过的问题。
 
@@ -204,5 +204,4 @@ class ResumeCraftAgent(BaseSkillAgent):
         chain = prompt | self.llm | StrOutputParser()
         full_prompt = self._build_resume_craft_html_prompt(payload)
         return chain.invoke({"full_prompt": full_prompt})
-
 
