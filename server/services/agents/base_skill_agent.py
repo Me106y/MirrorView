@@ -262,6 +262,17 @@ class BaseSkillAgent:
         return result
 
     @staticmethod
+    def _strip_preview_confirmation_guidance(value: Any) -> str:
+        """Keep confirmation guidance in the reply, never in the preview body."""
+        text = str(value or "").strip()
+        if not text:
+            return ""
+        guidance = "请确认以上信息是否需要修改？如果没有问题，可以输入“生成简历”来生成您的简历。"
+        text = re.sub(re.escape(guidance), "", text)
+        text = re.sub(r"\n{3,}", "\n\n", text)
+        return text.strip()
+
+    @staticmethod
     def _ensure_preview_confirmation_guidance(result: dict) -> dict:
         """Make the single preview-and-preferences confirmation actionable."""
         wizard_state = result.get("wizard_state")
@@ -272,7 +283,12 @@ class BaseSkillAgent:
         if not isinstance(step6, dict):
             return result
 
-        preview = str(result.get("step6_preview_markdown") or step6.get("preview_markdown") or "").strip()
+        raw_preview = result.get("step6_preview_markdown") or step6.get("preview_markdown") or ""
+        preview = BaseSkillAgent._strip_preview_confirmation_guidance(raw_preview)
+        if "step6_preview_markdown" in result:
+            result["step6_preview_markdown"] = preview
+        if "preview_markdown" in step6:
+            step6["preview_markdown"] = preview
         awaiting_confirm = (
             result.get("step6_waiting_confirm") is True
             or step6.get("awaiting_confirm") is True
@@ -304,7 +320,6 @@ class BaseSkillAgent:
                 if isinstance(step6, dict):
                     step5_preview_transition = (
                         str(current_step) == "5"
-                        and result.get("next_step_suggestion") == "next"
                         and result.get("render_ready") is not True
                         and result.get("step6_waiting_confirm") is True
                         and step6.get("preview_ready") is True
@@ -314,13 +329,16 @@ class BaseSkillAgent:
                     step6["confirmed"] = False
                     if not step5_preview_transition:
                         step6["awaiting_confirm"] = False
-            if result.get("render_ready") is not True and not premature_confirmation:
+            if (
+                result.get("render_ready") is not True
+                and not premature_confirmation
+                and not step5_preview_transition
+            ):
                 return BaseSkillAgent._ensure_preview_confirmation_guidance(result)
             result["render_ready"] = False
             result["action"] = "advance"
             result["next_step_suggestion"] = "next"
-            result["reply"] = "技能与证书信息已记录。接下来我会根据已确认内容整理简历预览。"
-            return result
+            return BaseSkillAgent._ensure_preview_confirmation_guidance(result)
 
         if result.get("render_ready") is not True:
             return BaseSkillAgent._ensure_preview_confirmation_guidance(result)
@@ -361,17 +379,13 @@ class BaseSkillAgent:
         if isinstance(step6, dict):
             step6["confirmed"] = True
             step6["awaiting_confirm"] = False
-        guidance = "预览内容已确认，我现在为你生成 HTML 和 PDF，请稍候。"
         reply = str(result.get("reply") or "").strip()
         if "点击" in reply and "生成" in reply:
             reply = re.sub(r"点击[^。！？\n]*生成[^。！？\n]*[。！？]?", "", reply).strip()
-        has_generation_guidance = (
-            any(token in reply for token in ("自动生成", "正在生成", "现在为你生成", "开始生成"))
-            and any(token in reply for token in ("简历", "HTML", "PDF"))
-            and "点击" not in reply
-        )
-        if not has_generation_guidance:
-            result["reply"] = f"{reply}\n\n{guidance}".strip()
+        if re.search(r"[\u4e00-\u9fff]", reply) or not reply:
+            result["reply"] = "好的，正在为您生成简历的 HTML 和 PDF 版本。请稍候。"
+        else:
+            result["reply"] = 'Okay, I am generating the HTML and PDF versions of your resume. Please wait.'
         return result
 
     def _safe_json_loads(self, raw: str) -> Optional[dict]:

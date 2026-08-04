@@ -30,6 +30,7 @@ type RenderRequest = {
   wizardState?: ResumeCraftWizardState;
   conversationMessages?: ResumeCraftConversationMessage[];
   activeBackendStep?: ResumeCraftBackendStep;
+  bypassConsent?: boolean;
 };
 
 type ResumeCraftRouteState = {
@@ -747,7 +748,7 @@ export function ResumeCraftPage() {
     const hasDraft = Boolean(currentDraft && Object.keys(currentDraft).length > 0);
     const confirmed = currentWizardState.collected_by_step?.step6_confirmed === true && currentStep6?.confirmed === true;
 
-    if (!accepted) {
+    if (!accepted && !requested.bypassConsent) {
       pendingRenderRef.current = requested;
       setShowConsentPrompt(true);
       return;
@@ -1244,7 +1245,14 @@ export function ResumeCraftPage() {
           </section>
         ) : null}
       </div>
-      <ConsentModal open={showConsentPrompt} onClose={() => { setShowConsentPrompt(false); if (accepted) void renderResume(); }} />
+      <ConsentModal
+        open={showConsentPrompt}
+        onClose={() => setShowConsentPrompt(false)}
+        onAccept={() => {
+          const pending = pendingRenderRef.current;
+          if (pending) void renderResume({ ...pending, bypassConsent: true });
+        }}
+      />
     </section>
     </>
   );

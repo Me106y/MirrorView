@@ -4,9 +4,10 @@ import { useConsent } from "../context/ConsentContext";
 interface ConsentModalProps {
   open: boolean;
   onClose?: () => void;
+  onAccept?: () => void;
 }
 
-export function ConsentModal({ open, onClose }: ConsentModalProps) {
+export function ConsentModal({ open, onClose, onAccept }: ConsentModalProps) {
   const { accepted, accept } = useConsent();
   const modalRef = useRef<HTMLDivElement | null>(null);
 
@@ -46,6 +47,7 @@ export function ConsentModal({ open, onClose }: ConsentModalProps) {
 
   const handleAccept = () => {
     accept();
+    onAccept?.();
     onClose?.();
   };
 

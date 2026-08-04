@@ -656,7 +656,8 @@ def test_agent_render_ready_adds_generation_guidance_when_model_omits_it():
         "wizard_state": {"current_step": 6},
         "history": [],
     })
-    assert "生成 HTML 和 PDF" in result["reply"]
+    assert "HTML 和 PDF" in result["reply"]
+    assert result["reply"] == "好的，正在为您生成简历的 HTML 和 PDF 版本。请稍候。"
     assert "点击“生成简历”" not in result["reply"]
     assert result["step6_preview_markdown"] == ""
 
@@ -738,6 +739,29 @@ def test_agent_step5_confirms_existing_preferences_and_prepares_preview():
     assert "不要先询问偏好" in prompt
 
 
+def test_agent_step5_preview_forces_transition_to_step6_even_when_model_says_stay():
+    model = _JsonModel(
+        '{"reply":"请确认简历摘要。","action":"preview","next_step_suggestion":"stay",'
+        '"render_ready":false,"missing_fields":[],"wizard_state":{"step_states":{"step6":{'
+        '"preview_ready":true,"awaiting_confirm":true,"confirmed":false,'
+        '"draft_json":{"target_role":"AI应用开发"}}},"collected_by_step":{"step6_confirmed":false}},'
+        '"step6_preview_markdown":"# 简历摘要","step6_waiting_confirm":true,"step6_applied_changes":[]}'
+    )
+    agent = ResumeCraftAgent(llm=model)
+
+    result = agent.run_resume_craft_chat_turn({
+        "message": "没有其他技能了，请生成预览。",
+        "current_step": 5,
+        "step1_profile": _profile(),
+        "wizard_state": {"current_step": 5, "step_states": {"step6": {"draft_json": {}}}},
+        "history": [],
+    })
+
+    assert result["next_step_suggestion"] == "next"
+    assert result["render_ready"] is False
+    assert result["wizard_state"]["step_states"]["step6"]["confirmed"] is False
+
+
 def test_agent_closes_experience_when_user_has_no_more_to_add():
     model = _JsonModel(
         '{"reply":"这段经历已整理完成。若还有其他经历可以继续描述；如果没有，请点击“下一步”进入技能与证书。",'
@@ -805,6 +829,33 @@ def test_agent_step5_preview_returns_structured_summary_without_render_ready():
     assert step6["draft_json"]["target_role"] == "AI应用开发"
     assert "结构化" in str(model.prompt)
     assert "step6_preview_markdown" in str(model.prompt)
+
+
+def test_agent_preview_keeps_confirmation_guidance_out_of_summary():
+    guidance = "请确认以上信息是否需要修改？如果没有问题，可以输入“生成简历”来生成您的简历。"
+    model = _JsonModel(
+        '{"reply":"请确认预览。","action":"preview","next_step_suggestion":"stay",'
+        '"render_ready":false,"missing_fields":[],"wizard_state":{"step_states":{"step6":{'
+        '"preview_ready":true,"awaiting_confirm":true,"confirmed":false,'
+        '"draft_json":{"target_role":"AI应用开发"},"preview_markdown":"# 摘要\\n\\n' + guidance + '\\n\\n' + guidance + '"}},'
+        '"collected_by_step":{"step6_confirmed":false}},'
+        '"step6_preview_markdown":"# 摘要\\n\\n' + guidance + '\\n\\n' + guidance + '",'
+        '"step6_waiting_confirm":true,"step6_applied_changes":[]}'
+    )
+    agent = ResumeCraftAgent(llm=model)
+
+    result = agent.run_resume_craft_chat_turn({
+        "message": "请查看预览",
+        "current_step": 6,
+        "step1_profile": _profile(),
+        "wizard_state": {"current_step": 6, "step_states": {"step6": {"draft_json": {}}}},
+        "history": [],
+    })
+
+    assert result["step6_preview_markdown"] == "# 摘要"
+    assert result["wizard_state"]["step_states"]["step6"]["preview_markdown"] == "# 摘要"
+    assert result["reply"] == guidance
+    assert result["reply"].count("请确认以上信息是否需要修改") == 1
 
 
 def test_agent_step5_revision_keeps_generation_locked_until_confirmation():
