@@ -44,6 +44,57 @@ class ResumeCraftAgent(BaseSkillAgent):
         return "生成简历" in compact and len(compact) <= 18
 
     @staticmethod
+    def _is_preview_intent(message: Any) -> bool:
+        """Recognize an explicit request to create the reviewable draft."""
+        value = str(message or "").strip().lower()
+        return any(marker in value for marker in ("简历预览", "预览简历", "查看预览", "查看简历预览"))
+
+    @staticmethod
+    def _preview_markdown(draft: dict) -> str:
+        """Create a compact, factual preview when the model omits its summary."""
+        personal = draft.get("personal_info") if isinstance(draft.get("personal_info"), dict) else {}
+        lines = ["# 简历预览"]
+        if draft.get("target_role"):
+            lines.append(f"\n- 目标岗位：{draft['target_role']}")
+        identity = " / ".join(str(personal.get(key) or "").strip() for key in ("name", "phone", "email", "city") if str(personal.get(key) or "").strip())
+        if identity:
+            lines.append(f"- 个人信息：{identity}")
+        for label, key in (("教育背景", "education"), ("工作/项目经历", "experiences"), ("技能与证书", "skills_and_certs")):
+            values = draft.get(key)
+            if isinstance(values, list) and values:
+                lines.append(f"- {label}：" + "；".join(str(value).strip() for value in values if str(value).strip()))
+        if draft.get("final_preferences"):
+            lines.append(f"- 重点：{draft['final_preferences']}")
+        return "\n".join(lines)
+
+    @classmethod
+    def _normalize_preview_request(cls, result: dict, previous_wizard_state: Any, user_message: Any, current_step: Any, step1_profile: Any) -> dict:
+        """Guarantee an explicit preview request enters the review state."""
+        if str(current_step) not in {"5", "6"} or not cls._is_preview_intent(user_message) or cls._is_generation_intent(user_message):
+            return result
+        wizard_state = result.get("wizard_state")
+        if not isinstance(wizard_state, dict):
+            return result
+        step_states = wizard_state.setdefault("step_states", {})
+        step6 = step_states.setdefault("step6", {})
+        if not isinstance(step6, dict):
+            step6 = {}
+            step_states["step6"] = step6
+        draft = step6.get("draft_json")
+        if not isinstance(draft, dict) or not draft:
+            draft = cls._fallback_preview_draft(step1_profile, wizard_state)
+        if not draft:
+            return result
+        preview = str(result.get("step6_preview_markdown") or step6.get("preview_markdown") or "").strip() or cls._preview_markdown(draft)
+        step6.update({"draft_json": deepcopy(draft), "preview_ready": True, "awaiting_confirm": True, "confirmed": False, "preview_markdown": preview})
+        wizard_state["current_step"] = 6
+        collected = wizard_state.setdefault("collected_by_step", {})
+        if isinstance(collected, dict):
+            collected["step6_confirmed"] = False
+        result.update({"action": "preview", "next_step_suggestion": "next", "render_ready": False, "step6_preview_markdown": preview, "step6_waiting_confirm": True, "reply": "请确认以上信息是否需要修改？如果没有问题，可以输入“生成简历”来生成您的简历。"})
+        return result
+
+    @staticmethod
     def _history_has_visible_preview(history: Any) -> bool:
         """Recognize preview bubbles from older snapshots without metadata."""
         if not isinstance(history, list):
@@ -258,7 +309,7 @@ class ResumeCraftAgent(BaseSkillAgent):
 11. 只返回本轮必要的 wizard_state 最小 JSON 补丁，不要重复输出完整历史、聊天记录或未变化的经历内容。运行时会把补丁合并到已有状态；本轮确认过的新事实写入对应的 collected_by_step / step_states。
 12. Step1 已选择的模板、语言和照片设置视为已确认；不要开启独立的最终偏好问卷。`current_step=5` 负责收集技能、工具、语言能力和证书；当这些信息已经足够，或用户语义表达没有其他技能/证书需要补充时，必须在同一轮直接基于全部已确认事实生成 Step6 未确认预览并返回 `next_step_suggestion=next`，不要先询问偏好。预览使用 Step1 已确认的模板、语言、照片和默认专业简洁风格；此时生成 `draft_json` 和 Markdown 摘要，写入 `step_states.step6.preview_markdown`，设置 `preview_ready=true`、`awaiting_confirm=true`、`confirmed=false`、`step6_confirmed=false`、`render_ready=false`；reply 只需要等待用户修改或输入“生成简历”。无论 `current_step=5` 还是 `current_step=6`，都不得在预览阶段提前确认或解锁生成；一般预览、修改和确认不依赖固定按钮或固定关键词。
 13. 用户提出修改时，只修改其明确要求的内容，更新 draft_json 和 preview_markdown，增加 revision_count，并保持 awaiting_confirm=true、confirmed=false、step6_confirmed=false、render_ready=false；修改后再次展示摘要并等待确认。用户可以在连续 history 中修改前一阶段内容，必须同步更新对应的 confirmed state 和后续预览事实。
-14. 只有用户明确确认预览并表达生成意图（例如输入“生成简历”或语义等价表达）时，才设置 step_states.step6.confirmed=true、awaiting_confirm=false、step6_confirmed=true、render_ready=true。若当前已有 `step6.preview_ready=true` 且 `step6.awaiting_confirm=true`，用户输入“生成简历”只能解释为确认当前预览并生成文件，禁止重新生成或返回 `step6_preview_markdown`，禁止把“生成”再次理解为“生成预览”。未确认时，`step6_preview_markdown` 只放结构化摘要，`reply` 只保留一条修改/生成确认提示；确认生成时只在 `reply` 中说明正在自动生成 HTML 和 PDF，不得提示用户点击按钮。Agent 不得自动调用生成接口。
+14. 只有用户明确确认预览并表达生成意图（例如输入“生成简历”或语义等价表达）时，才设置 step_states.step6.confirmed=true、awaiting_confirm=false、step6_confirmed=true、render_ready=true。若当前已有 `step6.preview_ready=true` 且 `step6.awaiting_confirm=true`，用户输入“生成简历”只能解释为确认当前预览并生成文件，禁止重新生成或返回 `step6_preview_markdown`，禁止把“生成”再次理解为“生成预览”。未确认时，`step6_preview_markdown` 只放结构化摘要，`reply` 只保留一条修改/生成确认提示；确认生成时不要返回等待式生成文案，前端会直接调用生成接口。Agent 不得自动调用生成接口。
 15. next_step_suggestion=next 只表示你判断当前阶段已完成；连续工作区会据此推进后端语义阶段，不要依赖固定按钮，也不要为了满足固定流程而强行推进。
 16. 结束工作/项目经历时，必须在事实边界内写入 step_states.step4.finalized_experiences，设置 step_states.step4.active_focus.stage=done，并记录仍缺失的核心维度（如有）。除非 user_skipped=true 或 Grill 已完成至少 2 轮，否则不得结束。若核心事实已齐全、当前没有 open 问题且用户语义上表示没有更多补充，应完成当前经历并保持 stage=done，不要继续追问。reply 要说明本段经历已完成；若还未达到用户计划的经历数量，邀请用户继续描述下一段，否则自然引导连续工作区进入技能与证书。结束后不得再次提出已经回答过的问题。
 
@@ -325,6 +376,7 @@ class ResumeCraftAgent(BaseSkillAgent):
             history=normalization_history,
             current_step=payload.get("current_step"),
         )
+        parsed = self._normalize_preview_request(parsed, previous_wizard_state, context["message"], payload.get("current_step"), context["step1_profile"])
         parsed = self._normalize_existing_preview_generation(
             parsed,
             previous_wizard_state,

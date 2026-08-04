@@ -938,9 +938,9 @@ class BaseSkillAgent:
         if "点击" in reply and "生成" in reply:
             reply = re.sub(r"点击[^。！？\n]*生成[^。！？\n]*[。！？]?", "", reply).strip()
         if re.search(r"[\u4e00-\u9fff]", reply) or not reply:
-            result["reply"] = "好的，正在为您生成简历的 HTML 和 PDF 版本。请稍候。"
+            result["reply"] = "简历已确认。"
         else:
-            result["reply"] = 'Okay, I am generating the HTML and PDF versions of your resume. Please wait.'
+            result["reply"] = "Resume confirmed; opening the generator."
         return result
 
     def _safe_json_loads(self, raw: str) -> Optional[dict]:
