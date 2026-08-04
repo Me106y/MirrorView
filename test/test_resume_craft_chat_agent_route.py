@@ -664,9 +664,9 @@ def test_agent_step5_confirms_existing_preferences_and_prepares_preview():
     assert result["reply"].count("请确认以上信息是否需要修改") == 1
     assert "Step1 已选择的模板、语言和照片设置视为已确认" in prompt
     assert "按当前选择继续" in prompt
-    assert "不要再次要求用户选择模板、语言或照片" in prompt
-    assert "不要先开启独立的偏好问卷" in prompt
-    assert "生成 Step6 未确认预览" in prompt
+    assert "不要开启独立的最终偏好问卷" in prompt
+    assert "同一轮直接基于全部已确认事实生成 Step6 未确认预览" in prompt
+    assert "不要先询问偏好" in prompt
 
 
 def test_agent_closes_experience_when_user_has_no_more_to_add():

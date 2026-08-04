@@ -62,25 +62,25 @@ const LANGUAGE_OPTIONS = [
 const INITIAL_CHAT_MESSAGES: Record<ResumeCraftBackendStep, string> = {
   4: "请描述一段工作或项目经历，可以包括项目背景、你的职责、采取的关键行动，以及最终结果或影响。我会围绕目标岗位帮你提炼亮点并进行追问。",
   5: "请补充与目标岗位相关的技能、工具、编程语言、语言能力或证书，并说明你的掌握程度和实际使用场景。我会帮你整理成简历中的技能信息。",
-  6: "请告诉我你希望简历重点突出什么，例如目标岗位方向、内容取舍、语气风格或其他排版偏好。我会结合已确认的信息整理最终简历草稿。",
+  6: "简历预览已经整理完成。如需修改请直接说明，确认无误后可以输入“生成简历”。",
 };
 
 const CHAT_INPUT_PLACEHOLDERS: Record<ResumeCraftBackendStep, string> = {
   4: "描述一段工作或项目经历，包含背景、职责、行动和结果",
   5: "补充技能、工具、语言能力或证书信息",
-  6: "补充简历重点、内容取舍或排版偏好，或表达想查看预览",
+  6: "修改预览内容，或输入“生成简历”",
 };
 
 const CHAT_STEP_DESCRIPTIONS: Record<ResumeCraftBackendStep, string> = {
   4: "围绕工作或项目经历的背景、职责、行动和结果，提炼与目标岗位匹配的亮点。",
   5: "整理技能、工具、语言能力和证书，并补充掌握程度与实际使用场景。",
-  6: "确认简历重点、内容取舍、语气风格和其他偏好，生成最终简历草稿。",
+  6: "确认预览内容；如需修改请直接说明，确认无误后输入“生成简历”。",
 };
 
 const CHAT_PHASES: Array<{ step: ResumeCraftBackendStep; label: string }> = [
   { step: 4, label: "工作/项目经历" },
   { step: 5, label: "技能与证书" },
-  { step: 6, label: "确认与偏好" },
+  { step: 6, label: "确认预览" },
 ];
 
 const STEP_TITLES: Record<StepNumber, string> = {

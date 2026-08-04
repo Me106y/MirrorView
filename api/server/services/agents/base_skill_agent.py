@@ -280,7 +280,7 @@ class BaseSkillAgent:
             result["render_ready"] = False
             result["action"] = "advance"
             result["next_step_suggestion"] = "next"
-            result["reply"] = "技能与证书信息已记录。接下来请在当前对话中补充最终偏好，随后进行预览确认。"
+            result["reply"] = "技能与证书信息已记录。接下来我会根据已确认内容整理简历预览。"
             return result
 
         if result.get("render_ready") is not True:
