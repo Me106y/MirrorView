@@ -340,7 +340,10 @@ class BaseSkillAgent:
             result["next_step_suggestion"] = "next"
             return BaseSkillAgent._ensure_preview_confirmation_guidance(result)
 
-        if result.get("render_ready") is not True:
+        if (
+            result.get("render_ready") is not True
+            and result.get("action") not in {"confirm", "render_ready"}
+        ):
             return BaseSkillAgent._ensure_preview_confirmation_guidance(result)
 
         wizard_state = result.get("wizard_state")
@@ -367,6 +370,10 @@ class BaseSkillAgent:
             # user must have confirmed the preview in the Agent state first.
             result["render_ready"] = False
             return BaseSkillAgent._ensure_preview_confirmation_guidance(result)
+
+        # The action and confirmed state are authoritative when a model omits
+        # the redundant top-level boolean from an otherwise valid response.
+        result["render_ready"] = True
 
         # The previous preview is already visible in the conversation. A
         # generation turn should only report progress, so the frontend does

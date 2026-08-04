@@ -601,9 +601,6 @@ export function ResumeCraftPage() {
       if (!serverReply && !step6PreviewMarkdown) {
         throw new Error("Agent response missing reply");
       }
-      const assistantReply = [step6PreviewMarkdown, serverReply]
-        .filter(Boolean)
-        .join("\n\n");
 
       if (!resp.wizard_state || typeof resp.wizard_state !== "object") {
         throw new Error("Agent response missing wizard_state");
@@ -615,6 +612,16 @@ export function ResumeCraftPage() {
       const nextBackendStep = resp.next_step_suggestion === "next"
         ? advanceBackendStep(activeBackendStep)
         : activeBackendStep;
+      const nextStep6 = nextWizard.step_states?.step6;
+      const nextDraft = nextStep6?.draft_json;
+      const renderReady = resp.render_ready === true
+        && nextBackendStep === 6
+        && nextWizard.collected_by_step?.step6_confirmed === true
+        && nextStep6?.confirmed === true
+        && Boolean(nextDraft && Object.keys(nextDraft).length > 0);
+      const assistantReply = [renderReady ? "" : step6PreviewMarkdown, serverReply]
+        .filter(Boolean)
+        .join("\n\n");
       const assistantMessage: ResumeCraftConversationMessage = {
         role: "assistant",
         content: assistantReply,
@@ -629,13 +636,6 @@ export function ResumeCraftPage() {
       setMessagesByStep(messagesByStepFromConversation(completedMessages));
       setActiveBackendStep(nextBackendStep);
 
-      const nextStep6 = nextWizard.step_states?.step6;
-      const nextDraft = nextStep6?.draft_json;
-      const renderReady = resp.render_ready === true
-        && nextBackendStep === 6
-        && nextWizard.collected_by_step?.step6_confirmed === true
-        && nextStep6?.confirmed === true
-        && Boolean(nextDraft && Object.keys(nextDraft).length > 0);
       if (renderReady) {
         await renderResume({
           wizardState: nextWizard,

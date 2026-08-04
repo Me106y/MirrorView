@@ -660,6 +660,7 @@ def test_agent_render_ready_adds_generation_guidance_when_model_omits_it():
     assert result["reply"] == "好的，正在为您生成简历的 HTML 和 PDF 版本。请稍候。"
     assert "点击“生成简历”" not in result["reply"]
     assert result["step6_preview_markdown"] == ""
+    assert result["wizard_state"]["step_states"]["step6"].get("preview_markdown", "") == ""
 
 
 def test_agent_does_not_unlock_step6_from_step5_confirmation():
@@ -952,6 +953,33 @@ def test_agent_render_ready_does_not_synthesize_step6_confirmation_state():
     assert result["render_ready"] is False
     assert result["wizard_state"].get("collected_by_step", {}).get("step6_confirmed") is False
     assert step6.get("confirmed") is not True
+
+
+def test_agent_confirm_action_with_valid_state_unlocks_render_when_boolean_is_missing():
+    model = _JsonModel(
+        '{"reply":"确认生成。","action":"confirm","next_step_suggestion":"stay",'
+        '"missing_fields":[],"wizard_state":{"step_states":{"step6":{'
+        '"preview_ready":true,"awaiting_confirm":false,"confirmed":true,'
+        '"draft_json":{"target_role":"AI应用开发"}}},"collected_by_step":{"step6_confirmed":true}},'
+        '"step6_preview_markdown":"# 摘要","step6_waiting_confirm":false,"step6_applied_changes":[]}'
+    )
+    agent = ResumeCraftAgent(llm=model)
+
+    result = agent.run_resume_craft_chat_turn({
+        "message": "生成简历",
+        "current_step": 6,
+        "step1_profile": _profile(),
+        "wizard_state": {
+            "current_step": 6,
+            "collected_by_step": {"step6_confirmed": False},
+            "step_states": {"step6": {"preview_ready": True, "awaiting_confirm": True}},
+        },
+        "history": [{"role": "assistant", "content": "请确认预览。"}],
+    })
+
+    assert result["render_ready"] is True
+    assert result["step6_preview_markdown"] == ""
+    assert result["reply"] == "好的，正在为您生成简历的 HTML 和 PDF 版本。请稍候。"
 
 
 def test_agent_recovers_structurally_incomplete_json_response():
