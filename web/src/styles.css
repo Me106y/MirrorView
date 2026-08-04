@@ -2001,19 +2001,23 @@ a {
 
 .resume-craft-final-head-actions {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 8px;
   flex-wrap: wrap;
   justify-content: flex-end;
 }
 
-.resume-craft-result-meta {
+.resume-craft-result-action-btn,
+.resume-craft-result-page .resume-craft-export-html-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  width: 120px;
+  height: 44px;
   min-height: 44px;
-  padding: 0 4px;
-  color: #6d6d6d;
-  font-size: 0.84rem;
+  margin-top: 0;
+  padding: 0 12px;
+  box-sizing: border-box;
   white-space: nowrap;
 }
 
@@ -2074,7 +2078,6 @@ a {
 }
 
 .resume-craft-result-page .resume-craft-export-html-btn {
-  margin-top: 0;
   background: #111111;
   color: #ffffff;
 }
@@ -3230,12 +3233,6 @@ textarea {
   .resume-craft-final-head-actions {
     width: 100%;
     justify-content: flex-start;
-  }
-}
-
-@media (min-width: 768px) {
-  .resume-craft-result-page > .back-home-btn {
-    left: -16px;
   }
 }
 

@@ -7,16 +7,6 @@ import {
   type ResumeCraftResultArtifact,
 } from "../lib/storage";
 
-const TEMPLATE_LABELS: Record<string, string> = {
-  "01": "杂志编辑风",
-  "02": "极简主义",
-  "03": "深蓝双栏",
-  "04": "深灰左栏",
-  "05": "深色头部",
-  "06": "清新青色",
-  "07": "优雅对称",
-};
-
 type ResultRouteState = { artifact?: unknown };
 
 function normalizeEditorState(value: unknown): ResumeCraftEditorState | undefined {
@@ -110,12 +100,6 @@ export function ResumeCraftResultPage() {
 
   return (
     <section className="resume-craft-page resume-craft-result-page">
-      <NavLink to="/resume-craft" state={{ resumeCraftStep: 5, editorState: artifact.editorState }} className="back-home-btn">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M19 12H5M12 19l-7-7 7-7" />
-        </svg>
-        返回简历制作
-      </NavLink>
       <div className="resume-craft-layout">
         <section className="surface resume-craft-final-page">
           <header className="resume-craft-final-head">
@@ -124,10 +108,11 @@ export function ResumeCraftResultPage() {
               <p>HTML 预览和 PDF 文件已经准备完成。</p>
             </div>
             <div className="resume-craft-final-head-actions">
-              <span className="resume-craft-result-meta">模板：{TEMPLATE_LABELS[artifact.templateCode] || "简历模板"}</span>
-              <span className="resume-craft-result-meta">语言：{artifact.language === "en" ? "英文" : artifact.language === "both" ? "中英文双版" : "中文"}</span>
+              <NavLink to="/resume-craft" state={{ resumeCraftStep: 5, editorState: artifact.editorState }} className="ghost-btn resume-craft-result-action-btn resume-craft-result-back-btn">
+                上一步
+              </NavLink>
               <button type="button" className="primary-btn resume-craft-export-html-btn" onClick={exportHtml}>导出 HTML</button>
-              <button type="button" className="ghost-btn" onClick={exportPdf}>导出 PDF</button>
+              <button type="button" className="ghost-btn resume-craft-result-action-btn" onClick={exportPdf}>导出 PDF</button>
             </div>
           </header>
           <iframe
