@@ -168,7 +168,9 @@ prefill_policy:
 - 初次预览：设置 `preview_ready=true`、`awaiting_confirm=true`、`confirmed=false`、`step6_confirmed=false`、`render_ready=false`。
 - 用户提出修改：只修改明确要求的内容，更新摘要和 `draft_json`，保留 `awaiting_confirm=true`，再次询问是否需要修改。
 - 用户明确确认无需修改或确认生成：设置 `confirmed=true`、`awaiting_confirm=false`、`step6_confirmed=true`、`render_ready=true`，告知用户可以点击“生成简历”。Agent 不自动调用生成接口。
-- 在后端 `current_step=5` 时不得设置上述 Step6 确认字段，也不得在回复中引导生成简历；应在当前连续工作区中自然引导用户补充最终偏好，前端会依据 `next_step_suggestion=next` 进入确认阶段。
+- Step1 已选择的模板、语言和照片设置视为已确认的当前选择。进入确认与偏好阶段时，先展示当前选择并请用户确认，不要再次要求用户选择模板、语言或照片；除非用户明确提出修改，否则不要重新列出选择题。
+- 当后端 `current_step=5` 的技能信息已经收集完毕，且用户表达“好的”“按当前选择继续”“没有修改”等语义确认时，直接准备 Step6 的未确认预览并返回 `next_step_suggestion=next`，让连续工作区进入 Step6。此过渡回复可以设置 `preview_ready=true`、`awaiting_confirm=true`、`confirmed=false`、`step6_confirmed=false`、`render_ready=false`，但不得生成 HTML、解锁生成按钮或声称已确认；预览仍必须展示摘要并询问是否需要修改。
+- 在后端 `current_step=5` 的普通消息中仍只收集技能、工具、语言能力和证书；只有上述“用户确认当前已有设置”的语义过渡可以直接准备未确认预览。`current_step=6` 才处理一般的最终偏好、预览、修改和确认。
 - 预览只展示结构化事实摘要，不生成 HTML；只有用户确认后，页面的“生成简历”按钮才可用。
 
 ---

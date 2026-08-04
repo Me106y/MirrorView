@@ -616,7 +616,7 @@ export function ResumeCraftPage() {
         role: "assistant",
         content: assistantReply,
         timestamp: nowTimeLabel(),
-        isPreview: activeBackendStep === 6 && Boolean(step6PreviewMarkdown),
+        isPreview: Boolean(step6PreviewMarkdown),
         backendStep: activeBackendStep,
       };
       const completedMessages = [...nextMessages, assistantMessage];

@@ -620,6 +620,50 @@ def test_agent_does_not_unlock_step6_from_step5_confirmation():
     assert "current_step=5" in str(model.prompt)
 
 
+def test_agent_step5_confirms_existing_preferences_and_prepares_preview():
+    model = _JsonModel(
+        '{"reply":"已按当前选择整理简历预览，请确认是否需要修改。",'
+        '"action":"preview","next_step_suggestion":"next","render_ready":false,'
+        '"missing_fields":[],"wizard_state":{"step_states":{"step6":{'
+        '"preview_ready":true,"awaiting_confirm":true,"confirmed":false,'
+        '"draft_json":{"target_role":"AI应用开发"}}},'
+        '"collected_by_step":{"step6_confirmed":false}},'
+        '"step6_preview_markdown":"# 简历摘要\\n\\n- 模板：极简主义\\n- 语言：中文\\n- 照片：不放照片",'
+        '"step6_waiting_confirm":true,"step6_applied_changes":[]}'
+    )
+    agent = CareerForgeAgent(llm=model)
+
+    result = agent.run_resume_craft_chat_turn(
+        {
+            "message": "好的，按当前选择继续，不需要修改模板、语言和照片设置。",
+            "current_step": 5,
+            "step1_profile": _profile(),
+            "wizard_state": {
+                "current_step": 5,
+                "collected_by_step": {"skills_and_certs": ["Python", "LangChain"]},
+                "step_states": {"step6": {"draft_json": {}}},
+            },
+            "history": [
+                {"role": "assistant", "content": "当前选择为极简主义、中文、不放照片，是否按当前选择继续？"},
+            ],
+        }
+    )
+
+    prompt = str(model.prompt)
+    assert result["next_step_suggestion"] == "next"
+    assert result["render_ready"] is False
+    assert result["step6_waiting_confirm"] is True
+    step6 = result["wizard_state"]["step_states"]["step6"]
+    assert step6["preview_ready"] is True
+    assert step6["awaiting_confirm"] is True
+    assert step6["confirmed"] is False
+    assert result["wizard_state"]["collected_by_step"]["step6_confirmed"] is False
+    assert "Step1 已选择的模板、语言和照片设置视为已确认" in prompt
+    assert "按当前选择继续" in prompt
+    assert "不要再次要求用户选择模板、语言或照片" in prompt
+    assert "直接准备 Step6 未确认预览" in prompt
+
+
 def test_agent_closes_experience_when_user_has_no_more_to_add():
     model = _JsonModel(
         '{"reply":"这段经历已整理完成。若还有其他经历可以继续描述；如果没有，请点击“下一步”进入技能与证书。",'
