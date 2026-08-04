@@ -242,17 +242,10 @@ class BaseSkillAgent:
             return result
 
         reply = str(result.get("reply") or "").strip()
-        explicit_chinese_guidance = "修改" in reply and "输入" in reply and "生成简历" in reply
-        explicit_english_guidance = (
-            "修改" not in reply
-            and "type" in reply.lower()
-            and "generate" in reply.lower()
-        )
-        if explicit_chinese_guidance or explicit_english_guidance:
-            return result
-
-        guidance = "请确认以上信息是否需要修改？如果没有问题，可以输入“生成简历”来生成您的简历。"
-        result["reply"] = f"{reply}\n\n{guidance}".strip()
+        if re.search(r"[\u4e00-\u9fff]", reply) or not reply:
+            result["reply"] = "请确认以上信息是否需要修改？如果没有问题，可以输入“生成简历”来生成您的简历。"
+        else:
+            result["reply"] = 'Please confirm whether the information above needs changes. If everything looks good, type "generate resume" to create your resume.'
         return result
 
     @staticmethod
@@ -317,6 +310,12 @@ class BaseSkillAgent:
             # user must have confirmed the preview in the Agent state first.
             result["render_ready"] = False
             return BaseSkillAgent._ensure_preview_confirmation_guidance(result)
+
+        # The previous preview is already visible in the conversation. A
+        # generation turn should only report progress, so the frontend does
+        # not append the same preview a second time.
+        result["step6_preview_markdown"] = ""
+        result["step6_waiting_confirm"] = False
 
         if isinstance(collected, dict):
             collected["step6_confirmed"] = True

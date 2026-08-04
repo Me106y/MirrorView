@@ -108,7 +108,7 @@ export function ResumeCraftResultPage() {
               <p>HTML 预览和 PDF 文件已经准备完成。</p>
             </div>
             <div className="resume-craft-final-head-actions">
-              <NavLink to="/resume-craft" state={{ resumeCraftStep: 5, editorState: artifact.editorState }} className="ghost-btn resume-craft-result-action-btn resume-craft-result-back-btn">
+              <NavLink to="/resume-craft" state={{ resumeCraftStep: 5, editorState: artifact.editorState }} className="ghost-btn resume-craft-result-action-btn resume-craft-result-back-btn resume-craft-back-btn resume-craft-chat-nav-btn">
                 上一步
               </NavLink>
               <button type="button" className="primary-btn resume-craft-export-html-btn" onClick={exportHtml}>导出 HTML</button>
