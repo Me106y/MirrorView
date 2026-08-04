@@ -5,16 +5,19 @@ import { callCareerforgeSkill } from "../lib/api";
 import { useModelSettings } from "../context/ModelSettingsContext";
 import { useCareerFeatureGuard } from "../components/CareerFeatureGuard";
 import { loadResumeCraftDraft, saveResumeCraftDraft, saveResumeCraftResult, type ResumeCraftEditorState } from "../lib/storage";
-import type { EducationItem, ResumeCraftWizardState, Step1Profile } from "../types";
+import type {
+  EducationItem,
+  ResumeCraftBackendStep,
+  ResumeCraftConversationMessage,
+  ResumeCraftWizardState,
+  Step1Profile,
+} from "../types";
 import { ConsentModal } from "../components/ConsentModal";
 import { useConsent } from "../context/ConsentContext";
 
-type Msg = { role: "user" | "assistant"; content: string; timestamp: string; isPreview?: boolean };
-type StepNumber = 1 | 2 | 3 | 4 | 5;
+type Msg = Omit<ResumeCraftConversationMessage, "backendStep">;
+type StepNumber = 1 | 2 | 3;
 type ChatStep = 3 | 4 | 5;
-
-const UI_TO_BACKEND: Record<number, number> = { 1: 1, 2: 3, 3: 4, 4: 5, 5: 6 };
-function uiStepToBackendKey(step: number): string { return `step${UI_TO_BACKEND[step]}`; }
 
 type ResultState = {
   kind: "idle" | "error";
@@ -26,9 +29,7 @@ type ResumeCraftRouteState = {
   editorState?: ResumeCraftEditorState;
 };
 
-const STEPS: StepNumber[] = [1, 2, 3, 4, 5];
-const CHAT_STEPS: ChatStep[] = [3, 4, 5];
-const STEP_SHIFT = 100 / 5;
+const STEP_SHIFT = 100 / 3;
 
 const TEMPLATE_OPTIONS = [
   { value: "01", label: "杂志编辑风" },
@@ -50,30 +51,34 @@ const LANGUAGE_OPTIONS = [
   { value: "both", label: "中英文双版" },
 ];
 
-const INITIAL_CHAT_MESSAGES: Record<ChatStep, string> = {
-  3: "请描述一段工作或项目经历，可以包括项目背景、你的职责、采取的关键行动，以及最终结果或影响。我会围绕目标岗位帮你提炼亮点并进行追问。",
-  4: "请补充与目标岗位相关的技能、工具、编程语言、语言能力或证书，并说明你的掌握程度和实际使用场景。我会帮你整理成简历中的技能信息。",
-  5: "请告诉我你希望简历重点突出什么，例如目标岗位方向、内容取舍、语气风格或其他排版偏好。我会结合已确认的信息整理最终简历草稿。",
+const INITIAL_CHAT_MESSAGES: Record<ResumeCraftBackendStep, string> = {
+  4: "请描述一段工作或项目经历，可以包括项目背景、你的职责、采取的关键行动，以及最终结果或影响。我会围绕目标岗位帮你提炼亮点并进行追问。",
+  5: "请补充与目标岗位相关的技能、工具、编程语言、语言能力或证书，并说明你的掌握程度和实际使用场景。我会帮你整理成简历中的技能信息。",
+  6: "请告诉我你希望简历重点突出什么，例如目标岗位方向、内容取舍、语气风格或其他排版偏好。我会结合已确认的信息整理最终简历草稿。",
 };
 
-const CHAT_INPUT_PLACEHOLDERS: Record<ChatStep, string> = {
-  3: "描述一段工作或项目经历，包含职责、行动和结果",
-  4: "补充技能、工具、语言能力或证书信息",
-  5: "补充简历重点、内容取舍或排版偏好",
+const CHAT_INPUT_PLACEHOLDERS: Record<ResumeCraftBackendStep, string> = {
+  4: "描述一段工作或项目经历，包含背景、职责、行动和结果",
+  5: "补充技能、工具、语言能力或证书信息",
+  6: "补充简历重点、内容取舍或排版偏好，或表达想查看预览",
 };
 
-const CHAT_STEP_DESCRIPTIONS: Record<ChatStep, string> = {
-  3: "围绕工作或项目经历的背景、职责、行动和结果，提炼与目标岗位匹配的亮点。",
-  4: "整理技能、工具、语言能力和证书，并补充掌握程度与实际使用场景。",
-  5: "确认简历重点、内容取舍、语气风格和其他偏好，生成最终简历草稿。",
+const CHAT_STEP_DESCRIPTIONS: Record<ResumeCraftBackendStep, string> = {
+  4: "围绕工作或项目经历的背景、职责、行动和结果，提炼与目标岗位匹配的亮点。",
+  5: "整理技能、工具、语言能力和证书，并补充掌握程度与实际使用场景。",
+  6: "确认简历重点、内容取舍、语气风格和其他偏好，生成最终简历草稿。",
 };
+
+const CHAT_PHASES: Array<{ step: ResumeCraftBackendStep; label: string }> = [
+  { step: 4, label: "工作/项目经历" },
+  { step: 5, label: "技能与证书" },
+  { step: 6, label: "确认与偏好" },
+];
 
 const STEP_TITLES: Record<StepNumber, string> = {
   1: "Step1 基础信息",
   2: "Step2 个人信息与教育背景",
-  3: "Step3 工作/项目经历",
-  4: "Step4 技能与证书",
-  5: "Step5 确认与偏好",
+  3: "Step3-5 简历内容整理",
 };
 
 const EMPTY_PROFILE: Step1Profile = {
@@ -201,8 +206,53 @@ function fileToDataUrl(file: File) {
   });
 }
 
-function stepKey(step: ChatStep) {
-  return uiStepToBackendKey(step) as "step3" | "step4" | "step5" | "step6";
+function normalizeBackendStep(value: unknown): ResumeCraftBackendStep {
+  const numeric = Number(value);
+  if (numeric === 5) return 5;
+  if (numeric === 6) return 6;
+  return 4;
+}
+
+function advanceBackendStep(step: ResumeCraftBackendStep): ResumeCraftBackendStep {
+  return step === 4 ? 5 : 6;
+}
+
+function legacyUiStepToBackendStep(step: ChatStep): ResumeCraftBackendStep {
+  return step === 3 ? 4 : step === 4 ? 5 : 6;
+}
+
+function normalizeConversationMessages(value: unknown, fallbackStep?: ResumeCraftBackendStep): ResumeCraftConversationMessage[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const candidate = item as Partial<ResumeCraftConversationMessage> & { backendStep?: unknown };
+    const content = String(candidate.content || "").trim();
+    if (!content || (candidate.role !== "user" && candidate.role !== "assistant")) return [];
+    return [{
+      role: candidate.role,
+      content,
+      timestamp: String(candidate.timestamp || nowTimeLabel()),
+      isPreview: candidate.isPreview === true,
+      backendStep: normalizeBackendStep(candidate.backendStep ?? fallbackStep),
+    }];
+  });
+}
+
+function legacyMessagesToConversation(messages: Record<ChatStep, Msg[]> | undefined): ResumeCraftConversationMessage[] {
+  if (!messages) return [];
+  return ([3, 4, 5] as ChatStep[]).flatMap((uiStep) =>
+    normalizeConversationMessages(messages[uiStep], legacyUiStepToBackendStep(uiStep))
+  );
+}
+
+function messagesByStepFromConversation(messages: ResumeCraftConversationMessage[]): Record<ChatStep, Msg[]> {
+  const result: Record<ChatStep, Msg[]> = { 3: [], 4: [], 5: [] };
+  for (const message of messages) {
+    const uiStep = message.backendStep === 4 ? 3 : message.backendStep === 5 ? 4 : 5;
+    const { backendStep: _backendStep, ...compatMessage } = message;
+    result[uiStep].push(compatMessage);
+  }
+  return result;
 }
 
 function normalizeTemplateCodeForUI(value: string) {
@@ -257,8 +307,14 @@ export function ResumeCraftPage() {
   const routeStep = (location.state as ResumeCraftRouteState | null)?.resumeCraftStep;
   const restoredEditorState = (location.state as ResumeCraftRouteState | null)?.editorState;
   const restoredMessages = restoredEditorState?.messagesByStep as Record<ChatStep, Msg[]> | undefined;
-  const restoredMessageKeys: ChatStep[] = [3, 4, 5];
-  const [step, setStep] = useState<StepNumber>(routeStep === 5 ? 5 : 1);
+  const restoredConversation = normalizeConversationMessages(restoredEditorState?.conversationMessages);
+  const initialConversationMessages = restoredConversation.length
+    ? restoredConversation
+    : legacyMessagesToConversation(restoredMessages);
+  const initialCombinedMessages = initialConversationMessages.length
+    ? initialConversationMessages
+    : [{ role: "assistant" as const, content: INITIAL_CHAT_MESSAGES[4], timestamp: nowTimeLabel(), backendStep: 4 as const }];
+  const [step, setStep] = useState<StepNumber>(routeStep === 5 ? 3 : routeStep === 2 ? 2 : 1);
   const [profile, setProfile] = useState<Step1Profile>(() => loadResumeCraftDraft() ?? EMPTY_PROFILE);
   const [linksInput, setLinksInput] = useState(() => profile.personal_info.links.join(", "));
 
@@ -269,14 +325,14 @@ export function ResumeCraftPage() {
 
   const [wizardState, setWizardState] = useState<ResumeCraftWizardState>(restoredEditorState?.wizardState ?? EMPTY_WIZARD);
   const [messagesByStep, setMessagesByStep] = useState<Record<ChatStep, Msg[]>>(() => {
-    if (restoredMessages && restoredMessageKeys.every((key) => Array.isArray(restoredMessages[key]))) {
-      return restoredMessages;
-    }
-    return {
-      3: [{ role: "assistant", content: INITIAL_CHAT_MESSAGES[3], timestamp: nowTimeLabel() }],
-      4: [{ role: "assistant", content: INITIAL_CHAT_MESSAGES[4], timestamp: nowTimeLabel() }],
-      5: [{ role: "assistant", content: INITIAL_CHAT_MESSAGES[5], timestamp: nowTimeLabel() }],
-    };
+    return messagesByStepFromConversation(initialCombinedMessages);
+  });
+  const [conversationMessages, setConversationMessages] = useState<ResumeCraftConversationMessage[]>(initialCombinedMessages);
+  const [activeBackendStep, setActiveBackendStep] = useState<ResumeCraftBackendStep>(() => {
+    if (restoredEditorState?.activeBackendStep) return normalizeBackendStep(restoredEditorState.activeBackendStep);
+    if (restoredEditorState?.wizardState?.step_states?.step6?.confirmed) return 6;
+    if (restoredEditorState?.wizardState?.collected_by_step?.skills_and_certs?.length) return 5;
+    return 4;
   });
 
   const [chatInput, setChatInput] = useState("");
@@ -292,7 +348,7 @@ export function ResumeCraftPage() {
 
   const photoInputRef = useRef<HTMLInputElement | null>(null);
   const wizardTrackRef = useRef<HTMLDivElement | null>(null);
-  const stepRefs = useRef<Record<StepNumber, HTMLElement | null>>({ 1: null, 2: null, 3: null, 4: null, 5: null });
+  const stepRefs = useRef<Record<StepNumber, HTMLElement | null>>({ 1: null, 2: null, 3: null });
   const educationCarouselRef = useRef<HTMLDivElement | null>(null);
   const previousEducationIndexRef = useRef(0);
   const monthPickerWrapRef = useRef<HTMLDivElement | null>(null);
@@ -326,37 +382,19 @@ export function ResumeCraftPage() {
     return hasName && hasPhone && hasEmail && hasEducation;
   }, [profile.personal_info, profile.education]);
 
-  const activeChatStep = step >= 3 ? (step as ChatStep) : null;
   const educationRows = profile.education.length ? profile.education : [{ ...EMPTY_EDUCATION }];
   const educationIndex = Math.min(activeEducationIndex, educationRows.length - 1);
   const edu = educationRows[educationIndex];
   const index = educationIndex;
-
-  const canAdvanceChatStep = useMemo(() => {
-    if (!activeChatStep) return false;
-    const hasUserMessage = messagesByStep[activeChatStep].some(
-      (message) => message.role === "user" && message.content.trim().length > 0
-    );
-    if (!hasUserMessage || activeChatStep !== 3) return hasUserMessage;
-
-    const experienceState = wizardState.step_states.step4;
-    const grill = experienceState.active_focus?.grill;
-    const agentMarkedComplete = Boolean(
-      experienceState.active_focus?.stage === "done" && experienceState.finalized_experiences.length > 0
-    );
-    return Boolean(
-      grill?.user_skipped ||
-      agentMarkedComplete
-    );
-  }, [activeChatStep, messagesByStep, wizardState.step_states.step4]);
+  const activePhase = CHAT_PHASES.find((phase) => phase.step === activeBackendStep) ?? CHAT_PHASES[0];
 
   const canGenerate = useMemo(() => {
     const step6 = wizardState.step_states.step6;
     const draft = step6?.draft_json;
     const hasDraft = Boolean(draft && Object.keys(draft).length > 0);
     const confirmed = wizardState.collected_by_step.step6_confirmed === true && step6?.confirmed === true;
-    return confirmed && hasDraft && !renderLoading;
-  }, [wizardState, renderLoading]);
+    return activeBackendStep === 6 && confirmed && hasDraft && !renderLoading;
+  }, [activeBackendStep, wizardState, renderLoading]);
 
   useEffect(() => {
     const card = stepRefs.current[step];
@@ -471,7 +509,7 @@ export function ResumeCraftPage() {
   const goNext = () => {
     if (step === 1 && !canStep1Next) return;
     if (step === 2 && !canStep2Next) return;
-    if (step < 5) {
+    if (step < 3) {
       stepSnapshots.current[step] = {
         profile: { ...profile },
         linksInput,
@@ -503,77 +541,38 @@ export function ResumeCraftPage() {
   };
 
   const onRestartCurrentChat = () => {
-    if (step === 2) {
-      setProfile((prev) => ({ ...prev, education: [{ ...EMPTY_EDUCATION }] }));
-      setWizardState((prev) => ({
-        ...prev,
-        collected_by_step: { ...prev.collected_by_step, education: [] },
-        step_states: { ...prev.step_states, step3: { turn_count: 0, confirmed: false } },
-      }));
-      return;
-    }
-    if (!activeChatStep) return;
-    setMessagesByStep((prev) => ({
-      ...prev,
-      [activeChatStep]: [{ role: "assistant", content: INITIAL_CHAT_MESSAGES[activeChatStep], timestamp: nowTimeLabel() }],
-    }));
+    if (step !== 3) return;
+    const initialMessage: ResumeCraftConversationMessage = {
+      role: "assistant",
+      content: INITIAL_CHAT_MESSAGES[4],
+      timestamp: nowTimeLabel(),
+      backendStep: 4,
+    };
+    setConversationMessages([initialMessage]);
+    setMessagesByStep(messagesByStepFromConversation([initialMessage]));
+    setActiveBackendStep(4);
     setWizardState((prev) => {
-      const next = JSON.parse(JSON.stringify(prev)) as ResumeCraftWizardState;
-      const key = stepKey(activeChatStep);
-      next.chat_history_by_step[key] = [];
-      if (activeChatStep === 3) {
-        next.collected_by_step.experiences = [];
-        next.step_states.step4 = {
-          current_index: 1,
-          followup_count: 0,
-          drafts: [],
-          finalized_experiences: [],
-          active_focus: {
-            topic: "",
-            stage: "implementation",
-            evidence: {
-              implementation: false,
-              tradeoff: false,
-              validation: false,
-            },
-            turn_count: 0,
-            grill: {
-              completed_rounds: 0,
-              pending_questions: [],
-              round_status: "awaiting_answers",
-              user_skipped: false,
-            },
-          },
-        };
-      }
-      if (activeChatStep === 4) {
-        next.collected_by_step.skills_and_certs = [];
-        next.step_states.step5 = { turn_count: 0, confirmed: false };
-      }
-    if (activeChatStep === 5) {
-        next.collected_by_step.final_preferences = "";
-        next.collected_by_step.step6_confirmed = false;
-        next.step_states.step6 = {
-          turn_count: 0,
-          confirmed: false,
-          preview_ready: false,
-          awaiting_confirm: false,
-          preview_markdown: "",
-          draft_json: {},
-          revision_count: 0,
-        };
-      }
+      const next = JSON.parse(JSON.stringify(EMPTY_WIZARD)) as ResumeCraftWizardState;
+      next.current_step = 3;
+      next.collected_by_step.education = prev.collected_by_step.education;
       return next;
     });
     setChatInput("");
+    setResult({ kind: "idle", message: "" });
   };
 
   const sendChatMessage = async (messageText: string) => {
-    if (!activeChatStep || !messageText.trim() || chatLoading) return;
+    if (step !== 3 || !messageText.trim() || chatLoading) return;
   
-    const userMessage: Msg = { role: "user", content: messageText.trim(), timestamp: nowTimeLabel() };
-    const nextMessages = [...messagesByStep[activeChatStep], userMessage];
-    setMessagesByStep((prev) => ({ ...prev, [activeChatStep]: nextMessages }));
+    const userMessage: ResumeCraftConversationMessage = {
+      role: "user",
+      content: messageText.trim(),
+      timestamp: nowTimeLabel(),
+      backendStep: activeBackendStep,
+    };
+    const nextMessages = [...conversationMessages, userMessage];
+    setConversationMessages(nextMessages);
+    setMessagesByStep(messagesByStepFromConversation(nextMessages));
     setChatInput("");
     setChatLoading(true);
   
@@ -582,7 +581,7 @@ export function ResumeCraftPage() {
       const resp = (await callCareerforgeSkill(settings, "/careerforge/resume-craft/chat-turn", {
         message: userMessage.content,
         history: nextMessages,
-        current_step: UI_TO_BACKEND[activeChatStep],
+        current_step: activeBackendStep,
         step1_profile: step1Profile,
         wizard_state: wizardState,
         template_code: step1Profile.template_code,
@@ -606,22 +605,32 @@ export function ResumeCraftPage() {
         throw new Error("Agent response has invalid next_step_suggestion");
       }
       const nextWizard = resp.wizard_state as ResumeCraftWizardState;
+      const nextBackendStep = resp.next_step_suggestion === "next"
+        ? advanceBackendStep(activeBackendStep)
+        : activeBackendStep;
+      const assistantMessage: ResumeCraftConversationMessage = {
+        role: "assistant",
+        content: assistantReply,
+        timestamp: nowTimeLabel(),
+        isPreview: activeBackendStep === 6 && Boolean(step6PreviewMarkdown),
+        backendStep: activeBackendStep,
+      };
+      const completedMessages = [...nextMessages, assistantMessage];
   
       setWizardState(nextWizard);
-      setMessagesByStep((prev) => ({
-        ...prev,
-        [activeChatStep]: [...nextMessages, {
-          role: "assistant",
-          content: assistantReply,
-          timestamp: nowTimeLabel(),
-          isPreview: activeChatStep === 5 && Boolean(step6PreviewMarkdown),
-        }],
-      }));
+      setConversationMessages(completedMessages);
+      setMessagesByStep(messagesByStepFromConversation(completedMessages));
+      setActiveBackendStep(nextBackendStep);
     } catch (err) {
-      setMessagesByStep((prev) => ({
-        ...prev,
-        [activeChatStep]: [...nextMessages, { role: "assistant", content: (err as Error).message || "请求失败，请重试。", timestamp: nowTimeLabel() }],
-      }));
+      const errorMessage: ResumeCraftConversationMessage = {
+        role: "assistant",
+        content: (err as Error).message || "请求失败，请重试。",
+        timestamp: nowTimeLabel(),
+        backendStep: activeBackendStep,
+      };
+      const failedMessages = [...nextMessages, errorMessage];
+      setConversationMessages(failedMessages);
+      setMessagesByStep(messagesByStepFromConversation(failedMessages));
     } finally {
       setChatLoading(false);
     }
@@ -715,7 +724,7 @@ export function ResumeCraftPage() {
     if (!canGenerate) return;
     setRenderLoading(true);
     try {
-      const history = CHAT_STEPS.flatMap((s) => messagesByStep[s]);
+      const history = conversationMessages;
       const baseProfile = buildProfilePayload();
       const step1Profile = {
         ...baseProfile,
@@ -745,7 +754,7 @@ export function ResumeCraftPage() {
         reportPdfBase64: nextPdfBase64,
         templateCode: step1Profile.template_code,
         language: step1Profile.language,
-        editorState: { wizardState, messagesByStep },
+        editorState: { wizardState, messagesByStep, conversationMessages, activeBackendStep },
       };
       saveResumeCraftResult(artifact);
       navigate("/resume-craft/result", { state: { artifact } });
@@ -765,7 +774,7 @@ export function ResumeCraftPage() {
   return (
     <>
       {featureGuard.overlay}
-    <section className={`resume-craft-page ${activeChatStep ? "is-chat-page" : ""} ${step === 1 ? "is-step1-page" : ""} ${step === 2 ? "is-step2-page" : ""}`}>
+    <section className={`resume-craft-page ${step === 3 ? "is-chat-page" : ""} ${step === 1 ? "is-step1-page" : ""} ${step === 2 ? "is-step2-page" : ""}`}>
       <NavLink to="/" className="back-home-btn">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M19 12H5M12 19l-7-7 7-7"/>
@@ -773,7 +782,7 @@ export function ResumeCraftPage() {
         返回
       </NavLink>
       <div className="resume-craft-layout">
-        <div className={`resume-craft-wizard-viewport ${activeChatStep ? "is-chat-viewport" : ""} ${step === 1 ? "is-step1-viewport" : ""} ${step === 2 ? "is-step2-viewport" : ""}`} style={activeChatStep && viewportHeight ? { height: `${viewportHeight}px` } : undefined}>
+        <div className={`resume-craft-wizard-viewport ${step === 3 ? "is-chat-viewport" : ""} ${step === 1 ? "is-step1-viewport" : ""} ${step === 2 ? "is-step2-viewport" : ""}`} style={step === 3 && viewportHeight ? { height: `${viewportHeight}px` } : undefined}>
           <div className="resume-craft-wizard-track" ref={wizardTrackRef} style={{ transform: `translateX(-${(step - 1) * STEP_SHIFT}%)` }}>
             {stepCard(
               1,
@@ -1090,101 +1099,103 @@ export function ResumeCraftPage() {
               </>
             )}
 
-            {([3, 4, 5] as ChatStep[]).map((chatStep) =>
-              stepCard(
-                chatStep,
-                <>
-                  <header className="resume-craft-chat-head">
-                    <div className="resume-craft-chat-head-left">
-                      <h2>{STEP_TITLES[chatStep]}</h2>
-                      <p>{CHAT_STEP_DESCRIPTIONS[chatStep]}</p>
-                      <div className="resume-craft-head-divider" />
-                    </div>
-                    <div className="resume-craft-head-actions">
-                      <button type="button" className="ghost-btn resume-craft-back-btn resume-craft-chat-nav-btn" onClick={goPrev}>上一步</button>
-                      <button type="button" className="ghost-btn resume-craft-restart-btn resume-craft-chat-nav-btn" onClick={onRestartCurrentChat} disabled={chatLoading || renderLoading || step !== chatStep}>重新开始</button>
-                      {chatStep < 5 ? (
-                        <button type="button" className="primary-btn resume-craft-next-btn resume-craft-chat-nav-btn" onClick={goNext} disabled={step !== chatStep || !canAdvanceChatStep || chatLoading}>下一步</button>
-                      ) : null}
-                    </div>
-                  </header>
-
-                  <div className="resume-craft-param-brief">
-                    <button type="button" className="resume-craft-pill-btn" aria-expanded={expandedPill === 'template'} onClick={() => setExpandedPill(expandedPill === 'template' ? null : 'template')}>{templateLabel(profile.template_code)}</button>
-                    <button type="button" className="resume-craft-pill-btn" aria-expanded={expandedPill === 'language'} onClick={() => setExpandedPill(expandedPill === 'language' ? null : 'language')}>{profile.language === "zh" ? "中文" : profile.language === "en" ? "英文" : "中英文双版"}</button>
-                    <button type="button" className="resume-craft-pill-btn" aria-expanded={expandedPill === 'photo'} onClick={() => setExpandedPill(expandedPill === 'photo' ? null : 'photo')}>{photoDataUrl ? "放照片" : "不放照片"}</button>
-                    <button type="button" className="resume-craft-pill-btn" aria-expanded={expandedPill === 'targetRole'} onClick={() => setExpandedPill(expandedPill === 'targetRole' ? null : 'targetRole')}>{profile.target_role || "未填写"}</button>
-                    {chatStep === 3 ? <span className="resume-craft-pill">经历进度 {wizardState.step_states.step4.finalized_experiences.length}/{profile.expected_experience_count}</span> : null}
+            {stepCard(
+              3,
+              <>
+                <header className="resume-craft-chat-head resume-craft-combined-head">
+                  <div className="resume-craft-chat-head-left">
+                    <h2>Step{activeBackendStep - 1} {activePhase.label}</h2>
+                    <p>{CHAT_STEP_DESCRIPTIONS[activePhase.step]}</p>
+                    <div className="resume-craft-head-divider" />
                   </div>
-                  {expandedPill === 'template' && (
-                    <div className="resume-craft-pill-panel">
-                      <select value={profile.template_code} onChange={(e) => setProfile((prev) => ({ ...prev, template_code: e.target.value }))}>
-                        {TEMPLATE_OPTIONS.map((item) => (<option key={`pill-ct-${item.value}`} value={item.value}>{item.label}</option>))}
-                      </select>
-                    </div>
-                  )}
-                  {expandedPill === 'language' && (
-                    <div className="resume-craft-pill-panel">
-                      <select value={profile.language} onChange={(e) => setProfile((prev) => ({ ...prev, language: e.target.value }))}>
-                        {LANGUAGE_OPTIONS.map((item) => (<option key={`pill-cl-${item.value}`} value={item.value}>{item.label}</option>))}
-                      </select>
-                    </div>
-                  )}
-                  {expandedPill === 'photo' && (
-                    <div className="resume-craft-pill-panel">
-                      <button type="button" className="ghost-btn" onClick={() => photoInputRef.current?.click()}>选择照片</button>
-                    </div>
-                  )}
-                  {expandedPill === 'targetRole' && (
-                    <div className="resume-craft-pill-panel">
-                      <input value={profile.target_role} placeholder="目标岗位" onChange={(e) => setProfile((prev) => ({ ...prev, target_role: e.target.value }))} />
-                    </div>
-                  )}
-
-                  <div className="chat-log resume-craft-chat-log">
-                    {(messagesByStep[chatStep] || []).map((msg, idx) => (
-                      <div key={`${chatStep}-${msg.role}-${idx}`} className={`msg ${msg.role}`}>
-                        {msg.role === "assistant" ? <span className="msg-ai-avatar" aria-hidden="true">AI</span> : null}
-                        <div className="resume-craft-bubble-wrap">
-                          {msg.isPreview && msg.role === "assistant" ? (
-                            <div
-                              className="resume-craft-message-bubble resume-craft-preview-message"
-                              dangerouslySetInnerHTML={{ __html: simpleMarkdownToHtml(msg.content) }}
-                            />
-                          ) : (
-                            <span className="resume-craft-message-bubble">{msg.content}</span>
-                          )}
-                          <small className="resume-craft-msg-time">{msg.timestamp}</small>
-                        </div>
-                      </div>
-                    ))}
-                    {chatLoading && step === chatStep ? (
-                      <div className="msg assistant">
-                        <span className="msg-ai-avatar" aria-hidden="true">AI</span>
-                        <div className="resume-craft-bubble-wrap">
-                          <span>思考中...</span>
-                        </div>
-                      </div>
-                    ) : null}
+                  <div className="resume-craft-head-actions">
+                    <button type="button" className="ghost-btn resume-craft-back-btn resume-craft-chat-nav-btn" onClick={goPrev}>上一步</button>
+                    <button type="button" className="ghost-btn resume-craft-restart-btn resume-craft-chat-nav-btn" onClick={onRestartCurrentChat} disabled={chatLoading || renderLoading}>重新开始</button>
                   </div>
+                </header>
 
-                  {chatStep === 5 ? (
-                    <div className="resume-craft-step-actions">
-                      {canGenerate ? (
-                        <p className="resume-craft-render-ready-note">预览内容已确认，请点击“生成简历”生成 HTML 和 PDF。</p>
-                      ) : null}
-                      <button type="button" className="primary-btn resume-craft-next-btn" disabled={!canGenerate} onClick={() => void renderResume()}>
-                        {renderLoading ? "生成中..." : "生成简历"}
-                      </button>
+                <div className="resume-craft-phase-indicator" aria-label="简历内容整理阶段">
+                  {CHAT_PHASES.map((phase) => (
+                    <div key={phase.step} className={`resume-craft-phase-item ${activeBackendStep === phase.step ? "is-active" : ""} ${activeBackendStep > phase.step ? "is-complete" : ""}`}>
+                      <span className="resume-craft-phase-dot" aria-hidden="true">{activeBackendStep > phase.step ? "✓" : phase.step - 3}</span>
+                      <span>{phase.label}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="resume-craft-param-brief">
+                  <button type="button" className="resume-craft-pill-btn" aria-expanded={expandedPill === 'template'} onClick={() => setExpandedPill(expandedPill === 'template' ? null : 'template')}>{templateLabel(profile.template_code)}</button>
+                  <button type="button" className="resume-craft-pill-btn" aria-expanded={expandedPill === 'language'} onClick={() => setExpandedPill(expandedPill === 'language' ? null : 'language')}>{profile.language === "zh" ? "中文" : profile.language === "en" ? "英文" : "中英文双版"}</button>
+                  <button type="button" className="resume-craft-pill-btn" aria-expanded={expandedPill === 'photo'} onClick={() => setExpandedPill(expandedPill === 'photo' ? null : 'photo')}>{photoDataUrl ? "放照片" : "不放照片"}</button>
+                  <button type="button" className="resume-craft-pill-btn" aria-expanded={expandedPill === 'targetRole'} onClick={() => setExpandedPill(expandedPill === 'targetRole' ? null : 'targetRole')}>{profile.target_role || "未填写"}</button>
+                  {activeBackendStep === 4 ? <span className="resume-craft-pill">经历进度 {wizardState.step_states.step4.finalized_experiences.length}/{profile.expected_experience_count}</span> : null}
+                </div>
+                {expandedPill === 'template' && (
+                  <div className="resume-craft-pill-panel">
+                    <select value={profile.template_code} onChange={(e) => setProfile((prev) => ({ ...prev, template_code: e.target.value }))}>
+                      {TEMPLATE_OPTIONS.map((item) => (<option key={`pill-ct-${item.value}`} value={item.value}>{item.label}</option>))}
+                    </select>
+                  </div>
+                )}
+                {expandedPill === 'language' && (
+                  <div className="resume-craft-pill-panel">
+                    <select value={profile.language} onChange={(e) => setProfile((prev) => ({ ...prev, language: e.target.value }))}>
+                      {LANGUAGE_OPTIONS.map((item) => (<option key={`pill-cl-${item.value}`} value={item.value}>{item.label}</option>))}
+                    </select>
+                  </div>
+                )}
+                {expandedPill === 'photo' && (
+                  <div className="resume-craft-pill-panel">
+                    <button type="button" className="ghost-btn" onClick={() => photoInputRef.current?.click()}>选择照片</button>
+                  </div>
+                )}
+                {expandedPill === 'targetRole' && (
+                  <div className="resume-craft-pill-panel">
+                    <input value={profile.target_role} placeholder="目标岗位" onChange={(e) => setProfile((prev) => ({ ...prev, target_role: e.target.value }))} />
+                  </div>
+                )}
+
+                <div className="chat-log resume-craft-chat-log">
+                  {conversationMessages.map((msg, idx) => (
+                    <div key={`${msg.backendStep}-${msg.role}-${idx}`} className={`msg ${msg.role}`}>
+                      {msg.role === "assistant" ? <span className="msg-ai-avatar" aria-hidden="true">AI</span> : null}
+                      <div className="resume-craft-bubble-wrap">
+                        {msg.isPreview && msg.role === "assistant" ? (
+                          <div
+                            className="resume-craft-message-bubble resume-craft-preview-message"
+                            dangerouslySetInnerHTML={{ __html: simpleMarkdownToHtml(msg.content) }}
+                          />
+                        ) : (
+                          <span className="resume-craft-message-bubble">{msg.content}</span>
+                        )}
+                        <small className="resume-craft-msg-time">{msg.timestamp}</small>
+                      </div>
+                    </div>
+                  ))}
+                  {chatLoading ? (
+                    <div className="msg assistant">
+                      <span className="msg-ai-avatar" aria-hidden="true">AI</span>
+                      <div className="resume-craft-bubble-wrap">
+                        <span>思考中...</span>
+                      </div>
                     </div>
                   ) : null}
-                </>
-              )
+                </div>
+
+                {canGenerate ? (
+                  <div className="resume-craft-step-actions">
+                    <p className="resume-craft-render-ready-note">预览内容已确认，请点击“生成简历”生成 HTML 和 PDF。</p>
+                    <button type="button" className="primary-btn resume-craft-next-btn" onClick={() => void renderResume()}>
+                      {renderLoading ? "生成中..." : "生成简历"}
+                    </button>
+                  </div>
+                ) : null}
+              </>
             )}
           </div>
         </div>
 
-        {activeChatStep ? (
+        {step === 3 ? (
           <div className="resume-craft-fixed-composer">
             <form className="chat-input resume-craft-chat-input" onSubmit={onSendChat}>
               <textarea
@@ -1196,7 +1207,7 @@ export function ResumeCraftPage() {
                     void sendChatMessage(chatInput);
                   }
                 }}
-                placeholder={CHAT_INPUT_PLACEHOLDERS[activeChatStep]}
+                placeholder={CHAT_INPUT_PLACEHOLDERS[activeBackendStep]}
                 disabled={chatLoading || renderLoading}
                 rows={1}
                 aria-label="输入当前步骤信息"

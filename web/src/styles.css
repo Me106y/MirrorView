@@ -728,7 +728,7 @@ a {
 
 .resume-craft-wizard-track {
   display: flex;
-  width: 500%;
+  width: 300%;
   height: 100%;
   min-height: 0;
   transform: translateX(0%);
@@ -737,8 +737,8 @@ a {
 }
 
 .resume-craft-step-card {
-  width: calc(100% / 5);
-  flex: 0 0 calc(100% / 5);
+  width: calc(100% / 3);
+  flex: 0 0 calc(100% / 3);
   padding: 24px 24px 22px;
   display: flex;
   flex-direction: column;
@@ -1648,6 +1648,55 @@ a {
   gap: 12px;
 }
 
+.resume-craft-combined-head {
+  flex: 0 0 auto;
+}
+
+.resume-craft-phase-indicator {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 2px 0 4px;
+  border-bottom: 1px solid rgba(184, 190, 193, 0.34);
+}
+
+.resume-craft-phase-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 7px 8px;
+  color: #858585;
+  font-size: 0.82rem;
+  line-height: 1.25;
+  text-align: center;
+  transition: color 160ms ease, background-color 160ms ease;
+}
+
+.resume-craft-phase-item.is-active {
+  color: #38566d;
+  background: #edf3f7;
+  font-weight: 700;
+}
+
+.resume-craft-phase-item.is-complete {
+  color: #55725f;
+}
+
+.resume-craft-phase-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-size: 0.72rem;
+  line-height: 1;
+}
+
 .resume-craft-chat-head h2 {
   margin: 0;
   color: #121212;
@@ -1806,6 +1855,7 @@ a {
   background: #f8f8f6;
   flex: 1 1 auto;
   min-height: 0;
+  overflow: hidden;
 }
 
 .chat-log.resume-craft-chat-log {
@@ -1813,6 +1863,11 @@ a {
   overflow-x: hidden;
   overflow-y: auto;
   scrollbar-gutter: stable;
+}
+
+.resume-craft-chat-step .resume-craft-chat-log {
+  min-height: 0;
+  flex: 1 1 auto;
 }
 
 .resume-craft-chat-log .msg {

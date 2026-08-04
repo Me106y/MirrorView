@@ -236,7 +236,7 @@ def test_agent_merges_compact_state_patch_after_user_has_no_more_experience():
     assert result["wizard_state"]["step_states"]["step4"]["confirmed"] is True
     assert result["wizard_state"]["step_states"]["step4"]["drafts"] == ["保留草稿"]
     assert "minimal" in str(model.prompt)
-    assert "自行点击" in str(model.prompt)
+    assert "自动切换阶段" in str(model.prompt)
 
 
 def test_agent_prompt_prevents_repeating_answered_grill_questions():

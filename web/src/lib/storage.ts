@@ -1,4 +1,9 @@
-import type { ModelSettings, ResumeCraftWizardState, Step1Profile } from "../types";
+import type {
+  ModelSettings,
+  ResumeCraftConversationMessage,
+  ResumeCraftWizardState,
+  Step1Profile,
+} from "../types";
 
 export const MODEL_SETTINGS_KEY = "mirrorview:web:model-settings:v2";
 export const CONSENT_ACCEPTED_KEY = "mirrorview:web:consent:v1";
@@ -23,6 +28,8 @@ export interface ResumeCraftEditorState {
     timestamp: string;
     isPreview?: boolean;
   }> >;
+  conversationMessages?: ResumeCraftConversationMessage[];
+  activeBackendStep?: 4 | 5 | 6;
 }
 
 export const defaultSettings: ModelSettings = {

@@ -111,3 +111,13 @@ export interface ResumeCraftWizardState {
     step6: StepChatState;
   };
 }
+
+export type ResumeCraftBackendStep = 4 | 5 | 6;
+
+export interface ResumeCraftConversationMessage {
+  role: "user" | "assistant";
+  content: string;
+  timestamp: string;
+  isPreview?: boolean;
+  backendStep: ResumeCraftBackendStep;
+}
