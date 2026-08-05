@@ -1826,6 +1826,161 @@ a {
   flex: 1 1 auto;
 }
 
+.resume-craft-view-stack {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.resume-craft-view-panel {
+  position: absolute;
+  inset: 0;
+  min-width: 0;
+  min-height: 0;
+  visibility: hidden;
+  opacity: 0;
+}
+
+.resume-craft-chat-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.resume-craft-generating-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  border: 1px solid rgba(170, 181, 191, 0.3);
+  background: #f8f8f6;
+}
+
+.resume-craft-generating-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: #52616d;
+  text-align: center;
+}
+
+.resume-craft-generating-state strong {
+  color: #242424;
+  font-size: 1rem;
+}
+
+.resume-craft-generating-state span:last-child {
+  color: #7a7a7a;
+  font-size: 0.86rem;
+}
+
+.resume-craft-generating-spinner {
+  width: 30px;
+  height: 30px;
+  border: 3px solid rgba(111, 141, 168, 0.22);
+  border-top-color: #6f8da8;
+  border-radius: 50%;
+  animation: resumeCraftSpin 800ms linear infinite;
+}
+
+@keyframes resumeCraftSpin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .resume-craft-generating-spinner { animation: none; }
+}
+
+.resume-craft-render-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border: 1px solid rgba(178, 115, 111, 0.28);
+  border-radius: 10px;
+  background: rgba(192, 136, 131, 0.08);
+}
+
+.resume-craft-render-error p {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.resume-craft-retry-btn {
+  margin-top: 0;
+  min-height: 36px;
+  white-space: nowrap;
+}
+
+.resume-craft-generated-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(170, 181, 191, 0.3);
+  background: #f8f8f6;
+}
+
+.resume-craft-generated-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+
+.resume-craft-generated-head h3 {
+  margin: 0;
+  color: #222222;
+  font-size: 1.05rem;
+}
+
+.resume-craft-generated-head p {
+  margin: 5px 0 0;
+  color: #747474;
+  font-size: 0.84rem;
+}
+
+.resume-craft-generated-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.resume-craft-generated-actions .resume-craft-result-action-btn {
+  width: auto;
+  min-width: 96px;
+  height: 38px;
+  min-height: 38px;
+  padding: 0 12px;
+  margin-top: 0;
+}
+
+.resume-craft-generated-frame-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid rgba(170, 181, 191, 0.35);
+  background: #ffffff;
+}
+
+.resume-craft-generated-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border: 0;
+  background: #ffffff;
+}
+
 .resume-craft-chat-log .msg {
   margin: 10px 0;
   align-items: flex-end;
@@ -3247,6 +3402,19 @@ textarea {
   .resume-craft-final-head-actions {
     width: 100%;
     justify-content: flex-start;
+  }
+
+  .resume-craft-generated-head {
+    flex-direction: column;
+  }
+
+  .resume-craft-generated-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .resume-craft-generated-actions .resume-craft-result-action-btn {
+    flex: 1 1 30%;
   }
 }
 

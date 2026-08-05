@@ -24,13 +24,21 @@ type ResultState = {
   message: string;
 };
 
+type GeneratedResumeState = {
+  html: string;
+  htmlUrl: string;
+  pdfBase64: string;
+  pdfName: string;
+};
+
+type ResumeView = "chat" | "generating" | "result";
+
 type RenderRequest = {
   template_code?: string;
   language?: string;
   wizardState?: ResumeCraftWizardState;
   conversationMessages?: ResumeCraftConversationMessage[];
   activeBackendStep?: ResumeCraftBackendStep;
-  completionMessage?: string;
   bypassConsent?: boolean;
 };
 
@@ -418,6 +426,7 @@ export function ResumeCraftPage() {
   const [chatLoading, setChatLoading] = useState(false);
   const [renderLoading, setRenderLoading] = useState(false);
   const [result, setResult] = useState<ResultState>({ kind: "idle", message: "" });
+  const [generatedResume, setGeneratedResume] = useState<GeneratedResumeState | null>(null);
   const [viewportHeight, setViewportHeight] = useState<number | null>(null);
   const [openMonthPicker, setOpenMonthPicker] = useState<{ index: number; part: "start" | "end" } | null>(null);
   const [monthPickerYear, setMonthPickerYear] = useState<number>(new Date().getFullYear());
@@ -432,6 +441,10 @@ export function ResumeCraftPage() {
 
   const photoInputRef = useRef<HTMLInputElement | null>(null);
   const wizardTrackRef = useRef<HTMLDivElement | null>(null);
+  const resumeViewRef = useRef<HTMLDivElement | null>(null);
+  const chatPanelRef = useRef<HTMLDivElement | null>(null);
+  const generatingPanelRef = useRef<HTMLDivElement | null>(null);
+  const resultPanelRef = useRef<HTMLElement | null>(null);
   const stepRefs = useRef<Record<StepNumber, HTMLElement | null>>({ 1: null, 2: null, 3: null });
   const educationCarouselRef = useRef<HTMLDivElement | null>(null);
   const previousEducationIndexRef = useRef(0);
@@ -472,6 +485,7 @@ export function ResumeCraftPage() {
   const edu = educationRows[educationIndex];
   const index = educationIndex;
   const activePhase = CHAT_PHASES.find((phase) => phase.step === activeBackendStep) ?? CHAT_PHASES[0];
+  const resumeView: ResumeView = renderLoading ? "generating" : generatedResume ? "result" : "chat";
 
   useEffect(() => {
     const card = stepRefs.current[step];
@@ -516,6 +530,34 @@ export function ResumeCraftPage() {
 
     return () => context.revert();
   }, [activeEducationIndex]);
+
+  useEffect(() => {
+    const scope = resumeViewRef.current;
+    if (!scope) return;
+
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const context = gsap.context(() => {
+      const panels = [chatPanelRef.current, generatingPanelRef.current, resultPanelRef.current].filter(
+        (panel): panel is HTMLElement => Boolean(panel),
+      );
+      const activePanel = resumeView === "chat"
+        ? chatPanelRef.current
+        : resumeView === "generating"
+          ? generatingPanelRef.current
+          : resultPanelRef.current;
+
+      gsap.set(panels, { autoAlpha: 0, x: reduceMotion ? 0 : 28 });
+      if (!activePanel) return;
+      gsap.to(activePanel, {
+        autoAlpha: 1,
+        x: 0,
+        duration: reduceMotion ? 0 : 0.32,
+        ease: "power2.out",
+      });
+    }, scope);
+
+    return () => context.revert();
+  }, [resumeView]);
 
   useEffect(() => {
     const onDocumentClick = (event: MouseEvent) => {
@@ -638,6 +680,18 @@ export function ResumeCraftPage() {
       return next;
     });
     setChatInput("");
+    setResult({ kind: "idle", message: "" });
+  };
+
+  const releaseGeneratedHtmlUrl = (url: string) => {
+    if (!url.startsWith("blob:")) return;
+    URL.revokeObjectURL(url);
+    generatedHtmlUrlsRef.current = generatedHtmlUrlsRef.current.filter((item) => item !== url);
+  };
+
+  const returnToChat = () => {
+    if (generatedResume) releaseGeneratedHtmlUrl(generatedResume.htmlUrl);
+    setGeneratedResume(null);
     setResult({ kind: "idle", message: "" });
   };
 
@@ -774,7 +828,6 @@ export function ResumeCraftPage() {
           wizardState: nextWizard,
           conversationMessages: completedMessages,
           activeBackendStep: nextBackendStep,
-          completionMessage: rawServerReply,
         });
       } else if (activeBackendStep === 6 || nextBackendStep === 6) {
         console.warn("[resume-craft] render not triggered", JSON.stringify({
@@ -920,6 +973,9 @@ export function ResumeCraftPage() {
       });
       return;
     }
+    if (generatedResume) releaseGeneratedHtmlUrl(generatedResume.htmlUrl);
+    setGeneratedResume(null);
+    setResult({ kind: "idle", message: "" });
     setRenderLoading(true);
     try {
       const history = toAgentHistory(currentConversationMessages);
@@ -962,22 +1018,20 @@ export function ResumeCraftPage() {
         htmlUrl = URL.createObjectURL(new Blob([reportHtml], { type: "text/html;charset=utf-8" }));
         generatedHtmlUrlsRef.current.push(htmlUrl);
       }
-      const generatedMessage: ResumeCraftConversationMessage = {
-        role: "assistant",
-        content: requested.completionMessage ?? "",
-        timestamp: nowTimeLabel(),
-        htmlLink: { href: htmlUrl, label: "查看 HTML 简历" },
-        backendStep: 6,
-      };
-      const generatedMessages = [...currentConversationMessages, generatedMessage];
-      setConversationMessages(generatedMessages);
-      setMessagesByStep(messagesByStepFromConversation(generatedMessages));
+      setGeneratedResume({
+        html: reportHtml,
+        htmlUrl,
+        pdfBase64: normalizeAgentText(resp.report_pdf_base64),
+        pdfName: normalizeAgentText(resp.report_pdf_name) || "resume.pdf",
+      });
+      setResult({ kind: "idle", message: "" });
       console.info("[resume-craft] render completed", JSON.stringify({
         htmlChars: reportHtml.length,
         htmlLink: true,
       }));
     } catch (err) {
       console.error("[resume-craft] render failed", err);
+      pendingRenderRef.current = requested;
       setResult({ kind: "error", message: (err as Error).message || "生成失败" });
     } finally {
       setRenderLoading(false);
@@ -1365,42 +1419,129 @@ export function ResumeCraftPage() {
                   </div>
                 )}
 
-                <div className="chat-log resume-craft-chat-log">
-                  {conversationMessages.map((msg, idx) => (
-                    <div key={`${msg.backendStep}-${msg.role}-${idx}`} className={`msg ${msg.role}`}>
-                      {msg.role === "assistant" ? <span className="msg-ai-avatar" aria-hidden="true">AI</span> : null}
-                      <div className="resume-craft-bubble-wrap">
-                        {msg.isPreview && msg.role === "assistant" ? (
-                          <div className="resume-craft-message-bubble resume-craft-preview-message">
-                            <div dangerouslySetInnerHTML={{ __html: simpleMarkdownToHtml(msg.content) }} />
-                            {msg.htmlLink ? (
-                              <a href={msg.htmlLink.href} target="_blank" rel="noreferrer" className="resume-craft-html-link">
-                                {msg.htmlLink.label}
-                              </a>
-                            ) : null}
+                <div
+                  ref={resumeViewRef}
+                  className={`resume-craft-view-stack resume-craft-view-${resumeView}`}
+                  aria-live="polite"
+                >
+                  <div
+                    ref={chatPanelRef}
+                    className="resume-craft-view-panel resume-craft-chat-panel"
+                    aria-hidden={resumeView !== "chat"}
+                  >
+                    <div className="chat-log resume-craft-chat-log">
+                      {conversationMessages.map((msg, idx) => (
+                        <div key={`${msg.backendStep}-${msg.role}-${idx}`} className={`msg ${msg.role}`}>
+                          {msg.role === "assistant" ? <span className="msg-ai-avatar" aria-hidden="true">AI</span> : null}
+                          <div className="resume-craft-bubble-wrap">
+                            {msg.isPreview && msg.role === "assistant" ? (
+                              <div className="resume-craft-message-bubble resume-craft-preview-message">
+                                <div dangerouslySetInnerHTML={{ __html: simpleMarkdownToHtml(msg.content) }} />
+                                {msg.htmlLink ? (
+                                  <a href={msg.htmlLink.href} target="_blank" rel="noreferrer" className="resume-craft-html-link">
+                                    {msg.htmlLink.label}
+                                  </a>
+                                ) : null}
+                              </div>
+                            ) : (
+                              <span className="resume-craft-message-bubble">
+                                {msg.content}
+                                {msg.htmlLink ? (
+                                  <a href={msg.htmlLink.href} target="_blank" rel="noreferrer" className="resume-craft-html-link">
+                                    {msg.htmlLink.label}
+                                  </a>
+                                ) : null}
+                              </span>
+                            )}
+                            <small className="resume-craft-msg-time">{msg.timestamp}</small>
                           </div>
-                        ) : (
-                          <span className="resume-craft-message-bubble">
-                            {msg.content}
-                            {msg.htmlLink ? (
-                              <a href={msg.htmlLink.href} target="_blank" rel="noreferrer" className="resume-craft-html-link">
-                                {msg.htmlLink.label}
+                        </div>
+                      ))}
+                      {chatLoading ? (
+                        <div className="msg assistant">
+                          <span className="msg-ai-avatar" aria-hidden="true">AI</span>
+                          <div className="resume-craft-bubble-wrap">
+                            <span>思考中...</span>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                    {result.kind === "error" ? (
+                      <div className="resume-craft-render-error" role="alert">
+                        <p className="resume-result-error">{result.message}</p>
+                        <button
+                          type="button"
+                          className="ghost-btn resume-craft-retry-btn"
+                          onClick={() => {
+                            const pending = pendingRenderRef.current;
+                            if (pending) void renderResume({ ...pending, bypassConsent: true });
+                          }}
+                          disabled={!pendingRenderRef.current || renderLoading}
+                        >
+                          重试生成
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div
+                    ref={generatingPanelRef}
+                    className="resume-craft-view-panel resume-craft-generating-panel"
+                    aria-hidden={resumeView !== "generating"}
+                  >
+                    <div className="resume-craft-generating-state">
+                      <span className="resume-craft-generating-spinner" aria-hidden="true" />
+                      <strong>正在生成简历</strong>
+                      <span>请稍候，生成结果会显示在当前页面。</span>
+                    </div>
+                  </div>
+
+                  <section
+                    ref={resultPanelRef}
+                    className="resume-craft-view-panel resume-craft-generated-panel"
+                    aria-hidden={resumeView !== "result"}
+                  >
+                    {generatedResume ? (
+                      <>
+                        <header className="resume-craft-generated-head">
+                          <div>
+                            <h3>简历结果</h3>
+                            <p>已在当前页面生成，可继续返回对话修改。</p>
+                          </div>
+                          <div className="resume-craft-generated-actions">
+                            <a
+                              href={generatedResume.htmlUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="ghost-btn resume-craft-result-action-btn"
+                            >
+                              查看 HTML
+                            </a>
+                            {generatedResume.pdfBase64 ? (
+                              <a
+                                href={`data:application/pdf;base64,${generatedResume.pdfBase64}`}
+                                download={generatedResume.pdfName}
+                                className="primary-btn resume-craft-result-action-btn"
+                              >
+                                下载 PDF
                               </a>
                             ) : null}
-                          </span>
-                        )}
-                        <small className="resume-craft-msg-time">{msg.timestamp}</small>
-                      </div>
-                    </div>
-                  ))}
-                  {chatLoading ? (
-                    <div className="msg assistant">
-                      <span className="msg-ai-avatar" aria-hidden="true">AI</span>
-                      <div className="resume-craft-bubble-wrap">
-                        <span>思考中...</span>
-                      </div>
-                    </div>
-                  ) : null}
+                            <button type="button" className="ghost-btn resume-craft-result-action-btn" onClick={returnToChat}>
+                              返回修改
+                            </button>
+                          </div>
+                        </header>
+                        <div className="resume-craft-generated-frame-wrap">
+                          <iframe
+                            className="resume-craft-generated-frame"
+                            title="生成的简历预览"
+                            srcDoc={generatedResume.html}
+                            sandbox=""
+                          />
+                        </div>
+                      </>
+                    ) : null}
+                  </section>
                 </div>
 
               </>
@@ -1408,7 +1549,7 @@ export function ResumeCraftPage() {
           </div>
         </div>
 
-        {step === 3 ? (
+        {step === 3 && resumeView === "chat" ? (
           <div className="resume-craft-fixed-composer">
             <form className="chat-input resume-craft-chat-input" onSubmit={onSendChat}>
               <textarea
@@ -1430,11 +1571,6 @@ export function ResumeCraftPage() {
           </div>
         ) : null}
 
-        {result.kind === "error" ? (
-          <section className="surface resume-craft-output resume-craft-result-error" style={{ marginTop: 14 }}>
-            <p className="resume-result-error">{result.message}</p>
-          </section>
-        ) : null}
       </div>
       <ConsentModal
         open={showConsentPrompt}
