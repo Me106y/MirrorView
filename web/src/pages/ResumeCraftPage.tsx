@@ -308,6 +308,17 @@ function looksLikeResumePreview(message: Pick<ResumeCraftConversationMessage, "r
     && fieldMarkers.filter((marker) => content.includes(marker)).length >= 2;
 }
 
+function isResumeGenerationIntent(message: string): boolean {
+  const compact = String(message || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s\u3000，。！？、；：:,.!?;"'“”‘’]+/g, "");
+  if (!compact || compact.includes("预览") || ["修改", "补充", "调整", "改一下"].some((token) => compact.includes(token))) {
+    return false;
+  }
+  return compact.includes("生成简历") || compact === "generateresume";
+}
+
 function hasPendingResumePreview(
   wizardState: ResumeCraftWizardState,
   messages: ResumeCraftConversationMessage[],
@@ -645,6 +656,9 @@ export function ResumeCraftPage() {
     const requestBackendStep: ResumeCraftBackendStep = hasPendingPreview
       ? 6
       : activeBackendStep;
+    const generationIntent = requestBackendStep === 6
+      && hasPendingPreview
+      && isResumeGenerationIntent(messageText);
     const userMessage: ResumeCraftConversationMessage = {
       role: "user",
       content: messageText.trim(),
@@ -687,6 +701,9 @@ export function ResumeCraftPage() {
       // previously confirmed preview and other step data when a response only
       // includes the fields changed in this turn.
       const nextWizard = mergeWizardState(wizardState, resp.wizard_state);
+      const nextStep6 = nextWizard.step_states?.step6;
+      const forceConfirmedGeneration = generationIntent
+        && Boolean(nextStep6?.draft_json && Object.keys(nextStep6.draft_json).length > 0);
       const prematureGeneration = requestBackendStep !== 6
         && (resp.render_ready === true || resp.action === "confirm" || resp.action === "render_ready");
       if (prematureGeneration) {
@@ -699,12 +716,20 @@ export function ResumeCraftPage() {
           nextWizard.step_states.step6.awaiting_confirm = false;
         }
       }
+      // The user's explicit generation message is the confirmation. The
+      // Agent still supplies the draft, but missing redundant confirmation
+      // flags must not strand the user in the chat after reviewing it.
+      if (forceConfirmedGeneration && nextStep6) {
+        nextWizard.current_step = 6;
+        nextWizard.collected_by_step.step6_confirmed = true;
+        nextStep6.confirmed = true;
+        nextStep6.awaiting_confirm = false;
+      }
       const serverReply = prematureGeneration
         ? step6PreviewMarkdown
           ? "请确认以上预览内容是否需要修改；如果没有问题，请输入“生成简历”。"
           : "已收到这段信息，我会继续围绕当前阶段整理内容。"
         : rawServerReply;
-      const nextStep6 = nextWizard.step_states?.step6;
       const responseLooksLikePreview = looksLikeResumePreview({
         role: "assistant",
         content: [step6PreviewMarkdown, serverReply].filter(Boolean).join("\n\n"),
@@ -728,7 +753,7 @@ export function ResumeCraftPage() {
       // top-level render_ready flag is redundant and older/runtime-mirrored
       // agents may omit or lag it even after confirming the current preview.
       const responseClaimsGeneration = requestBackendStep === 6
-        && (resp.render_ready === true || resp.action === "confirm" || resp.action === "render_ready");
+        && (resp.render_ready === true || resp.action === "confirm" || resp.action === "render_ready" || forceConfirmedGeneration);
       const renderReady = nextBackendStep === 6
         && responseClaimsGeneration
         && nextWizard.collected_by_step?.step6_confirmed === true
@@ -747,6 +772,8 @@ export function ResumeCraftPage() {
         phaseTransitioned: nextBackendStep !== activeBackendStep,
         renderReady,
         responseRenderReady: resp.render_ready === true,
+        generationIntent,
+        forceConfirmedGeneration,
         step6Confirmed: nextWizard.collected_by_step?.step6_confirmed === true,
         step6ConfirmedState: nextStep6?.confirmed === true,
         hasDraft: Boolean(nextDraft && Object.keys(nextDraft).length > 0),
