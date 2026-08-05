@@ -182,13 +182,13 @@ prefill_policy:
 
 - 初次预览：设置 `preview_ready=true`、`awaiting_confirm=true`、`confirmed=false`、`step6_confirmed=false`、`render_ready=false`。
 - 用户提出修改：只修改明确要求的内容，更新摘要和 `draft_json`，保留 `awaiting_confirm=true`，再次询问是否需要修改。
-- 用户明确确认无需修改并表达生成意图：设置 `confirmed=true`、`awaiting_confirm=false`、`step6_confirmed=true`、`render_ready=true`。`step6_preview_markdown` 只包含结构化摘要，`reply` 放在摘要之后，说明已确认并将自动生成 HTML/PDF；不要提示用户点击按钮。Agent 本身不调用 render 接口。
+- 用户明确确认无需修改并表达生成意图：设置 `confirmed=true`、`awaiting_confirm=false`、`step6_confirmed=true`、`render_ready=true`。`step6_preview_markdown` 只包含结构化摘要；`reply` 由 Agent 根据上下文生成简短的完成引导，推荐使用「HTML 简历已生成，请查看下方链接。」这类直接表达，不要声称正在生成、等待生成或要求用户点击一个并不存在的按钮。Agent 本身不调用 render 接口；前端会在当前对话中附加真实的 HTML 查看链接。
 - 如果当前已有 `step6.preview_ready=true` 且 `step6.awaiting_confirm=true`，用户输入“生成简历”或语义等价表达只表示确认当前预览并生成文件，不表示重新生成预览；这一轮必须清空 `step6_preview_markdown`，只返回生成状态，不得重复输出简历内容。
 - Step1 已选择的模板、语言和照片设置视为已确认的当前选择。生成预览时直接沿用这些设置，不要再次要求用户选择模板、语言或照片，也不要发起最终偏好问题；除非用户明确提出修改，否则不要重新列出选择题。
 - 当后端 `current_step=5` 的技能信息已经收集完毕，或用户语义表达没有其他技能、工具、语言能力或证书需要补充时，直接准备 Step6 的未确认预览并返回 `next_step_suggestion=next`，让连续工作区进入 Step6。此过渡回复可以设置 `preview_ready=true`、`awaiting_confirm=true`、`confirmed=false`、`step6_confirmed=false`、`render_ready=false`，但不得生成 HTML、解锁生成按钮或声称已确认；预览必须展示摘要并只询问是否需要修改或生成。
 - 在后端 `current_step=5` 的普通消息中仍只收集技能、工具、语言能力和证书；技能信息完成后即可准备未确认预览。`current_step=6` 只处理预览后的修改、确认和生成，不再收集最终偏好。
 - 预览只展示结构化事实摘要，不额外收集最终偏好；摘要之后只保留一次确认提示：「请确认以上信息是否需要修改？如果没有问题，可以输入“生成简历”来生成您的简历。」`step6_preview_markdown` 不得包含这条提示，`reply` 也不得重复输出；如果模型同时生成了重复段落，应只保留一次。
-- 用户确认生成后，不要输出“您的简历已确认，即将为您生成 HTML 和 PDF 版本”“正在为您生成”或“请稍候”等等待话术。只返回简短的完成引导，例如「HTML 简历已生成，请查看下方链接。」前端会在当前对话中附加 HTML 查看链接，不跳转到独立 result 页面。
+- 用户确认生成后，不要输出“您的简历已确认，即将为您生成 HTML 和 PDF 版本”“正在为您生成”或“请稍候”等等待话术。只返回由 Agent 自主生成的简短完成引导；推荐使用「HTML 简历已生成，请查看下方链接。」这类表达。不要在回复中伪造 URL，前端会在当前对话中附加真实 HTML 查看链接，不跳转到独立 result 页面。
 
 ---
 
@@ -248,7 +248,7 @@ prefill_policy:
 
 每次输出必须保留当前轮仍为 `open` 的问题；只有全部问题变为 `answered` 或 `skipped` 后，才可增加 `completed_rounds`。旧状态缺少该对象时按第 0 轮、无待回答问题兼容处理。
 
-`wizard_state` 只需返回本轮必要的最小 JSON 补丁，运行时会将其深度合并到已有状态，不要重复输出未变化的完整历史或聊天记录。不要依赖固定关键词识别“没有更多”、拒答、确认或修改；应根据上下文判断用户意图。`next_step_suggestion=next` 只用于表达语义上的阶段完成，前端会在连续工作区中自动切换阶段，回复应自然说明接下来要收集的内容，不要提示用户点击不存在的阶段按钮。技能信息完成后直接生成预览，不发起最终偏好问题；只有用户明确确认预览并表达生成意图后，才能设置 `step6_confirmed=true` 和 `render_ready=true`。未确认时，`reply` 必须在 `step6_preview_markdown` 之后只保留一次输入“生成简历”的引导；确认生成时不要再次返回预览摘要，也不得出现“正在生成”“请稍候”或“点击生成简历”等话术，前端会直接调用生成接口。
+`wizard_state` 只需返回本轮必要的最小 JSON 补丁，运行时会将其深度合并到已有状态，不要重复输出未变化的完整历史或聊天记录。不要依赖固定关键词识别“没有更多”、拒答、确认或修改；应根据上下文判断用户意图。`next_step_suggestion=next` 只用于表达语义上的阶段完成，前端会在连续工作区中自动切换阶段，回复应自然说明接下来要收集的内容，不要提示用户点击不存在的阶段按钮。技能信息完成后直接生成预览，不发起最终偏好问题；只有用户明确确认预览并表达生成意图后，才能设置 `step6_confirmed=true` 和 `render_ready=true`。未确认时，`reply` 必须在 `step6_preview_markdown` 之后只保留一次输入“生成简历”的引导；确认生成时不要再次返回预览摘要，也不得出现“正在生成”“请稍候”或“点击生成简历”等话术。完成文案由 Agent 生成，前端只负责把生成接口返回的 HTML 变成当前对话中的真实链接。
 
 ---
 
@@ -318,11 +318,7 @@ prefill_policy:
 
 ## 用户确认环节
 
-生成 HTML 文件后，提醒用户在浏览器中打开查看效果，然后问：
-
-> 「简历已经生成好了，请在浏览器中打开 HTML 文件看一下效果。有什么需要调整的吗？比如内容修改、排版调整、配色更换等。」
-
-用户满意后再生成 PDF。支持多轮迭代修改。
+生成请求成功后，保持在当前对话中。Agent 只返回简短的完成引导，前端会附加一个真实的 HTML 查看链接；不要输出伪造 URL，也不要跳转到独立的 result 页面。用户后续如果提出内容、排版或配色修改，继续交给 Agent 结合完整历史修订并重新确认；HTML 内置的打印能力负责导出 PDF。
 
 ---
 

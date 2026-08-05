@@ -96,8 +96,10 @@ class ResumeCraftAgent(BaseSkillAgent):
             if not fallback_state:
                 fallback_state = {"current_step": payload.get("current_step") or 4}
             parsed["wizard_state"] = fallback_state
-        if not str(parsed.get("reply") or "").strip() and not str(parsed.get("step6_preview_markdown") or "").strip():
-            parsed["reply"] = "我已收到这段信息。请继续补充与项目相关的职责、关键行动和结果；如果已经没有更多内容，也可以直接告诉我。"
+        if not isinstance(parsed.get("reply"), str):
+            parsed["reply"] = ""
+        if not isinstance(parsed.get("step6_preview_markdown"), str):
+            parsed["step6_preview_markdown"] = ""
         if parsed.get("action") not in {"collect", "advance", "preview", "revise", "confirm", "render_ready"}:
             parsed["action"] = "collect"
         if parsed.get("next_step_suggestion") not in {"stay", "next"}:

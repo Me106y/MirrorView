@@ -267,12 +267,22 @@ function normalizeConversationMessages(value: unknown, fallbackStep?: ResumeCraf
     const candidate = item as Partial<ResumeCraftConversationMessage> & { backendStep?: unknown };
     const content = String(candidate.content || "").trim();
     if (!content || (candidate.role !== "user" && candidate.role !== "assistant")) return [];
+    const candidateLink = candidate.htmlLink;
+    const htmlLink = candidateLink
+      && typeof candidateLink === "object"
+      && typeof candidateLink.href === "string"
+      && candidateLink.href.trim()
+      && typeof candidateLink.label === "string"
+      && candidateLink.label.trim()
+      ? { href: candidateLink.href.trim(), label: candidateLink.label.trim() }
+      : undefined;
     return [{
       role: candidate.role,
       content,
       timestamp: String(candidate.timestamp || nowTimeLabel()),
       isPreview: candidate.isPreview === true,
       backendStep: normalizeBackendStep(candidate.backendStep ?? fallbackStep),
+      ...(htmlLink ? { htmlLink } : {}),
     }];
   });
 }
@@ -698,8 +708,7 @@ export function ResumeCraftPage() {
       // The nested confirmation state is the authoritative contract. The
       // frontend does not infer confirmation from user wording or local
       // preview heuristics.
-      const responseClaimsGeneration = requestBackendStep === 6
-        && (resp.render_ready === true || resp.action === "confirm" || resp.action === "render_ready");
+      const responseClaimsGeneration = resp.render_ready === true;
       const renderReady = nextBackendStep === 6
         && responseClaimsGeneration
         && nextWizard.collected_by_step?.step6_confirmed === true
@@ -920,12 +929,11 @@ export function ResumeCraftPage() {
       const resp = (await callCareerforgeSkill(settings, "/careerforge/resume-craft/render", payload)) as Record<string, unknown>;
       const reportHtml = String(resp.report_html || "").trim();
       if (!reportHtml) throw new Error(String(resp.message || "未返回有效简历 HTML"));
-      const reportName = String(resp.report_name || "resume-craft-report.html").trim() || "resume-craft-report.html";
       const htmlUrl = URL.createObjectURL(new Blob([reportHtml], { type: "text/html;charset=utf-8" }));
       generatedHtmlUrlsRef.current.push(htmlUrl);
       const generatedMessage: ResumeCraftConversationMessage = {
         role: "assistant",
-        content: requested.completionMessage || "HTML 简历已生成，请查看下方链接。",
+        content: requested.completionMessage ?? "",
         timestamp: nowTimeLabel(),
         htmlLink: { href: htmlUrl, label: "查看 HTML 简历" },
         backendStep: 6,
