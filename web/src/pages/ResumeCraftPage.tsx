@@ -949,8 +949,19 @@ export function ResumeCraftPage() {
       const resp = (await callCareerforgeSkill(settings, "/careerforge/resume-craft/render", payload)) as Record<string, unknown>;
       const reportHtml = String(resp.report_html || "").trim();
       if (!reportHtml) throw new Error(String(resp.message || "未返回有效简历 HTML"));
-      const htmlUrl = URL.createObjectURL(new Blob([reportHtml], { type: "text/html;charset=utf-8" }));
-      generatedHtmlUrlsRef.current.push(htmlUrl);
+      const reportUrl = normalizeAgentText(resp.report_url);
+      let htmlUrl = "";
+      if (reportUrl) {
+        try {
+          htmlUrl = new URL(reportUrl, window.location.origin).toString();
+        } catch {
+          htmlUrl = "";
+        }
+      }
+      if (!htmlUrl) {
+        htmlUrl = URL.createObjectURL(new Blob([reportHtml], { type: "text/html;charset=utf-8" }));
+        generatedHtmlUrlsRef.current.push(htmlUrl);
+      }
       const generatedMessage: ResumeCraftConversationMessage = {
         role: "assistant",
         content: requested.completionMessage ?? "",

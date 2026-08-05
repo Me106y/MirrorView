@@ -52,6 +52,9 @@ RESUME_CRAFT_TEMPLATE_MAP: Dict[str, Tuple[str, str]] = {
 }
 RESUME_CRAFT_PHOTO_TOKEN = "__PHOTO_DATA_URL__"
 RESUME_CRAFT_MAX_PHOTO_DATA_URL_LENGTH = 2_000_000
+RESUME_CRAFT_HTML_ARTIFACT_TTL_SECONDS = 30 * 60
+RESUME_CRAFT_HTML_ARTIFACT_MAX_ITEMS = 64
+_RESUME_CRAFT_HTML_ARTIFACTS: Dict[str, Tuple[float, str]] = {}
 RESUME_CRAFT_FACT_AUDIT_STOPWORDS = {
     "负责",
     "参与",
@@ -1226,6 +1229,39 @@ def _generate_resume_craft_pdf_artifact(report_html: str, report_name: str) -> T
         return "", "", f"pdf_generation_exception:{str(e)[:220]}"
 
 
+def _store_resume_craft_html_artifact(report_html: str) -> str:
+    now = time.time()
+    expired = [
+        token
+        for token, (created_at, _html) in _RESUME_CRAFT_HTML_ARTIFACTS.items()
+        if now - created_at > RESUME_CRAFT_HTML_ARTIFACT_TTL_SECONDS
+    ]
+    for token in expired:
+        _RESUME_CRAFT_HTML_ARTIFACTS.pop(token, None)
+
+    while len(_RESUME_CRAFT_HTML_ARTIFACTS) >= RESUME_CRAFT_HTML_ARTIFACT_MAX_ITEMS:
+        oldest = min(_RESUME_CRAFT_HTML_ARTIFACTS, key=lambda key: _RESUME_CRAFT_HTML_ARTIFACTS[key][0])
+        _RESUME_CRAFT_HTML_ARTIFACTS.pop(oldest, None)
+
+    token = secrets.token_urlsafe(24)
+    _RESUME_CRAFT_HTML_ARTIFACTS[token] = (now, report_html)
+    return token
+
+
+@api.route('/careerforge/resume-craft/artifacts/<artifact_token>', methods=['GET'])
+def careerforge_resume_craft_artifact(artifact_token: str):
+    stored = _RESUME_CRAFT_HTML_ARTIFACTS.get(artifact_token)
+    if not stored or time.time() - stored[0] > RESUME_CRAFT_HTML_ARTIFACT_TTL_SECONDS:
+        _RESUME_CRAFT_HTML_ARTIFACTS.pop(artifact_token, None)
+        return jsonify({"error": "resume_craft_artifact_not_found"}), 404
+
+    return Response(
+        stored[1],
+        mimetype="text/html",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
 def _process_photo_data_url_with_skill(photo_data_url: str) -> Tuple[str, str]:
     value = str(photo_data_url or "").strip()
     if not value:
@@ -2069,17 +2105,21 @@ def careerforge_resume_craft_render():
     if photo_process_warning:
         response_meta["resume_craft_photo_process_warning"] = photo_process_warning
 
+    artifact_token = _store_resume_craft_html_artifact(report_html)
+    report_url = f"/api/careerforge/resume-craft/artifacts/{artifact_token}"
     logger.info(
-        "resume-craft render completed: html_chars=%s pdf_generated=%s pdf_error=%s",
+        "resume-craft render completed: html_chars=%s pdf_generated=%s pdf_error=%s artifact=%s",
         len(report_html),
         bool(pdf_base64),
         bool(pdf_error),
+        bool(artifact_token),
     )
 
     return jsonify(
         {
             "report_name": report_name,
             "report_html": report_html,
+            "report_url": report_url,
             "report_pdf_name": pdf_name,
             "report_pdf_base64": pdf_base64,
             "meta": response_meta,
