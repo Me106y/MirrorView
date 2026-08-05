@@ -738,6 +738,18 @@ export function ResumeCraftPage() {
     });
   };
 
+  const clearRenderFailureFeedback = () => {
+    setConversationMessages((previous) => {
+      const next = previous.filter(
+        (message) => !(message.role === "assistant" && message.backendStep === 6 && message.content.includes("简历生成失败")),
+      );
+      if (next.length !== previous.length) {
+        setMessagesByStep(messagesByStepFromConversation(next));
+      }
+      return next;
+    });
+  };
+
   const sendChatMessage = async (messageText: string) => {
     if (step !== 3 || !messageText.trim() || chatLoading) return;
 
@@ -1099,6 +1111,7 @@ export function ResumeCraftPage() {
         pdfName: normalizeAgentText(resp.report_pdf_name) || "resume.pdf",
       });
       setResult({ kind: "success", message: "简历已生成。" });
+      clearRenderFailureFeedback();
       appendRenderFeedback("简历已生成，HTML 简历已准备好。");
       console.info("[resume-craft] render completed", JSON.stringify({
         htmlChars: reportHtml.length,
