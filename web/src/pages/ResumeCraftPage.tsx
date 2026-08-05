@@ -859,6 +859,7 @@ export function ResumeCraftPage() {
       const failedMessages = [...nextMessages, errorMessage];
       setConversationMessages(failedMessages);
       setMessagesByStep(messagesByStepFromConversation(failedMessages));
+      setResult({ kind: "error", message: errorMessage.content });
     } finally {
       setChatLoading(false);
     }
