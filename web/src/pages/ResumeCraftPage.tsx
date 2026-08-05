@@ -1021,7 +1021,10 @@ export function ResumeCraftPage() {
     // The explicit confirmation state is the render contract. Do not repeat
     // the page phase check here; the backend validates the same state before
     // allowing the high-cost render request.
-    if (!confirmed || !hasDraft || renderLoading) {
+    // A confirmed Step6 response may omit draft_json when the model relies on
+    // the already-confirmed wizard state. The render route owns the structural
+    // fallback and its safety checks, so the page must not reject that request.
+    if (!confirmed || renderLoading) {
       console.warn("[resume-craft] render skipped", {
         currentBackendStep,
         confirmed,
@@ -1030,9 +1033,7 @@ export function ResumeCraftPage() {
       });
       const errorMessage = renderLoading
         ? "生成请求正在处理中，请稍候。"
-        : !confirmed
-          ? "生成未执行：当前简历尚未确认。"
-          : "生成未执行：没有可生成的简历草稿。";
+        : "生成未执行：当前简历尚未确认。";
       setResult({
         kind: "error",
         message: errorMessage,
