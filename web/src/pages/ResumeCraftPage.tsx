@@ -443,6 +443,7 @@ export function ResumeCraftPage() {
   const [renderLoading, setRenderLoading] = useState(false);
   const [result, setResult] = useState<ResultState>({ kind: "idle", message: "" });
   const [generatedResume, setGeneratedResume] = useState<GeneratedResumeState | null>(null);
+  const [generatedFrameHeight, setGeneratedFrameHeight] = useState<number | null>(null);
   const [viewportHeight, setViewportHeight] = useState<number | null>(null);
   const [openMonthPicker, setOpenMonthPicker] = useState<{ index: number; part: "start" | "end" } | null>(null);
   const [monthPickerYear, setMonthPickerYear] = useState<number>(new Date().getFullYear());
@@ -505,6 +506,10 @@ export function ResumeCraftPage() {
 
   useEffect(() => {
     const card = stepRefs.current[step];
+    if (resumeView === "result") {
+      setViewportHeight(null);
+      return;
+    }
     if (!card) return;
 
     const updateHeight = () => {
@@ -523,7 +528,7 @@ export function ResumeCraftPage() {
       observer.disconnect();
       cancelAnimationFrame(rafRef.current);
     };
-  }, [step]);
+  }, [step, resumeView]);
 
   useEffect(() => {
     setActiveEducationIndex((current) => Math.min(current, Math.max(educationRows.length - 1, 0)));
@@ -708,16 +713,16 @@ export function ResumeCraftPage() {
   const returnToChat = () => {
     if (generatedResume) releaseGeneratedHtmlUrl(generatedResume.htmlUrl);
     setGeneratedResume(null);
+    setGeneratedFrameHeight(null);
     setResult({ kind: "idle", message: "" });
   };
 
-  const appendRenderFeedback = (content: string, htmlUrl?: string) => {
+  const appendRenderFeedback = (content: string) => {
     const feedback: ResumeCraftConversationMessage = {
       role: "assistant",
       content,
       timestamp: nowTimeLabel(),
       backendStep: 6,
-      ...(htmlUrl ? { htmlLink: { href: htmlUrl, label: "查看 HTML 简历" } } : {}),
     };
     setConversationMessages((previous) => {
       const alreadyAdded = previous.some(
@@ -1043,6 +1048,7 @@ export function ResumeCraftPage() {
     }
     if (generatedResume) releaseGeneratedHtmlUrl(generatedResume.htmlUrl);
     setGeneratedResume(null);
+    setGeneratedFrameHeight(null);
     setResult({ kind: "pending", message: "生成请求已发送，正在生成简历。" });
     setRenderLoading(true);
     try {
@@ -1093,7 +1099,7 @@ export function ResumeCraftPage() {
         pdfName: normalizeAgentText(resp.report_pdf_name) || "resume.pdf",
       });
       setResult({ kind: "success", message: "简历已生成。" });
-      appendRenderFeedback("简历已生成，HTML 简历已准备好。", htmlUrl);
+      appendRenderFeedback("简历已生成，HTML 简历已准备好。");
       console.info("[resume-craft] render completed", JSON.stringify({
         htmlChars: reportHtml.length,
         htmlLink: true,
@@ -1126,7 +1132,7 @@ export function ResumeCraftPage() {
         返回
       </NavLink>
       <div className="resume-craft-layout">
-        <div className={`resume-craft-wizard-viewport ${step === 3 ? "is-chat-viewport" : ""} ${step === 1 ? "is-step1-viewport" : ""} ${step === 2 ? "is-step2-viewport" : ""}`} style={step === 3 && viewportHeight ? { height: `${viewportHeight}px` } : undefined}>
+        <div className={`resume-craft-wizard-viewport ${step === 3 ? "is-chat-viewport" : ""} ${step === 3 && resumeView === "result" ? "is-result-viewport" : ""} ${step === 1 ? "is-step1-viewport" : ""} ${step === 2 ? "is-step2-viewport" : ""}`} style={step === 3 && resumeView !== "result" && viewportHeight ? { height: `${viewportHeight}px` } : undefined}>
           <div className="resume-craft-wizard-track" ref={wizardTrackRef} style={{ transform: `translateX(-${(step - 1) * STEP_SHIFT}%)` }}>
             {stepCard(
               1,
@@ -1500,11 +1506,6 @@ export function ResumeCraftPage() {
                       {result.kind === "pending" ? "生成中" : result.kind === "success" ? "生成完成" : "生成失败"}
                     </span>
                     <p>{result.message}</p>
-                    {result.kind === "success" && generatedResume ? (
-                      <a href={generatedResume.htmlUrl} target="_blank" rel="noreferrer" className="resume-craft-html-link">
-                        查看 HTML 简历
-                      </a>
-                    ) : null}
                     {result.kind === "error" ? (
                       <button
                         type="button"
@@ -1599,7 +1600,7 @@ export function ResumeCraftPage() {
                               href={generatedResume.htmlUrl}
                               target="_blank"
                               rel="noreferrer"
-                              className="ghost-btn resume-craft-result-action-btn"
+                              className="ghost-btn resume-craft-result-action-btn resume-craft-html-result-btn"
                             >
                               查看 HTML
                             </a>
@@ -1623,6 +1624,19 @@ export function ResumeCraftPage() {
                             title="生成的简历预览"
                             srcDoc={generatedResume.html}
                             sandbox=""
+                            style={generatedFrameHeight ? { height: `${generatedFrameHeight}px` } : undefined}
+                            onLoad={(event) => {
+                              const frame = event.currentTarget;
+                              const documentElement = frame.contentDocument?.documentElement;
+                              const body = frame.contentDocument?.body;
+                              const contentHeight = Math.max(
+                                documentElement?.scrollHeight || 0,
+                                documentElement?.offsetHeight || 0,
+                                body?.scrollHeight || 0,
+                                body?.offsetHeight || 0,
+                              );
+                              if (contentHeight > 0) setGeneratedFrameHeight(contentHeight);
+                            }}
                           />
                         </div>
                       </>

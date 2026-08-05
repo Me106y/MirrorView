@@ -712,6 +712,12 @@ a {
   max-height: none;
 }
 
+.resume-craft-wizard-viewport.is-result-viewport {
+  height: auto;
+  max-height: none;
+  overflow: visible;
+}
+
 .resume-craft-wizard-viewport.is-step2-viewport {
   overflow: hidden;
   max-height: none;
@@ -1833,6 +1839,14 @@ a {
   overflow: hidden;
 }
 
+.resume-craft-view-stack.resume-craft-view-result {
+  display: block;
+  flex: 0 0 auto;
+  height: auto;
+  min-height: 0;
+  overflow: visible;
+}
+
 .resume-craft-view-panel {
   position: absolute;
   inset: 0;
@@ -1840,6 +1854,16 @@ a {
   min-height: 0;
   visibility: hidden;
   opacity: 0;
+}
+
+.resume-craft-view-result .resume-craft-view-panel {
+  position: relative;
+  inset: auto;
+}
+
+.resume-craft-view-result .resume-craft-chat-panel,
+.resume-craft-view-result .resume-craft-generating-panel {
+  display: none;
 }
 
 .resume-craft-chat-panel {
@@ -1954,7 +1978,7 @@ a {
   flex-direction: column;
   gap: 12px;
   padding: 12px;
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid rgba(170, 181, 191, 0.3);
   background: #f8f8f6;
 }
@@ -1996,10 +2020,22 @@ a {
   margin-top: 0;
 }
 
+.resume-craft-generated-actions .resume-craft-html-result-btn {
+  border-color: rgba(79, 123, 163, 0.45);
+  background: #e2ecf3;
+  color: #3f617a;
+}
+
+.resume-craft-generated-actions .resume-craft-html-result-btn:hover:not(:disabled) {
+  border-color: rgba(79, 123, 163, 0.7);
+  background: #d5e5ef;
+  color: #294c67;
+}
+
 .resume-craft-generated-frame-wrap {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid rgba(170, 181, 191, 0.35);
   background: #ffffff;
 }
@@ -2007,8 +2043,8 @@ a {
 .resume-craft-generated-frame {
   display: block;
   width: 100%;
-  height: 100%;
-  min-height: 0;
+  height: 1120px;
+  min-height: 720px;
   border: 0;
   background: #ffffff;
 }
