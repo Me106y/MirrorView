@@ -270,7 +270,6 @@ function normalizeConversationMessages(value: unknown, fallbackStep?: ResumeCraf
     if (!item || typeof item !== "object") return [];
     const candidate = item as Partial<ResumeCraftConversationMessage> & { backendStep?: unknown };
     const content = String(candidate.content || "").trim();
-    if (!content || (candidate.role !== "user" && candidate.role !== "assistant")) return [];
     const candidateLink = candidate.htmlLink;
     const htmlLink = candidateLink
       && typeof candidateLink === "object"
@@ -280,6 +279,9 @@ function normalizeConversationMessages(value: unknown, fallbackStep?: ResumeCraf
       && candidateLink.label.trim()
       ? { href: candidateLink.href.trim(), label: candidateLink.label.trim() }
       : undefined;
+    // A generated assistant message can intentionally have no model text;
+    // its user-facing content is the real HTML link attached below.
+    if ((!content && !htmlLink) || (candidate.role !== "user" && candidate.role !== "assistant")) return [];
     return [{
       role: candidate.role,
       content,
@@ -720,8 +722,10 @@ export function ResumeCraftPage() {
       // frontend does not infer confirmation from user wording or local
       // preview heuristics.
       const responseClaimsGeneration = resp.render_ready === true;
-      const renderReady = nextBackendStep === 6
-        && responseClaimsGeneration
+      // `render_ready` is an explicit Agent decision. The page phase is only
+      // navigation context and must not veto a confirmed render request; the
+      // render route remains the final safety gate for confirmation and draft.
+      const renderReady = responseClaimsGeneration
         && nextWizard.collected_by_step?.step6_confirmed === true
         && nextStep6?.confirmed === true
         && Boolean(nextDraft && Object.keys(nextDraft).length > 0);
@@ -904,7 +908,10 @@ export function ResumeCraftPage() {
       return;
     }
     pendingRenderRef.current = null;
-    if (currentBackendStep !== 6 || !confirmed || !hasDraft || renderLoading) {
+    // The explicit confirmation state is the render contract. Do not repeat
+    // the page phase check here; the backend validates the same state before
+    // allowing the high-cost render request.
+    if (!confirmed || !hasDraft || renderLoading) {
       console.warn("[resume-craft] render skipped", {
         currentBackendStep,
         confirmed,
