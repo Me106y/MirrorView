@@ -292,31 +292,7 @@ function toAgentHistory(messages: ResumeCraftConversationMessage[]): Msg[] {
 }
 
 function looksLikeResumePreview(message: Pick<ResumeCraftConversationMessage, "role" | "content" | "isPreview">): boolean {
-  if (message.role !== "assistant") return false;
-  if (message.isPreview === true) return true;
-  const content = String(message.content || "");
-  const generationGuidanceMarkers = [
-    "输入“生成简历”",
-    '输入"生成简历"',
-    "输入生成简历",
-    "generate resume",
-  ];
-  if (generationGuidanceMarkers.some((marker) => content.toLowerCase().includes(marker))) return true;
-  const previewMarkers = ["简历预览", "简历摘要", "简历草稿"];
-  const fieldMarkers = ["目标岗位", "个人信息", "个人简介", "工作经历", "项目经历", "教育背景", "技能与证书", "技能"];
-  return previewMarkers.some((marker) => content.includes(marker))
-    && fieldMarkers.filter((marker) => content.includes(marker)).length >= 2;
-}
-
-function isResumeGenerationIntent(message: string): boolean {
-  const compact = String(message || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[\s\u3000，。！？、；：:,.!?;"'“”‘’]+/g, "");
-  if (!compact || compact.includes("预览") || ["修改", "补充", "调整", "改一下"].some((token) => compact.includes(token))) {
-    return false;
-  }
-  return compact.includes("生成简历") || compact === "generateresume";
+  return message.role === "assistant" && message.isPreview === true;
 }
 
 function hasPendingResumePreview(
@@ -413,7 +389,6 @@ export function ResumeCraftPage() {
   const [activeBackendStep, setActiveBackendStep] = useState<ResumeCraftBackendStep>(() => {
     if (restoredEditorState?.activeBackendStep) return normalizeBackendStep(restoredEditorState.activeBackendStep);
     if (restoredEditorState?.wizardState?.step_states?.step6?.confirmed) return 6;
-    if (restoredEditorState?.wizardState?.collected_by_step?.skills_and_certs?.length) return 5;
     return 4;
   });
 
@@ -656,9 +631,6 @@ export function ResumeCraftPage() {
     const requestBackendStep: ResumeCraftBackendStep = hasPendingPreview
       ? 6
       : activeBackendStep;
-    const generationIntent = requestBackendStep === 6
-      && hasPendingPreview
-      && isResumeGenerationIntent(messageText);
     const userMessage: ResumeCraftConversationMessage = {
       role: "user",
       content: messageText.trim(),
@@ -702,58 +674,21 @@ export function ResumeCraftPage() {
       // includes the fields changed in this turn.
       const nextWizard = mergeWizardState(wizardState, resp.wizard_state);
       const nextStep6 = nextWizard.step_states?.step6;
-      const forceConfirmedGeneration = generationIntent
-        && Boolean(nextStep6?.draft_json && Object.keys(nextStep6.draft_json).length > 0);
-      const prematureGeneration = requestBackendStep !== 6
-        && (resp.render_ready === true || resp.action === "confirm" || resp.action === "render_ready");
-      if (prematureGeneration) {
-        // A stale/runtime-mirrored Agent can claim generation during Step4 or
-        // Step5. That response must never unlock rendering or show a terminal
-        // generation message before the conversation reaches Step6.
-        nextWizard.collected_by_step.step6_confirmed = false;
-        nextWizard.step_states.step6.confirmed = false;
-        if (!(requestBackendStep === 5 && resp.step6_waiting_confirm === true)) {
-          nextWizard.step_states.step6.awaiting_confirm = false;
-        }
-      }
-      // The user's explicit generation message is the confirmation. The
-      // Agent still supplies the draft, but missing redundant confirmation
-      // flags must not strand the user in the chat after reviewing it.
-      if (forceConfirmedGeneration && nextStep6) {
-        nextWizard.current_step = 6;
-        nextWizard.collected_by_step.step6_confirmed = true;
-        nextStep6.confirmed = true;
-        nextStep6.awaiting_confirm = false;
-      }
-      const serverReply = prematureGeneration
-        ? step6PreviewMarkdown
-          ? "请确认以上预览内容是否需要修改；如果没有问题，请输入“生成简历”。"
-          : "已收到这段信息，我会继续围绕当前阶段整理内容。"
-        : rawServerReply;
       const responseLooksLikePreview = looksLikeResumePreview({
         role: "assistant",
-        content: [step6PreviewMarkdown, serverReply].filter(Boolean).join("\n\n"),
+        content: [step6PreviewMarkdown, rawServerReply].filter(Boolean).join("\n\n"),
         isPreview: Boolean(step6PreviewMarkdown),
       });
-      const responseHasPreview = (
-        nextStep6?.preview_ready === true
-        && nextStep6?.awaiting_confirm === true
-      ) || (
-        requestBackendStep === 5
-        && resp.step6_waiting_confirm === true
-        && Boolean(step6PreviewMarkdown)
-      ) || (requestBackendStep === 5 && responseLooksLikePreview);
-      const shouldEnterPreviewStep = resp.next_step_suggestion === "next"
-        || (requestBackendStep === 5 && responseHasPreview);
+      const shouldEnterPreviewStep = resp.next_step_suggestion === "next";
       const nextBackendStep = shouldEnterPreviewStep
         ? advanceBackendStep(requestBackendStep)
         : requestBackendStep;
       const nextDraft = nextStep6?.draft_json;
       // The nested confirmation state is the authoritative contract. The
-      // top-level render_ready flag is redundant and older/runtime-mirrored
-      // agents may omit or lag it even after confirming the current preview.
+      // frontend does not infer confirmation from user wording or local
+      // preview heuristics.
       const responseClaimsGeneration = requestBackendStep === 6
-        && (resp.render_ready === true || resp.action === "confirm" || resp.action === "render_ready" || forceConfirmedGeneration);
+        && (resp.render_ready === true || resp.action === "confirm" || resp.action === "render_ready");
       const renderReady = nextBackendStep === 6
         && responseClaimsGeneration
         && nextWizard.collected_by_step?.step6_confirmed === true
@@ -768,12 +703,9 @@ export function ResumeCraftPage() {
         visiblePreviewCount,
         action: String(resp.action || ""),
         suggestion: String(resp.next_step_suggestion || ""),
-        responseHasPreview,
         phaseTransitioned: nextBackendStep !== activeBackendStep,
         renderReady,
         responseRenderReady: resp.render_ready === true,
-        generationIntent,
-        forceConfirmedGeneration,
         step6Confirmed: nextWizard.collected_by_step?.step6_confirmed === true,
         step6ConfirmedState: nextStep6?.confirmed === true,
         hasDraft: Boolean(nextDraft && Object.keys(nextDraft).length > 0),
@@ -788,7 +720,7 @@ export function ResumeCraftPage() {
             ...nextMessages,
             {
               role: "assistant" as const,
-              content: [step6PreviewMarkdown, serverReply].filter(Boolean).join("\n\n"),
+              content: [step6PreviewMarkdown, rawServerReply].filter(Boolean).join("\n\n"),
               timestamp: nowTimeLabel(),
               isPreview: responseLooksLikePreview,
               backendStep: nextBackendStep,
