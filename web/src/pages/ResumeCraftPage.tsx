@@ -359,6 +359,20 @@ function nowTimeLabel() {
   return new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
+function hasCompleteResumeCraftProfile(profile: Step1Profile | null): boolean {
+  if (!profile) return false;
+  const personal = profile.personal_info;
+  return Boolean(
+    profile.target_role.trim()
+      && personal.name.trim()
+      && personal.phone.trim()
+      && personal.email.trim()
+      && profile.education.some(
+        (item) => item.school.trim() && item.major.trim() && item.degree.trim() && item.period.trim(),
+      ),
+  );
+}
+
 function parseMonthValue(value: string) {
   const raw = String(value || "").trim();
   if (!/^\d{4}-\d{2}$/.test(raw)) return null;
@@ -392,6 +406,7 @@ export function ResumeCraftPage() {
 
   const routeStep = (location.state as ResumeCraftRouteState | null)?.resumeCraftStep;
   const restoredEditorState = (location.state as ResumeCraftRouteState | null)?.editorState;
+  const storedDraft = loadResumeCraftDraft();
   const restoredMessages = restoredEditorState?.messagesByStep as Record<ChatStep, Msg[]> | undefined;
   const restoredConversation = normalizeConversationMessages(restoredEditorState?.conversationMessages);
   const initialConversationMessages = restoredConversation.length
@@ -400,8 +415,9 @@ export function ResumeCraftPage() {
   const initialCombinedMessages = initialConversationMessages.length
     ? initialConversationMessages
     : [{ role: "assistant" as const, content: INITIAL_CHAT_MESSAGES[4], timestamp: nowTimeLabel(), backendStep: 4 as const }];
-  const [step, setStep] = useState<StepNumber>(routeStep === 5 ? 3 : routeStep === 2 ? 2 : 1);
-  const [profile, setProfile] = useState<Step1Profile>(() => loadResumeCraftDraft() ?? EMPTY_PROFILE);
+  const initialStep = routeStep === 5 ? 3 : routeStep === 2 ? 2 : hasCompleteResumeCraftProfile(storedDraft) ? 3 : 1;
+  const [step, setStep] = useState<StepNumber>(initialStep);
+  const [profile, setProfile] = useState<Step1Profile>(() => storedDraft ?? EMPTY_PROFILE);
   const [linksInput, setLinksInput] = useState(() => profile.personal_info.links.join(", "));
 
   const [photoFile, setPhotoFile] = useState<File | null>(null);
@@ -693,6 +709,28 @@ export function ResumeCraftPage() {
     if (generatedResume) releaseGeneratedHtmlUrl(generatedResume.htmlUrl);
     setGeneratedResume(null);
     setResult({ kind: "idle", message: "" });
+  };
+
+  const appendRenderFeedback = (content: string, htmlUrl?: string) => {
+    const feedback: ResumeCraftConversationMessage = {
+      role: "assistant",
+      content,
+      timestamp: nowTimeLabel(),
+      backendStep: 6,
+      ...(htmlUrl ? { htmlLink: { href: htmlUrl, label: "查看 HTML 简历" } } : {}),
+    };
+    setConversationMessages((previous) => {
+      const alreadyAdded = previous.some(
+        (message) => message.role === "assistant"
+          && message.backendStep === 6
+          && message.content === feedback.content
+          && message.htmlLink?.href === feedback.htmlLink?.href,
+      );
+      if (alreadyAdded) return previous;
+      const next = [...previous, feedback];
+      setMessagesByStep(messagesByStepFromConversation(next));
+      return next;
+    });
   };
 
   const sendChatMessage = async (messageText: string) => {
@@ -990,14 +1028,16 @@ export function ResumeCraftPage() {
         hasDraft,
         renderLoading,
       });
+      const errorMessage = renderLoading
+        ? "生成请求正在处理中，请稍候。"
+        : !confirmed
+          ? "生成未执行：当前简历尚未确认。"
+          : "生成未执行：没有可生成的简历草稿。";
       setResult({
         kind: "error",
-        message: renderLoading
-          ? "生成请求正在处理中，请稍候。"
-          : !confirmed
-            ? "生成未执行：当前简历尚未确认。"
-            : "生成未执行：没有可生成的简历草稿。",
+        message: errorMessage,
       });
+      appendRenderFeedback(errorMessage);
       return;
     }
     if (generatedResume) releaseGeneratedHtmlUrl(generatedResume.htmlUrl);
@@ -1052,6 +1092,7 @@ export function ResumeCraftPage() {
         pdfName: normalizeAgentText(resp.report_pdf_name) || "resume.pdf",
       });
       setResult({ kind: "success", message: "简历已生成。" });
+      appendRenderFeedback("简历已生成，HTML 简历已准备好。", htmlUrl);
       console.info("[resume-craft] render completed", JSON.stringify({
         htmlChars: reportHtml.length,
         htmlLink: true,
@@ -1059,7 +1100,9 @@ export function ResumeCraftPage() {
     } catch (err) {
       console.error("[resume-craft] render failed", err);
       pendingRenderRef.current = requested;
-      setResult({ kind: "error", message: (err as Error).message || "生成失败" });
+      const errorMessage = (err as Error).message || "生成失败";
+      setResult({ kind: "error", message: errorMessage });
+      appendRenderFeedback(`简历生成失败：${errorMessage}`);
     } finally {
       setRenderLoading(false);
     }
