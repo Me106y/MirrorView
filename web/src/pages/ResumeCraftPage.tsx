@@ -1,10 +1,10 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { gsap } from "gsap";
-import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import { callCareerforgeSkill } from "../lib/api";
 import { useModelSettings } from "../context/ModelSettingsContext";
 import { useCareerFeatureGuard } from "../components/CareerFeatureGuard";
-import { loadResumeCraftDraft, saveResumeCraftDraft, saveResumeCraftResult, type ResumeCraftEditorState } from "../lib/storage";
+import { loadResumeCraftDraft, saveResumeCraftDraft, type ResumeCraftEditorState } from "../lib/storage";
 import type {
   EducationItem,
   ResumeCraftBackendStep,
@@ -30,6 +30,7 @@ type RenderRequest = {
   wizardState?: ResumeCraftWizardState;
   conversationMessages?: ResumeCraftConversationMessage[];
   activeBackendStep?: ResumeCraftBackendStep;
+  completionMessage?: string;
   bypassConsent?: boolean;
 };
 
@@ -215,6 +216,12 @@ function simpleMarkdownToHtml(md: string): string {
     .replace(/^(?!<[huplo])((?!<).+)$/gm, '<p>$1</p>');
 }
 
+function mergePreviewAndReply(preview: string, reply: string): string {
+  const replyLines = new Set(reply.trim().split("\n").map((line) => line.trim()).filter(Boolean));
+  const previewText = preview.trim().split("\n").map((line) => line.trim()).filter((line) => line && !replyLines.has(line)).join("\n");
+  return [previewText, reply.trim()].filter(Boolean).join("\n\n");
+}
+
 function splitTags(input: string) {
   return input
     .split(/[，,\n；;|]/)
@@ -288,7 +295,7 @@ function messagesByStepFromConversation(messages: ResumeCraftConversationMessage
 }
 
 function toAgentHistory(messages: ResumeCraftConversationMessage[]): Msg[] {
-  return messages.map(({ backendStep: _backendStep, ...message }) => message);
+  return messages.map(({ backendStep: _backendStep, htmlLink: _htmlLink, ...message }) => message);
 }
 
 function looksLikeResumePreview(message: Pick<ResumeCraftConversationMessage, "role" | "content" | "isPreview">): boolean {
@@ -355,7 +362,6 @@ function splitPeriod(period: string) {
 export function ResumeCraftPage() {
   const { settings } = useModelSettings();
   const location = useLocation();
-  const navigate = useNavigate();
   const featureGuard = useCareerFeatureGuard(settings, "简历优化");
   const { accepted } = useConsent();
   const [showConsentPrompt, setShowConsentPrompt] = useState(false);
@@ -402,6 +408,11 @@ export function ResumeCraftPage() {
   const [expandedPill, setExpandedPill] = useState<string | null>(null);
   const [touchedFields, setTouchedFields] = useState<Record<string, boolean>>({});
   const [activeEducationIndex, setActiveEducationIndex] = useState(0);
+  const generatedHtmlUrlsRef = useRef<string[]>([]);
+
+  useEffect(() => () => {
+    generatedHtmlUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+  }, []);
 
   const photoInputRef = useRef<HTMLInputElement | null>(null);
   const wizardTrackRef = useRef<HTMLDivElement | null>(null);
@@ -720,7 +731,7 @@ export function ResumeCraftPage() {
             ...nextMessages,
             {
               role: "assistant" as const,
-              content: [step6PreviewMarkdown, rawServerReply].filter(Boolean).join("\n\n"),
+              content: mergePreviewAndReply(step6PreviewMarkdown, rawServerReply),
               timestamp: nowTimeLabel(),
               isPreview: responseLooksLikePreview,
               backendStep: nextBackendStep,
@@ -737,6 +748,7 @@ export function ResumeCraftPage() {
           wizardState: nextWizard,
           conversationMessages: completedMessages,
           activeBackendStep: nextBackendStep,
+          completionMessage: rawServerReply,
         });
       } else if (activeBackendStep === 6 || nextBackendStep === 6) {
         console.warn("[resume-craft] render not triggered", JSON.stringify({
@@ -908,28 +920,23 @@ export function ResumeCraftPage() {
       const resp = (await callCareerforgeSkill(settings, "/careerforge/resume-craft/render", payload)) as Record<string, unknown>;
       const reportHtml = String(resp.report_html || "").trim();
       if (!reportHtml) throw new Error(String(resp.message || "未返回有效简历 HTML"));
-      const nextPdfName = String(resp.report_pdf_name || "resume-craft-report.pdf").trim();
-      const nextPdfBase64 = String(resp.report_pdf_base64 || "").trim();
-      const artifact = {
-        reportHtml,
-        reportName: String(resp.report_name || "resume-craft-report.html"),
-        reportPdfName: nextPdfName || "resume-craft-report.pdf",
-        reportPdfBase64: nextPdfBase64,
-        templateCode: step1Profile.template_code,
-        language: step1Profile.language,
-        editorState: {
-          wizardState: currentWizardState,
-          messagesByStep: messagesByStepFromConversation(currentConversationMessages),
-          conversationMessages: currentConversationMessages,
-          activeBackendStep: currentBackendStep,
-        },
+      const reportName = String(resp.report_name || "resume-craft-report.html").trim() || "resume-craft-report.html";
+      const htmlUrl = URL.createObjectURL(new Blob([reportHtml], { type: "text/html;charset=utf-8" }));
+      generatedHtmlUrlsRef.current.push(htmlUrl);
+      const generatedMessage: ResumeCraftConversationMessage = {
+        role: "assistant",
+        content: requested.completionMessage || "HTML 简历已生成，请查看下方链接。",
+        timestamp: nowTimeLabel(),
+        htmlLink: { href: htmlUrl, label: "查看 HTML 简历" },
+        backendStep: 6,
       };
-      saveResumeCraftResult(artifact);
+      const generatedMessages = [...currentConversationMessages, generatedMessage];
+      setConversationMessages(generatedMessages);
+      setMessagesByStep(messagesByStepFromConversation(generatedMessages));
       console.info("[resume-craft] render completed", JSON.stringify({
         htmlChars: reportHtml.length,
-        pdfGenerated: Boolean(nextPdfBase64),
+        htmlLink: true,
       }));
-      navigate("/resume-craft/result", { state: { artifact } });
     } catch (err) {
       console.error("[resume-craft] render failed", err);
       setResult({ kind: "error", message: (err as Error).message || "生成失败" });
@@ -1325,12 +1332,23 @@ export function ResumeCraftPage() {
                       {msg.role === "assistant" ? <span className="msg-ai-avatar" aria-hidden="true">AI</span> : null}
                       <div className="resume-craft-bubble-wrap">
                         {msg.isPreview && msg.role === "assistant" ? (
-                          <div
-                            className="resume-craft-message-bubble resume-craft-preview-message"
-                            dangerouslySetInnerHTML={{ __html: simpleMarkdownToHtml(msg.content) }}
-                          />
+                          <div className="resume-craft-message-bubble resume-craft-preview-message">
+                            <div dangerouslySetInnerHTML={{ __html: simpleMarkdownToHtml(msg.content) }} />
+                            {msg.htmlLink ? (
+                              <a href={msg.htmlLink.href} target="_blank" rel="noreferrer" className="resume-craft-html-link">
+                                {msg.htmlLink.label}
+                              </a>
+                            ) : null}
+                          </div>
                         ) : (
-                          <span className="resume-craft-message-bubble">{msg.content}</span>
+                          <span className="resume-craft-message-bubble">
+                            {msg.content}
+                            {msg.htmlLink ? (
+                              <a href={msg.htmlLink.href} target="_blank" rel="noreferrer" className="resume-craft-html-link">
+                                {msg.htmlLink.label}
+                              </a>
+                            ) : null}
+                          </span>
                         )}
                         <small className="resume-craft-msg-time">{msg.timestamp}</small>
                       </div>

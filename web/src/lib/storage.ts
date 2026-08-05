@@ -8,18 +8,6 @@ import type {
 export const MODEL_SETTINGS_KEY = "mirrorview:web:model-settings:v2";
 export const CONSENT_ACCEPTED_KEY = "mirrorview:web:consent:v1";
 export const RESUME_CRAFT_DRAFT_KEY = "mirrorview:web:resume-craft:draft:v1";
-export const RESUME_CRAFT_RESULT_KEY = "mirrorview:web:resume-craft:result:v1";
-
-export interface ResumeCraftResultArtifact {
-  reportHtml: string;
-  reportName: string;
-  reportPdfName: string;
-  reportPdfBase64: string;
-  templateCode: string;
-  language: string;
-  editorState?: ResumeCraftEditorState;
-}
-
 export interface ResumeCraftEditorState {
   wizardState: ResumeCraftWizardState;
   messagesByStep: Record<string, Array<{
@@ -124,38 +112,4 @@ export function loadResumeCraftDraft(): Step1Profile | null {
   } catch {
     return null;
   }
-}
-
-export function saveResumeCraftResult(artifact: ResumeCraftResultArtifact): void {
-  try {
-    sessionStorage.setItem(RESUME_CRAFT_RESULT_KEY, JSON.stringify(artifact));
-  } catch {
-    // The result is also passed through router state for the current navigation.
-  }
-}
-
-export function loadResumeCraftResult(): ResumeCraftResultArtifact | null {
-  try {
-    const raw = sessionStorage.getItem(RESUME_CRAFT_RESULT_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<ResumeCraftResultArtifact>;
-    if (typeof parsed.reportHtml !== "string" || !parsed.reportHtml.trim()) return null;
-    return {
-      reportHtml: parsed.reportHtml,
-      reportName: typeof parsed.reportName === "string" && parsed.reportName.trim() ? parsed.reportName : "resume-craft-report.html",
-      reportPdfName: typeof parsed.reportPdfName === "string" && parsed.reportPdfName.trim() ? parsed.reportPdfName : "resume-craft-report.pdf",
-      reportPdfBase64: typeof parsed.reportPdfBase64 === "string" ? parsed.reportPdfBase64 : "",
-      templateCode: typeof parsed.templateCode === "string" ? parsed.templateCode : "02",
-      language: typeof parsed.language === "string" ? parsed.language : "zh",
-      editorState: isResumeCraftEditorState(parsed.editorState) ? parsed.editorState : undefined,
-    };
-  } catch {
-    return null;
-  }
-}
-
-function isResumeCraftEditorState(value: unknown): value is ResumeCraftEditorState {
-  if (!value || typeof value !== "object") return false;
-  const candidate = value as Partial<ResumeCraftEditorState>;
-  return Boolean(candidate.wizardState && typeof candidate.wizardState === "object" && candidate.messagesByStep && typeof candidate.messagesByStep === "object");
 }

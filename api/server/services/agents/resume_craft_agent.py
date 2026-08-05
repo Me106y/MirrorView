@@ -104,9 +104,6 @@ class ResumeCraftAgent(BaseSkillAgent):
             parsed["next_step_suggestion"] = "stay"
         if not isinstance(parsed.get("missing_fields"), list):
             parsed["missing_fields"] = []
-        parsed["wizard_state"] = self._merge_state_patch(
-            previous_wizard_state, parsed["wizard_state"]
-        )
         # Semantic progression is owned by resume-craft/SKILL.md. The runtime
         # only preserves the model patch and the prior state; render safety is
         # enforced by the render route.

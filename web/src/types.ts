@@ -119,5 +119,9 @@ export interface ResumeCraftConversationMessage {
   content: string;
   timestamp: string;
   isPreview?: boolean;
+  htmlLink?: {
+    href: string;
+    label: string;
+  };
   backendStep: ResumeCraftBackendStep;
 }

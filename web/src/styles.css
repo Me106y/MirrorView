@@ -1902,6 +1902,20 @@ a {
   margin: 0.4em 0;
 }
 
+.resume-craft-html-link {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 10px;
+  color: #075fc4;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.resume-craft-html-link:hover {
+  color: #00458f;
+}
+
 .resume-craft-chat-input {
   border: none;
   border-radius: 0;
