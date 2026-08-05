@@ -222,6 +222,10 @@ function mergePreviewAndReply(preview: string, reply: string): string {
   return [previewText, reply.trim()].filter(Boolean).join("\n\n");
 }
 
+function normalizeAgentText(value: unknown): string {
+  return String(value ?? "").replace(/[\u200B-\u200D\uFEFF]/g, "").trim();
+}
+
 function splitTags(input: string) {
   return input
     .split(/[，,\n；;|]/)
@@ -678,8 +682,8 @@ export function ResumeCraftPage() {
         photo_pref: step1Profile.photo_pref,
       })) as Record<string, unknown>;
   
-      const rawServerReply = String(resp.reply || "").trim();
-      const step6PreviewMarkdown = String(resp.step6_preview_markdown || "").trim();
+      const rawServerReply = normalizeAgentText(resp.reply);
+      const step6PreviewMarkdown = normalizeAgentText(resp.step6_preview_markdown);
       const isRenderReadyResponse = resp.render_ready === true;
       if (!rawServerReply && !step6PreviewMarkdown && !isRenderReadyResponse) {
         throw new Error("Agent response missing reply");
@@ -701,6 +705,7 @@ export function ResumeCraftPage() {
         content: [step6PreviewMarkdown, rawServerReply].filter(Boolean).join("\n\n"),
         isPreview: Boolean(step6PreviewMarkdown),
       });
+      const assistantContent = mergePreviewAndReply(step6PreviewMarkdown, rawServerReply);
       const shouldEnterPreviewStep = resp.next_step_suggestion === "next";
       const nextBackendStep = shouldEnterPreviewStep
         ? advanceBackendStep(requestBackendStep)
@@ -737,16 +742,18 @@ export function ResumeCraftPage() {
       // mistaken for a second preview while the render request is running.
       const completedMessages = renderReady
         ? nextMessages
-        : [
+        : assistantContent
+          ? [
             ...nextMessages,
             {
               role: "assistant" as const,
-              content: mergePreviewAndReply(step6PreviewMarkdown, rawServerReply),
+              content: assistantContent,
               timestamp: nowTimeLabel(),
               isPreview: responseLooksLikePreview,
               backendStep: nextBackendStep,
             },
-          ];
+          ]
+          : nextMessages;
   
       setWizardState(nextWizard);
       setConversationMessages(completedMessages);

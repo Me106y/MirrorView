@@ -182,8 +182,9 @@ prefill_policy:
 
 - 初次预览：设置 `preview_ready=true`、`awaiting_confirm=true`、`confirmed=false`、`step6_confirmed=false`、`render_ready=false`。
 - 用户提出修改：只修改明确要求的内容，更新摘要和 `draft_json`，保留 `awaiting_confirm=true`，再次询问是否需要修改。
-- 用户明确确认无需修改并表达生成意图：设置 `confirmed=true`、`awaiting_confirm=false`、`step6_confirmed=true`、`render_ready=true`，并将 `reply` 和 `step6_preview_markdown` 设为空字符串。确认生成后不要输出任何确认、等待或引导文字；Agent 本身不调用 render 接口，前端会在当前对话中只附加真实的 HTML 查看链接。
-- 如果当前已有 `step6.preview_ready=true` 且 `step6.awaiting_confirm=true`，用户输入“生成简历”或语义等价表达只表示确认当前预览并生成文件，不表示重新生成预览；这一轮必须清空 `step6_preview_markdown`，只返回生成状态，不得重复输出简历内容。
+- 用户说“生成简历预览”、想查看预览或要求先看看效果时，这是未确认的预览意图，不是最终 HTML 生成确认。必须使用 `action=preview`，设置 `preview_ready=true`、`awaiting_confirm=true`、`confirmed=false`、`step6_confirmed=false`、`render_ready=false`，返回非空的 `step6_preview_markdown` 和一次修改/生成确认引导。
+- 用户明确确认无需修改并表达生成意图：必须使用 `action=render_ready`，设置 `confirmed=true`、`awaiting_confirm=false`、`step6_confirmed=true`、`render_ready=true`，并将 `reply` 和 `step6_preview_markdown` 设为空字符串。确认生成后不要输出任何确认、等待或引导文字；Agent 本身不调用 render 接口，前端会在当前对话中只附加真实的 HTML 查看链接。
+- 如果当前已有 `step6.preview_ready=true` 且 `step6.awaiting_confirm=true`，用户确认当前预览并表达生成最终简历的意图才表示确认生成文件；“生成简历预览”仍然只是预览请求。这一轮必须清空 `step6_preview_markdown`，只返回生成状态，不得重复输出简历内容。
 - Step1 已选择的模板、语言和照片设置视为已确认的当前选择。生成预览时直接沿用这些设置，不要再次要求用户选择模板、语言或照片，也不要发起最终偏好问题；除非用户明确提出修改，否则不要重新列出选择题。
 - 当后端 `current_step=5` 的技能信息已经收集完毕，或用户语义表达没有其他技能、工具、语言能力或证书需要补充时，直接准备 Step6 的未确认预览并返回 `next_step_suggestion=next`，让连续工作区进入 Step6。此过渡回复可以设置 `preview_ready=true`、`awaiting_confirm=true`、`confirmed=false`、`step6_confirmed=false`、`render_ready=false`，但不得生成 HTML、解锁生成按钮或声称已确认；预览必须展示摘要并只询问是否需要修改或生成。
 - 在后端 `current_step=5` 的普通消息中仍只收集技能、工具、语言能力和证书；技能信息完成后即可准备未确认预览。`current_step=6` 只处理预览后的修改、确认和生成，不再收集最终偏好。
