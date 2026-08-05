@@ -680,7 +680,8 @@ export function ResumeCraftPage() {
   
       const rawServerReply = String(resp.reply || "").trim();
       const step6PreviewMarkdown = String(resp.step6_preview_markdown || "").trim();
-      if (!rawServerReply && !step6PreviewMarkdown) {
+      const isRenderReadyResponse = resp.render_ready === true;
+      if (!rawServerReply && !step6PreviewMarkdown && !isRenderReadyResponse) {
         throw new Error("Agent response missing reply");
       }
 
