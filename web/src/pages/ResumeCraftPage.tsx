@@ -1636,7 +1636,7 @@ export function ResumeCraftPage() {
                                   body?.scrollHeight || 0,
                                   body?.offsetHeight || 0,
                                 );
-                                if (contentHeight > 0) setGeneratedFrameHeight(contentHeight);
+                                if (contentHeight > 0) setGeneratedFrameHeight(Math.max(contentHeight, 2240));
                               };
 
                               // HTML resumes can settle after fonts and layout resources load.

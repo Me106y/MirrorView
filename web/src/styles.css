@@ -2043,8 +2043,8 @@ a {
 .resume-craft-generated-frame {
   display: block;
   width: 100%;
-  height: 1120px;
-  min-height: 720px;
+  height: 2240px;
+  min-height: 2240px;
   border: 0;
   background: #ffffff;
 }
