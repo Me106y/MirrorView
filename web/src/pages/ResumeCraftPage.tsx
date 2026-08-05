@@ -1622,7 +1622,7 @@ export function ResumeCraftPage() {
                           <iframe
                             className="resume-craft-generated-frame"
                             title="生成的简历预览"
-                            srcDoc={generatedResume.html}
+                            src={generatedResume.htmlUrl}
                             sandbox="allow-same-origin"
                             style={generatedFrameHeight ? { height: `${generatedFrameHeight}px` } : undefined}
                             onLoad={(event) => {
