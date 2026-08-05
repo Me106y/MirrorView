@@ -183,6 +183,8 @@ prefill_policy:
 - 初次预览：设置 `preview_ready=true`、`awaiting_confirm=true`、`confirmed=false`、`step6_confirmed=false`、`render_ready=false`。
 - 用户提出修改：只修改明确要求的内容，更新摘要和 `draft_json`，保留 `awaiting_confirm=true`，再次询问是否需要修改。
 - 用户说“生成简历预览”、想查看预览或要求先看看效果时，这是未确认的预览意图，不是最终 HTML 生成确认。必须使用 `action=preview`，设置 `preview_ready=true`、`awaiting_confirm=true`、`confirmed=false`、`step6_confirmed=false`、`render_ready=false`，返回非空的 `step6_preview_markdown` 和一次修改/生成确认引导。
+- 预览内容必须由 Agent 返回：将非空的结构化简历摘要放在顶层 `step6_preview_markdown`；如同时写入 `wizard_state.step_states.step6.preview_markdown`，两处内容保持一致。不能只返回空 `reply`、空摘要或只返回状态而让页面自行推断简历内容。
+- 预览这一轮的 `reply` 只承担一次确认引导：不得继续输出上一轮“已记录”的回执、再次询问技能/工具/语言能力/证书，也不得说“如果没有我将生成预览”。这些内容属于技能收集阶段，摘要之后只保留一次确认生成引导。
 - 用户明确确认无需修改并表达生成意图：必须使用 `action=render_ready`、`next_step_suggestion=stay`、`render_ready=true`，并返回能被深度合并的最小状态补丁，至少明确设置 `wizard_state.collected_by_step.step6_confirmed=true`、`wizard_state.step_states.step6.confirmed=true`、`wizard_state.step_states.step6.awaiting_confirm=false`。必须保留已有非空 `wizard_state.step_states.step6.draft_json`，不要用空对象覆盖它；同时将 `reply` 和 `step6_preview_markdown` 设为空字符串。确认生成后不要输出任何确认、等待或引导文字；Agent 本身不调用 render 接口，前端会在当前对话中只附加真实的 HTML 查看链接。
 - 如果当前已有 `step6.preview_ready=true` 且 `step6.awaiting_confirm=true`，用户确认当前预览并表达生成最终简历的意图才表示确认生成文件；“生成简历预览”仍然只是预览请求。这一轮必须清空 `step6_preview_markdown`，只返回生成状态，不得重复输出简历内容。
 - Step1 已选择的模板、语言和照片设置视为已确认的当前选择。生成预览时直接沿用这些设置，不要再次要求用户选择模板、语言或照片，也不要发起最终偏好问题；除非用户明确提出修改，否则不要重新列出选择题。
@@ -249,7 +251,7 @@ prefill_policy:
 
 每次输出必须保留当前轮仍为 `open` 的问题；只有全部问题变为 `answered` 或 `skipped` 后，才可增加 `completed_rounds`。旧状态缺少该对象时按第 0 轮、无待回答问题兼容处理。
 
-`wizard_state` 只需返回本轮必要的最小 JSON 补丁，运行时会将其深度合并到已有状态，不要重复输出未变化的完整历史或聊天记录。不要依赖固定关键词识别“没有更多”、拒答、确认或修改；应根据上下文判断用户意图。`next_step_suggestion=next` 只用于表达语义上的阶段完成，前端会在连续工作区中自动切换阶段，回复应自然说明接下来要收集的内容，不要提示用户点击不存在的阶段按钮。技能信息完成后直接生成预览，不发起最终偏好问题；只有用户明确确认预览并表达生成意图后，才能设置 `step6_confirmed=true` 和 `render_ready=true`。未确认时，`reply` 必须在 `step6_preview_markdown` 之后只保留一次输入“生成简历”的引导；确认生成时 `reply` 和 `step6_preview_markdown` 必须为空，前端只负责把生成接口返回的 HTML 变成当前对话中的真实链接。
+`wizard_state` 只需返回本轮必要的最小 JSON 补丁，运行时会将其深度合并到已有状态，不要重复输出未变化的完整历史或聊天记录。不要依赖固定关键词识别“没有更多”、拒答、确认或修改；应根据上下文判断用户意图。`next_step_suggestion=next` 只用于表达语义上的阶段完成，前端会在连续工作区中自动切换阶段，回复应自然说明接下来要收集的内容，不要提示用户点击不存在的阶段按钮。技能信息完成后直接生成预览，不发起最终偏好问题；只有用户明确确认预览并表达生成意图后，才能设置 `step6_confirmed=true` 和 `render_ready=true`。预览时必须返回非空的顶层 `step6_preview_markdown`，不要只返回空 `reply` 或让前端从其他字段拼出摘要；未确认时，`reply` 必须在摘要之后只保留一次输入“生成简历”的引导；确认生成时 `reply` 和 `step6_preview_markdown` 必须为空，前端只负责把生成接口返回的 HTML 变成当前对话中的真实链接。
 
 ---
 

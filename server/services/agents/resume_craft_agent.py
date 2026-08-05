@@ -29,7 +29,21 @@ class ResumeCraftAgent(BaseSkillAgent):
             "next_step_suggestion": "stay|next",
             "render_ready": False,
             "missing_fields": ["string"],
-            "wizard_state": "minimal JSON patch for ResumeCraftWizardState",
+            "wizard_state": {
+                "current_step": "4|5|6 (optional)",
+                "collected_by_step": {
+                    "step6_confirmed": "boolean (required for render_ready)"
+                },
+                "step_states": {
+                    "step6": {
+                        "preview_ready": "boolean",
+                        "awaiting_confirm": "boolean",
+                        "confirmed": "boolean (required for render_ready)",
+                        "preview_markdown": "string",
+                        "draft_json": "object (preserve the existing object when confirming)"
+                    }
+                }
+            },
             "step6_preview_markdown": "string",
             "step6_waiting_confirm": False,
             "step6_applied_changes": ["string"],
@@ -61,6 +75,8 @@ class ResumeCraftAgent(BaseSkillAgent):
 1. 只输出一个 JSON 对象，严格匹配下面的 schema，不要 Markdown 代码块或额外解释。
 2. 使用完整 history、wizard_state、step1_profile 和用户消息理解语义，依据 Skill 自主决定追问、记录、跳过、修改、预览、确认或推进。
 3. 只返回本轮必要的 wizard_state 最小 JSON 补丁，不要重复输出历史、聊天记录或未变化的数据。
+4. 当 action=preview 或 action=revise 且本轮需要展示预览时，step6_preview_markdown 必须是非空的结构化简历摘要；不要把预览只放在 reply 或只放在 wizard_state 中。此时 reply 只保留一次确认引导，不要继续输出上一轮已记录回执或技能收集问题。
+5. 当 action=render_ready 时，reply 和 step6_preview_markdown 必须为空；wizard_state 必须明确包含 collected_by_step.step6_confirmed=true、step_states.step6.confirmed=true、step_states.step6.awaiting_confirm=false，并保留已有非空 step_states.step6.draft_json。
 [Required JSON Schema]
 {schema_json}
 """

@@ -1250,7 +1250,7 @@ a {
 
 .resume-craft-education-carousel {
   min-height: 270px;
-  overflow: hidden;
+  overflow: visible;
   border-radius: 12px;
 }
 

@@ -683,11 +683,8 @@ export function ResumeCraftPage() {
       })) as Record<string, unknown>;
   
       const rawServerReply = normalizeAgentText(resp.reply);
-      const step6PreviewMarkdown = normalizeAgentText(resp.step6_preview_markdown);
+      const responsePreviewMarkdown = normalizeAgentText(resp.step6_preview_markdown);
       const isRenderReadyResponse = resp.render_ready === true;
-      if (!rawServerReply && !step6PreviewMarkdown && !isRenderReadyResponse) {
-        throw new Error("Agent response missing reply");
-      }
 
       if (!resp.wizard_state || typeof resp.wizard_state !== "object") {
         throw new Error("Agent response missing wizard_state");
@@ -700,6 +697,14 @@ export function ResumeCraftPage() {
       // includes the fields changed in this turn.
       const nextWizard = mergeWizardState(wizardState, resp.wizard_state);
       const nextStep6 = nextWizard.step_states?.step6;
+      // The preview is an Agent-owned field. Accept the nested state copy as a
+      // structural compatibility fallback when a model returns the same
+      // preview there but omits the top-level convenience field.
+      const step6PreviewMarkdown = responsePreviewMarkdown
+        || normalizeAgentText(nextStep6?.preview_markdown);
+      if (!rawServerReply && !step6PreviewMarkdown && !isRenderReadyResponse) {
+        throw new Error("Agent response missing reply");
+      }
       const responseLooksLikePreview = looksLikeResumePreview({
         role: "assistant",
         content: [step6PreviewMarkdown, rawServerReply].filter(Boolean).join("\n\n"),
