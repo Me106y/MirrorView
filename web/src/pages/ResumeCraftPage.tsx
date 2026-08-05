@@ -20,7 +20,7 @@ type StepNumber = 1 | 2 | 3;
 type ChatStep = 3 | 4 | 5;
 
 type ResultState = {
-  kind: "idle" | "error";
+  kind: "idle" | "pending" | "success" | "error";
   message: string;
 };
 
@@ -829,6 +829,15 @@ export function ResumeCraftPage() {
           conversationMessages: completedMessages,
           activeBackendStep: nextBackendStep,
         });
+      } else if (responseClaimsGeneration) {
+        // Keep the render route as the final safety gate, but surface a
+        // rejected render attempt in the same workspace instead of logging it
+        // and leaving the user without feedback.
+        await renderResume({
+          wizardState: nextWizard,
+          conversationMessages: completedMessages,
+          activeBackendStep: nextBackendStep,
+        });
       } else if (activeBackendStep === 6 || nextBackendStep === 6) {
         console.warn("[resume-craft] render not triggered", JSON.stringify({
           activeBackendStep,
@@ -957,6 +966,7 @@ export function ResumeCraftPage() {
     if (!accepted && !requested.bypassConsent) {
       console.info("[resume-craft] render deferred for consent");
       pendingRenderRef.current = requested;
+      setResult({ kind: "pending", message: "等待确认后开始生成简历。" });
       setShowConsentPrompt(true);
       return;
     }
@@ -971,11 +981,19 @@ export function ResumeCraftPage() {
         hasDraft,
         renderLoading,
       });
+      setResult({
+        kind: "error",
+        message: renderLoading
+          ? "生成请求正在处理中，请稍候。"
+          : !confirmed
+            ? "生成未执行：当前简历尚未确认。"
+            : "生成未执行：没有可生成的简历草稿。",
+      });
       return;
     }
     if (generatedResume) releaseGeneratedHtmlUrl(generatedResume.htmlUrl);
     setGeneratedResume(null);
-    setResult({ kind: "idle", message: "" });
+    setResult({ kind: "pending", message: "生成请求已发送，正在生成简历。" });
     setRenderLoading(true);
     try {
       const history = toAgentHistory(currentConversationMessages);
@@ -1024,7 +1042,7 @@ export function ResumeCraftPage() {
         pdfBase64: normalizeAgentText(resp.report_pdf_base64),
         pdfName: normalizeAgentText(resp.report_pdf_name) || "resume.pdf",
       });
-      setResult({ kind: "idle", message: "" });
+      setResult({ kind: "success", message: "简历已生成。" });
       console.info("[resume-craft] render completed", JSON.stringify({
         htmlChars: reportHtml.length,
         htmlLink: true,
@@ -1419,6 +1437,37 @@ export function ResumeCraftPage() {
                   </div>
                 )}
 
+                {result.kind !== "idle" ? (
+                  <div
+                    className={`resume-craft-render-feedback is-${result.kind}`}
+                    role={result.kind === "error" ? "alert" : "status"}
+                    aria-live="polite"
+                  >
+                    <span className="resume-craft-render-feedback-label">
+                      {result.kind === "pending" ? "生成中" : result.kind === "success" ? "生成完成" : "生成失败"}
+                    </span>
+                    <p>{result.message}</p>
+                    {result.kind === "success" && generatedResume ? (
+                      <a href={generatedResume.htmlUrl} target="_blank" rel="noreferrer" className="resume-craft-html-link">
+                        查看 HTML 简历
+                      </a>
+                    ) : null}
+                    {result.kind === "error" ? (
+                      <button
+                        type="button"
+                        className="ghost-btn resume-craft-retry-btn"
+                        onClick={() => {
+                          const pending = pendingRenderRef.current;
+                          if (pending) void renderResume({ ...pending, bypassConsent: true });
+                        }}
+                        disabled={!pendingRenderRef.current || renderLoading}
+                      >
+                        重试生成
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+
                 <div
                   ref={resumeViewRef}
                   className={`resume-craft-view-stack resume-craft-view-${resumeView}`}
@@ -1466,22 +1515,6 @@ export function ResumeCraftPage() {
                         </div>
                       ) : null}
                     </div>
-                    {result.kind === "error" ? (
-                      <div className="resume-craft-render-error" role="alert">
-                        <p className="resume-result-error">{result.message}</p>
-                        <button
-                          type="button"
-                          className="ghost-btn resume-craft-retry-btn"
-                          onClick={() => {
-                            const pending = pendingRenderRef.current;
-                            if (pending) void renderResume({ ...pending, bypassConsent: true });
-                          }}
-                          disabled={!pendingRenderRef.current || renderLoading}
-                        >
-                          重试生成
-                        </button>
-                      </div>
-                    ) : null}
                   </div>
 
                   <div
