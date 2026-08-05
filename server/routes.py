@@ -1415,6 +1415,64 @@ def _sanitize_step6_draft_json(raw: Any) -> Dict[str, Any]:
     }
 
 
+def _build_confirmed_step6_draft_fallback(
+    step1_profile: Dict[str, Any],
+    wizard_state: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Build a structural draft from already-confirmed state when the model omits draft_json."""
+    collected = wizard_state.get("collected_by_step") if isinstance(wizard_state.get("collected_by_step"), dict) else {}
+    step_states = wizard_state.get("step_states") if isinstance(wizard_state.get("step_states"), dict) else {}
+    step4 = step_states.get("step4") if isinstance(step_states.get("step4"), dict) else {}
+    personal = step1_profile.get("personal_info") if isinstance(step1_profile.get("personal_info"), dict) else {}
+
+    def unique_text(values: Any, limit: int) -> List[str]:
+        result: List[str] = []
+        for value in values if isinstance(values, list) else []:
+            text = str(value or "").strip()
+            if text and text not in result:
+                result.append(text[:2400])
+            if len(result) >= limit:
+                break
+        return result
+
+    education: List[str] = []
+    for item in step1_profile.get("education") if isinstance(step1_profile.get("education"), list) else []:
+        if not isinstance(item, dict):
+            continue
+        value = " | ".join(
+            str(item.get(key) or "").strip()
+            for key in ("school", "major", "degree", "period", "highlights")
+            if str(item.get(key) or "").strip()
+        )
+        if value:
+            education.append(value)
+
+    return {
+        "target_role": str(step1_profile.get("target_role") or "").strip(),
+        "personal_info": {
+            "name": str(personal.get("name") or "").strip(),
+            "phone": str(personal.get("phone") or "").strip(),
+            "email": str(personal.get("email") or "").strip(),
+            "city": str(personal.get("city") or "").strip(),
+            "links": unique_text(personal.get("links"), 8),
+        },
+        "education": unique_text(education + list(collected.get("education") or []), 20),
+        "experiences": unique_text(
+            list(collected.get("experiences") or []) + list(step4.get("finalized_experiences") or []),
+            20,
+        ),
+        "skills_and_certs": unique_text(
+            list(step1_profile.get("skills") or [])
+            + list(step1_profile.get("certificates") or [])
+            + list(collected.get("skills_and_certs") or []),
+            30,
+        ),
+        "final_preferences": str(
+            collected.get("final_preferences") or step1_profile.get("focus_points") or ""
+        ).strip(),
+    }
+
+
 
 
 def _build_confirmed_facts_context(
@@ -1975,6 +2033,22 @@ def careerforge_resume_craft_render():
         return jsonify({"error": "not_ready_for_render", "message": "请先完成 Step6 预览确认后再生成简历。", "meta": meta}), 400
 
     input_draft_json = data.get("draft_json") if isinstance(data.get("draft_json"), dict) else step6_state.get("draft_json")
+    if (not isinstance(input_draft_json, dict) or not input_draft_json) and step6_state.get("preview_ready") is True:
+        fallback_draft = _build_confirmed_step6_draft_fallback(step1_profile, wizard_state)
+        fallback_personal = fallback_draft.get("personal_info") if isinstance(fallback_draft.get("personal_info"), dict) else {}
+        if any(
+            [
+                fallback_draft.get("target_role"),
+                fallback_personal.get("name"),
+                fallback_personal.get("phone"),
+                fallback_personal.get("email"),
+                fallback_draft.get("education"),
+                fallback_draft.get("experiences"),
+                fallback_draft.get("skills_and_certs"),
+                fallback_draft.get("final_preferences"),
+            ]
+        ):
+            input_draft_json = fallback_draft
     if not isinstance(input_draft_json, dict) or not input_draft_json:
         return jsonify(
             {

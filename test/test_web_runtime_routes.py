@@ -309,6 +309,49 @@ def test_resume_craft_render_works_with_step1_profile_and_finalized_experiences(
     assert "<!doctype html>" in body["report_html"].lower()
 
 
+def test_resume_craft_render_builds_confirmed_fallback_when_draft_json_is_missing(monkeypatch):
+    Config.TURNSTILE_ENFORCE = False
+    Config.RATE_LIMIT_ENFORCE = False
+    captured = {}
+
+    def _fake_render(payload, runtime=None):
+        captured.update(payload)
+        return "<!DOCTYPE html><html><body><h1>Resume</h1></body></html>"
+
+    monkeypatch.setattr(routes.ai_service, "run_resume_craft_html", _fake_render)
+
+    client = _client()
+    resp = client.post(
+        "/api/careerforge/resume-craft/render",
+        json={
+            "render_ready": True,
+            "wizard_state": {
+                "current_step": 6,
+                "collected_by_step": {
+                    "education": [],
+                    "experiences": ["负责 RAG 检索服务，降低响应时延 35%。"],
+                    "skills_and_certs": ["Python", "Flask"],
+                    "final_preferences": "",
+                    "step6_confirmed": True,
+                },
+                "step_states": {
+                    "step4": {"finalized_experiences": ["负责 RAG 检索服务，降低响应时延 35%。"]},
+                    "step6": {"preview_ready": True, "awaiting_confirm": False, "confirmed": True},
+                },
+            },
+            "step1_profile": {
+                **_resume_craft_profile(),
+                "personal_info": {"name": "候选人", "phone": "1", "email": "a@example.com", "city": "杭州", "links": []},
+                "education": [{"school": "X 大学", "major": "软件工程", "degree": "硕士", "period": "2020-2023", "highlights": ""}],
+            },
+        },
+    )
+
+    assert resp.status_code == 200
+    assert captured["confirmed_facts_context"]
+    assert "RAG 检索服务" in captured["confirmed_facts_context"]
+
+
 def test_resume_craft_render_returns_html(monkeypatch):
     Config.TURNSTILE_ENFORCE = False
     Config.RATE_LIMIT_ENFORCE = False
@@ -339,6 +382,10 @@ def test_resume_craft_render_returns_html(monkeypatch):
     body = resp.get_json()
     assert body["report_name"].endswith(".html")
     assert "<!doctype html>" in body["report_html"].lower()
+
+    artifact_response = client.get(body["report_url"])
+    assert artifact_response.status_code == 200
+    assert "<!doctype html>" in artifact_response.get_data(as_text=True).lower()
 
 
 def test_resume_craft_render_returns_400_when_photo_missing(monkeypatch):

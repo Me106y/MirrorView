@@ -89,3 +89,142 @@ def test_resume_craft_preserves_natural_language_revision_after_skip():
         "Python",
         "AWS Certified Solutions Architect",
     ]
+
+
+def test_resume_craft_does_not_invent_reply_when_model_returns_empty_reply():
+    model = _JsonModel(
+        '{"reply":"","action":"render_ready","next_step_suggestion":"stay",'
+        '"render_ready":true,"missing_fields":[],"wizard_state":{"current_step":6},'
+        '"step6_preview_markdown":"","step6_waiting_confirm":false,"step6_applied_changes":[]}'
+    )
+    agent = ResumeCraftAgent(llm=model)
+
+    result = agent.run_resume_craft_chat_turn(
+        _agent_payload("确认生成", current_step=6, wizard_state={"current_step": 6})
+    )
+
+    assert result["reply"] == ""
+
+
+def test_resume_craft_preview_request_keeps_preview_content_and_not_render_ready():
+    model = _JsonModel(
+        '{"reply":"请确认以上信息是否需要修改？", "action":"preview",'
+        '"next_step_suggestion":"stay", "render_ready":false, "missing_fields":[], '
+        '"wizard_state":{"current_step":6,"step_states":{"step6":{'
+        '"preview_ready":true,"awaiting_confirm":true,"confirmed":false,'
+        '"draft_json":{"target_role":"AI 应用开发"}}}},'
+        '"step6_preview_markdown":"# 简历预览\\n\\n目标岗位：AI 应用开发",'
+        '"step6_waiting_confirm":true,"step6_applied_changes":[]}'
+    )
+    agent = ResumeCraftAgent(llm=model)
+
+    result = agent.run_resume_craft_chat_turn(
+        _agent_payload("生成简历预览", current_step=6, wizard_state={"current_step": 6})
+    )
+
+    assert result["action"] == "preview"
+    assert result["render_ready"] is False
+    assert "目标岗位：AI 应用开发" in result["step6_preview_markdown"]
+
+
+def test_resume_craft_render_ready_patch_preserves_existing_draft_json():
+    model = _JsonModel(
+        '{"reply":"", "action":"render_ready", "next_step_suggestion":"stay",'
+        '"render_ready":true, "missing_fields":[], "wizard_state":{'
+        '"collected_by_step":{"step6_confirmed":true}, "step_states":{"step6":{'
+        '"confirmed":true,"awaiting_confirm":false}}},'
+        '"step6_preview_markdown":"", "step6_waiting_confirm":false,'
+        '"step6_applied_changes":[]}'
+    )
+    agent = ResumeCraftAgent(llm=model)
+    existing_draft = {"target_role": "AI 应用开发", "skills_and_certs": ["Python"]}
+
+    result = agent.run_resume_craft_chat_turn(
+        _agent_payload(
+            "确认生成",
+            current_step=6,
+            wizard_state={
+                "current_step": 6,
+                "collected_by_step": {"step6_confirmed": False},
+                "step_states": {
+                    "step6": {
+                        "preview_ready": True,
+                        "awaiting_confirm": True,
+                        "confirmed": False,
+                        "draft_json": existing_draft,
+                    }
+                },
+            },
+        )
+    )
+
+    assert result["wizard_state"]["collected_by_step"]["step6_confirmed"] is True
+    assert result["wizard_state"]["step_states"]["step6"]["confirmed"] is True
+    assert result["wizard_state"]["step_states"]["step6"]["draft_json"] == existing_draft
+
+
+def test_resume_craft_preserves_draft_when_model_returns_invalid_empty_patch():
+    model = _JsonModel(
+        '{"reply":"", "action":"render_ready", "next_step_suggestion":"stay",'
+        '"render_ready":true, "missing_fields":[], "wizard_state":{'
+        '"collected_by_step":{"step6_confirmed":true}, "step_states":{"step6":{'
+        '"confirmed":true,"awaiting_confirm":false,"draft_json":""}}},'
+        '"step6_preview_markdown":"", "step6_waiting_confirm":false}'
+    )
+    agent = ResumeCraftAgent(llm=model)
+    existing_draft = {"target_role": "AI 应用开发", "skills_and_certs": ["Python"]}
+
+    result = agent.run_resume_craft_chat_turn(
+        _agent_payload(
+            "确认生成",
+            current_step=6,
+            wizard_state={
+                "current_step": 6,
+                "step_states": {"step6": {"draft_json": existing_draft}},
+            },
+        )
+    )
+
+    assert result["wizard_state"]["step_states"]["step6"]["draft_json"] == existing_draft
+
+
+def test_resume_craft_normalizes_top_level_draft_into_step6_state():
+    model = _JsonModel(
+        '{"reply":"", "action":"render_ready", "next_step_suggestion":"stay",'
+        '"render_ready":true, "missing_fields":[], "draft_json":{'
+        '"target_role":"AI 应用开发", "skills_and_certs":["Python"]},'
+        '"wizard_state":{"collected_by_step":{"step6_confirmed":true},'
+        '"step_states":{"step6":{"confirmed":true,"awaiting_confirm":false}}},'
+        '"step6_preview_markdown":"", "step6_waiting_confirm":false}'
+    )
+    agent = ResumeCraftAgent(llm=model)
+
+    result = agent.run_resume_craft_chat_turn(
+        _agent_payload("确认生成", current_step=6, wizard_state={"current_step": 6})
+    )
+
+    assert result["wizard_state"]["step_states"]["step6"]["draft_json"] == {
+        "target_role": "AI 应用开发",
+        "skills_and_certs": ["Python"],
+    }
+
+
+def test_resume_craft_normalizes_draft_at_wizard_state_root_into_step6_state():
+    model = _JsonModel(
+        '{"reply":"", "action":"render_ready", "next_step_suggestion":"stay",'
+        '"render_ready":true, "missing_fields":[], "wizard_state":{'
+        '"current_step":6, "draft_json":{"target_role":"AI 应用开发",'
+        '"skills_and_certs":["Python"]}, "collected_by_step":{"step6_confirmed":true},'
+        '"step_states":{"step6":{"confirmed":true,"awaiting_confirm":false}}},'
+        '"step6_preview_markdown":"", "step6_waiting_confirm":false}'
+    )
+    agent = ResumeCraftAgent(llm=model)
+
+    result = agent.run_resume_craft_chat_turn(
+        _agent_payload("确认生成", current_step=6, wizard_state={"current_step": 6})
+    )
+
+    assert result["wizard_state"]["step_states"]["step6"]["draft_json"] == {
+        "target_role": "AI 应用开发",
+        "skills_and_certs": ["Python"],
+    }
