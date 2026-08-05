@@ -694,6 +694,7 @@ def test_resume_craft_render_repairs_unconfirmed_jd_facts_before_rejecting(monke
     assert resp.get_json()["report_pdf_base64"] == "UERG"
     assert len(captured) == 2
     assert "pinecone" in captured[1]["extra_instruction"].lower()
+    assert "职位标题必须逐字" in captured[1]["extra_instruction"]
 
 
 def test_resume_craft_fact_audit_accepts_confirmed_text_with_jd_formatting():
