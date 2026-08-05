@@ -751,7 +751,15 @@ export function ResumeCraftPage() {
       // The Agent contract returns a minimal wizard-state patch. Keep the
       // previously confirmed preview and other step data when a response only
       // includes the fields changed in this turn.
-      const nextWizard = mergeWizardState(wizardState, resp.wizard_state);
+      // Accept a structurally valid draft even when an older runtime/model
+      // places it at the response root instead of inside Step6.
+      const responseDraft = isPlainRecord(resp.draft_json) && Object.keys(resp.draft_json).length > 0
+        ? resp.draft_json
+        : null;
+      const wizardPatch = responseDraft
+        ? mergeWizardState(resp.wizard_state as ResumeCraftWizardState, { step_states: { step6: { draft_json: responseDraft } } })
+        : resp.wizard_state;
+      const nextWizard = mergeWizardState(wizardState, wizardPatch);
       const nextStep6 = nextWizard.step_states?.step6;
       // The preview is an Agent-owned field. Accept the nested state copy as a
       // structural compatibility fallback when a model returns the same

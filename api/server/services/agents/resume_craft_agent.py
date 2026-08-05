@@ -17,6 +17,37 @@ from utils.logger_handler import logger
 class ResumeCraftAgent(BaseSkillAgent):
     SKILL_NAME = "resume-craft"
 
+    @staticmethod
+    def _normalize_step6_draft_patch(
+        previous_wizard_state: Any,
+        wizard_state_patch: Any,
+        top_level_draft: Any,
+    ) -> Dict[str, Any]:
+        """Keep the render draft structural contract intact across model patches."""
+        patch = deepcopy(wizard_state_patch) if isinstance(wizard_state_patch, dict) else {}
+        step_states = patch.get("step_states")
+        if not isinstance(step_states, dict):
+            step_states = {}
+            patch["step_states"] = step_states
+        step6 = step_states.get("step6")
+        if not isinstance(step6, dict):
+            step6 = {}
+            step_states["step6"] = step6
+
+        previous_step_states = previous_wizard_state.get("step_states") if isinstance(previous_wizard_state, dict) else {}
+        previous_step6 = previous_step_states.get("step6") if isinstance(previous_step_states, dict) else {}
+        previous_draft = previous_step6.get("draft_json") if isinstance(previous_step6, dict) else None
+        incoming_draft = step6.get("draft_json")
+
+        if isinstance(top_level_draft, dict) and top_level_draft:
+            if not isinstance(incoming_draft, dict) or not incoming_draft:
+                step6["draft_json"] = deepcopy(top_level_draft)
+        elif isinstance(previous_draft, dict) and previous_draft:
+            if not isinstance(incoming_draft, dict) or not incoming_draft:
+                step6["draft_json"] = deepcopy(previous_draft)
+
+        return patch
+
     def run_resume_craft_chat_turn(self, payload: dict) -> dict:
         """Run one stateful resume-craft conversation turn through the loaded skill."""
         if self.llm is None:
@@ -125,6 +156,15 @@ class ResumeCraftAgent(BaseSkillAgent):
         # Semantic progression is owned by resume-craft/SKILL.md. The runtime
         # only preserves the model patch and the prior state; render safety is
         # enforced by the render route.
+        wizard_level_draft = parsed["wizard_state"].get("draft_json") if isinstance(parsed["wizard_state"], dict) else None
+        draft_candidate = parsed.get("draft_json")
+        if not isinstance(draft_candidate, dict) or not draft_candidate:
+            draft_candidate = wizard_level_draft
+        parsed["wizard_state"] = self._normalize_step6_draft_patch(
+            previous_wizard_state,
+            parsed["wizard_state"],
+            draft_candidate,
+        )
         parsed["wizard_state"] = self._merge_state_patch(
             previous_wizard_state,
             parsed["wizard_state"],
