@@ -1627,15 +1627,23 @@ export function ResumeCraftPage() {
                             style={generatedFrameHeight ? { height: `${generatedFrameHeight}px` } : undefined}
                             onLoad={(event) => {
                               const frame = event.currentTarget;
-                              const documentElement = frame.contentDocument?.documentElement;
-                              const body = frame.contentDocument?.body;
-                              const contentHeight = Math.max(
-                                documentElement?.scrollHeight || 0,
-                                documentElement?.offsetHeight || 0,
-                                body?.scrollHeight || 0,
-                                body?.offsetHeight || 0,
-                              );
-                              if (contentHeight > 0) setGeneratedFrameHeight(contentHeight);
+                              const measure = () => {
+                                const documentElement = frame.contentDocument?.documentElement;
+                                const body = frame.contentDocument?.body;
+                                const contentHeight = Math.max(
+                                  documentElement?.scrollHeight || 0,
+                                  documentElement?.offsetHeight || 0,
+                                  body?.scrollHeight || 0,
+                                  body?.offsetHeight || 0,
+                                );
+                                if (contentHeight > 0) setGeneratedFrameHeight(contentHeight);
+                              };
+
+                              // HTML resumes can settle after fonts and layout resources load.
+                              measure();
+                              requestAnimationFrame(measure);
+                              window.setTimeout(measure, 120);
+                              frame.contentDocument?.fonts?.ready.then(measure).catch(() => undefined);
                             }}
                           />
                         </div>
