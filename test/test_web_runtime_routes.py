@@ -708,6 +708,17 @@ def test_resume_craft_fact_audit_accepts_confirmed_text_with_jd_formatting():
     assert result["unsupported_tokens"] == []
 
 
+def test_resume_craft_fact_audit_ignores_generic_jd_wording():
+    result = routes._audit_resume_fact_integrity(
+        "<!DOCTYPE html><html><body><p>负责设计和实现 AI 应用系统，完成需求分析、技术选型与功能落地。</p></body></html>",
+        "【目标岗位】\n- 目标岗位: AI应用开发\n【技能与证书】\n- 技能1: Python",
+        "JD 方向摘要: 负责设计和实现基于大语言模型的智能应用系统，包括需求分析、技术选型、功能开发及接口封装，推动 AI 功能从原型到生产环境快速落地。",
+    )
+
+    assert result["passed"] is True
+    assert result["unsupported_tokens"] == []
+
+
 def test_resume_craft_fact_audit_still_rejects_unconfirmed_jd_qualifier():
     result = routes._audit_resume_fact_integrity(
         "<!DOCTYPE html><html><body><p>AI应用开发工程师</p></body></html>",

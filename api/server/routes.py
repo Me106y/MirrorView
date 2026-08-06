@@ -80,6 +80,36 @@ RESUME_CRAFT_FACT_AUDIT_STOPWORDS = {
     "团队",
     "平台",
     "系统",
+    "设计",
+    "实现",
+    "基于",
+    "包括",
+    "需求",
+    "分析",
+    "选型",
+    "流程",
+    "搭建",
+    "功能",
+    "接口",
+    "封装",
+    "类似",
+    "实践",
+    "能够",
+    "持续",
+    "降低",
+    "延迟",
+    "成本",
+    "协作",
+    "推动",
+    "原型",
+    "生产",
+    "环境",
+    "快速",
+    "落地",
+    "智能",
+    "应用",
+    "云服务",
+    "向量数据库",
     "开发",
     "优化",
     "技术",
@@ -1630,7 +1660,7 @@ def _audit_resume_fact_integrity(
     for raw_token in _extract_fact_audit_tokens(jd_direction_context):
         raw_normalized = _normalize_fact_audit_text(raw_token)
         semantic_normalized = _normalize_fact_audit_text(_strip_fact_audit_stopwords(raw_token))
-        if len(raw_normalized) < 3:
+        if len(raw_normalized) < 3 or len(semantic_normalized) < 2:
             continue
         jd_tokens.append((raw_normalized, semantic_normalized))
     unsupported = []
