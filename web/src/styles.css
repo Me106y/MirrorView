@@ -715,7 +715,7 @@ a {
 .resume-craft-wizard-viewport.is-result-viewport {
   height: auto;
   max-height: none;
-  overflow: visible;
+  overflow: hidden;
 }
 
 .resume-craft-wizard-viewport.is-step2-viewport {
@@ -740,6 +740,10 @@ a {
   transform: translateX(0%);
   align-items: flex-start;
   transition: transform 450ms cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+.resume-craft-wizard-viewport.is-result-viewport .resume-craft-wizard-track {
+  height: auto;
 }
 
 .resume-craft-step-card {
@@ -1575,8 +1579,27 @@ a {
   overflow: hidden;
 }
 
+.resume-craft-chat-step.is-result-step {
+  height: auto;
+  min-height: 0;
+  overflow: visible;
+}
+
 .resume-craft-page.is-chat-page {
   padding-bottom: 0;
+  overflow: visible;
+}
+
+.resume-craft-page.is-result-page {
+  padding-bottom: 24px;
+}
+
+.app-shell-resume-craft:has(.resume-craft-page.is-result-page) {
+  height: auto;
+  min-height: 100vh;
+}
+
+.app-shell-resume-craft:has(.resume-craft-page.is-result-page) .page-main {
   overflow: visible;
 }
 
@@ -1844,7 +1867,7 @@ a {
   flex: 0 0 auto;
   height: auto;
   min-height: 0;
-  overflow: visible;
+  overflow: hidden;
 }
 
 .resume-craft-view-panel {
@@ -2018,6 +2041,10 @@ a {
   min-height: 38px;
   padding: 0 12px;
   margin-top: 0;
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 600;
+  text-decoration: none;
 }
 
 .resume-craft-generated-actions .resume-craft-html-result-btn {
