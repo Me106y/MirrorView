@@ -54,8 +54,8 @@ a {
   max-width: 1180px;
   margin: 0 auto;
   padding: 14px 20px 24px;
-  height: 100vh;
   min-height: 100vh;
+  height: auto;
   display: flex;
   flex-direction: column;
 }
@@ -171,7 +171,7 @@ a {
 
 .page-main {
   animation: rise 260ms ease;
-  flex: 1;
+  flex: 1 0 auto;
   min-height: 0;
 }
 
