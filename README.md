@@ -32,12 +32,6 @@ The home page is the starting point for every workflow:
 
 ![MirrorView home page](docs/images/readme-home.jpg)
 
-### Model Settings
-
-Model Settings is a user-facing prerequisite for AI features. The current interface supports DeepSeek. You can set the base URL and model name, test the connection, and save the configuration locally in the browser.
-
-![MirrorView model settings](docs/images/readme-settings.jpg)
-
 ### Resume Match
 
 Upload a PDF resume, enter the target role, and paste the job description. MirrorView uses the role requirements to produce a match assessment, identify strengths and gaps, and suggest concrete resume improvements.

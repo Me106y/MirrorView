@@ -32,12 +32,6 @@ MirrorView 围绕一条实际的求职准备路径设计：
 
 ![MirrorView 首页](docs/images/readme-home.jpg)
 
-### 模型设置
-
-模型设置是使用 AI 功能前需要完成的配置。当前界面支持 DeepSeek，可以填写 Base URL 和模型名称、测试连接，并将配置保存在浏览器本地。
-
-![MirrorView 模型设置](docs/images/readme-settings.jpg)
-
 ### 简历匹配分析
 
 上传 PDF 简历，填写目标岗位并粘贴岗位 JD。MirrorView 会结合岗位要求生成匹配度分析，指出你的优势和关键缺口，并给出可以直接执行的简历优化建议。
