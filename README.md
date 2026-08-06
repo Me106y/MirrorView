@@ -18,7 +18,7 @@ Each tool can be used on its own, or as part of the same preparation process. Th
 
 ## Use MirrorView
 
-1. Open the MirrorView website and select **Model Settings**.
+1. Open the [MirrorView website](https://mirrorview.dpdns.org/) and select **Model Settings**.
 2. Choose the supported model provider, enter your API key, base URL, and model name, then test and save the connection.
 3. Choose a workflow from the home page.
 4. Provide the resume, job description, or experience details requested by that workflow.
