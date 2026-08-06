@@ -185,7 +185,6 @@ class ResumeCraftAgent(BaseSkillAgent):
         history_text = json.dumps(payload.get("history") or [], ensure_ascii=False)
         confirmed_facts_context = payload.get("confirmed_facts_context") or history_text or "（无）"
         jd_direction_context = payload.get("jd_direction_context") or "（无）"
-        extra_instruction = (payload.get("extra_instruction") or "").strip()
         photo_rule = (
             f'8) 本次要求放照片：必须输出 <img class="header-photo" src="{photo_token}" ...>，'
             "src 必须是该占位 token，禁止写死 URL 或其他 base64。"
@@ -209,6 +208,7 @@ class ResumeCraftAgent(BaseSkillAgent):
 9) 事实白名单是唯一可写入简历的事实来源；目标 JD、职位要求、JD 中的示例技术和候选方案都不是事实。若某个技术、协议、数据库、云服务、证书、雇主、指标或职责没有在事实白名单中明确出现，必须完全省略，不能作为对比项、备选项或技能列表补充。尤其不要把 Pinecone、Chroma、Qdrant、AWS、GCP、Azure、Java 等 JD 示例写入简历，除非它们已在白名单中被用户确认。
 10) 职位标题必须逐字复制事实白名单中的目标岗位；绝对不要从 JD 添加“工程师”“专家”等后缀或改写岗位名称。若目标岗位未填写，省略职位标题。
 11) 生成内容必须以事实白名单为准，即使 JD 或参考模板建议了更丰富的技术栈，也只能使用白名单中明确确认的内容；不确定时删去，不要猜测或补全。
+12) 事实边界由本 Skill 和 Agent 根据完整上下文判断；运行时不会通过关键词或停用词扫描 HTML 来替你解释事实。请在输出 HTML 前自行完成事实核对，保留可由事实白名单支持的自然语言表达，同时删除或改写未确认的具体技术、证书、职位后缀、雇主、指标和职责。
 
 [SKILL.md 规范全文]
 {skill_spec}
@@ -231,8 +231,6 @@ class ResumeCraftAgent(BaseSkillAgent):
 [对话摘要（仅供参考）]
 {str(history_text)[:5000]}
 
-[附加约束]
-{extra_instruction[:1200] if extra_instruction else "（无）"}
 """
 
     def stream_resume_craft_html(self, payload: dict) -> Generator[str, None, None]:

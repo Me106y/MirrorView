@@ -592,7 +592,7 @@ def test_resume_craft_render_returns_pdf_payload_when_pdf_generation_succeeds(mo
     assert body["meta"]["resume_craft_pdf_generated"] is True
 
 
-def test_resume_craft_render_rejects_jd_only_facts(monkeypatch):
+def test_resume_craft_render_leaves_fact_interpretation_to_agent(monkeypatch):
     Config.TURNSTILE_ENFORCE = False
     Config.RATE_LIMIT_ENFORCE = False
 
@@ -604,6 +604,11 @@ def test_resume_craft_render_rejects_jd_only_facts(monkeypatch):
             "<h1>简历</h1><p>熟练 Kubernetes Operator 开发。</p>"
             "</body></html>"
         ),
+    )
+    monkeypatch.setattr(
+        routes,
+        "_generate_resume_craft_pdf_artifact",
+        lambda report_html, report_name: ("resume.pdf", "UERG", ""),
     )
 
     client = _client()
@@ -648,23 +653,20 @@ def test_resume_craft_render_rejects_jd_only_facts(monkeypatch):
             },
         },
     )
-    assert resp.status_code == 400
+    assert resp.status_code == 200
     body = resp.get_json()
-    assert body["error"] == "unsupported_fact_detected"
+    assert "Kubernetes Operator" in body["report_html"]
 
 
-def test_resume_craft_render_repairs_unconfirmed_jd_facts_before_rejecting(monkeypatch):
+def test_resume_craft_render_does_not_repair_or_reinterpret_agent_html(monkeypatch):
     Config.TURNSTILE_ENFORCE = False
     Config.RATE_LIMIT_ENFORCE = False
-    rendered = [
-        "<!DOCTYPE html><html><body><p>熟悉 Pinecone 和 Milvus。</p></body></html>",
-        "<!DOCTYPE html><html><body><p>使用 Milvus。</p></body></html>",
-    ]
+    rendered = "<!DOCTYPE html><html><body><p>熟悉 Pinecone 和 Milvus。</p></body></html>"
     captured = []
 
     def _fake_render(payload, runtime=None):
         captured.append(payload)
-        return rendered.pop(0)
+        return rendered
 
     monkeypatch.setattr(routes.ai_service, "run_resume_craft_html", _fake_render)
     monkeypatch.setattr(
@@ -692,42 +694,8 @@ def test_resume_craft_render_repairs_unconfirmed_jd_facts_before_rejecting(monke
 
     assert resp.status_code == 200
     assert resp.get_json()["report_pdf_base64"] == "UERG"
-    assert len(captured) == 2
-    assert "pinecone" in captured[1]["extra_instruction"].lower()
-    assert "职位标题必须逐字" in captured[1]["extra_instruction"]
-
-
-def test_resume_craft_fact_audit_accepts_confirmed_text_with_jd_formatting():
-    result = routes._audit_resume_fact_integrity(
-        "<!DOCTYPE html><html><body><p>熟悉大模型应用开发经验</p></body></html>",
-        "【工作/项目经历】\n- 经历1: 已确认大模型 应用开发实践",
-        "JD 方向摘要: 熟悉大模型应用开发经验",
-    )
-
-    assert result["passed"] is True
-    assert result["unsupported_tokens"] == []
-
-
-def test_resume_craft_fact_audit_ignores_generic_jd_wording():
-    result = routes._audit_resume_fact_integrity(
-        "<!DOCTYPE html><html><body><p>负责设计和实现 AI 应用系统，完成需求分析、技术选型与功能落地。</p></body></html>",
-        "【目标岗位】\n- 目标岗位: AI应用开发\n【技能与证书】\n- 技能1: Python",
-        "JD 方向摘要: 负责设计和实现基于大语言模型的智能应用系统，包括需求分析、技术选型、功能开发及接口封装，推动 AI 功能从原型到生产环境快速落地。",
-    )
-
-    assert result["passed"] is True
-    assert result["unsupported_tokens"] == []
-
-
-def test_resume_craft_fact_audit_still_rejects_unconfirmed_jd_qualifier():
-    result = routes._audit_resume_fact_integrity(
-        "<!DOCTYPE html><html><body><p>AI应用开发工程师</p></body></html>",
-        "【目标岗位】\n- 目标岗位: AI 应用开发",
-        "JD 方向摘要: AI应用开发工程师",
-    )
-
-    assert result["passed"] is False
-    assert "应用开发工程师" in result["unsupported_tokens"]
+    assert len(captured) == 1
+    assert "extra_instruction" not in captured[0]
 
 
 def test_resume_craft_render_accepts_facts_from_finalized_experiences(monkeypatch):

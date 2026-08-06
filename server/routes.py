@@ -55,75 +55,6 @@ RESUME_CRAFT_MAX_PHOTO_DATA_URL_LENGTH = 2_000_000
 RESUME_CRAFT_HTML_ARTIFACT_TTL_SECONDS = 30 * 60
 RESUME_CRAFT_HTML_ARTIFACT_MAX_ITEMS = 64
 _RESUME_CRAFT_HTML_ARTIFACTS: Dict[str, Tuple[float, str]] = {}
-RESUME_CRAFT_FACT_AUDIT_STOPWORDS = {
-    "负责",
-    "参与",
-    "岗位",
-    "职位",
-    "要求",
-    "经验",
-    "能力",
-    "熟悉",
-    "熟练",
-    "掌握",
-    "精通",
-    "具备",
-    "了解",
-    "使用",
-    "工作",
-    "项目",
-    "相关",
-    "以上",
-    "以下",
-    "职责",
-    "沟通",
-    "团队",
-    "平台",
-    "系统",
-    "设计",
-    "实现",
-    "基于",
-    "包括",
-    "需求",
-    "分析",
-    "选型",
-    "流程",
-    "搭建",
-    "功能",
-    "接口",
-    "封装",
-    "类似",
-    "实践",
-    "能够",
-    "持续",
-    "降低",
-    "延迟",
-    "成本",
-    "协作",
-    "推动",
-    "原型",
-    "生产",
-    "环境",
-    "快速",
-    "落地",
-    "智能",
-    "应用",
-    "云服务",
-    "向量数据库",
-    "开发",
-    "优化",
-    "技术",
-    "业务",
-    "产品",
-    "solution",
-    "ability",
-    "experience",
-    "requirements",
-    "responsibility",
-    "team",
-    "project",
-    "role",
-}
 @api.route('/health', methods=['GET'])
 def health():
     return jsonify(
@@ -1608,73 +1539,6 @@ def _build_jd_direction_context(step1_profile: Dict[str, Any]) -> str:
     )
 
 
-def _strip_html_text(value: str) -> str:
-    text = str(value or "")
-    text = re.sub(r"(?is)<script[\s\S]*?</script>", " ", text)
-    text = re.sub(r"(?is)<style[\s\S]*?</style>", " ", text)
-    text = re.sub(r"(?is)<[^>]+>", " ", text)
-    return re.sub(r"\s+", " ", unescape(text)).strip()
-
-
-def _extract_fact_audit_tokens(text: str) -> List[str]:
-    source = str(text or "")
-    zh_tokens = re.findall(r"[\u4e00-\u9fff]{2,40}", source)
-    en_tokens = re.findall(r"[A-Za-z][A-Za-z0-9+._-]{2,}", source)
-    out: List[str] = []
-    for token in zh_tokens + en_tokens:
-        item = token.strip().lower()
-        if len(item) < 3:
-            continue
-        if item in RESUME_CRAFT_FACT_AUDIT_STOPWORDS:
-            continue
-        if item not in out:
-            out.append(item)
-    return out[:120]
-
-
-def _normalize_fact_audit_text(value: str) -> str:
-    """Compare facts across whitespace, punctuation, and line-break formatting."""
-    return re.sub(r"[\s\W_]+", "", str(value or "").lower())
-
-
-def _strip_fact_audit_stopwords(token: str) -> str:
-    value = str(token or "").lower()
-    chinese_stopwords = sorted(
-        (item for item in RESUME_CRAFT_FACT_AUDIT_STOPWORDS if re.search(r"[\u4e00-\u9fff]", item)),
-        key=len,
-        reverse=True,
-    )
-    for stopword in chinese_stopwords:
-        value = value.replace(stopword, "")
-    return value
-
-
-def _audit_resume_fact_integrity(
-    report_html: str,
-    confirmed_facts_context: str,
-    jd_direction_context: str,
-) -> Dict[str, Any]:
-    html_text = _normalize_fact_audit_text(_strip_html_text(report_html))
-    facts_text = _normalize_fact_audit_text(confirmed_facts_context)
-    jd_tokens = []
-    for raw_token in _extract_fact_audit_tokens(jd_direction_context):
-        raw_normalized = _normalize_fact_audit_text(raw_token)
-        semantic_normalized = _normalize_fact_audit_text(_strip_fact_audit_stopwords(raw_token))
-        if len(raw_normalized) < 3 or len(semantic_normalized) < 2:
-            continue
-        jd_tokens.append((raw_normalized, semantic_normalized))
-    unsupported = []
-    for raw_token, semantic_token in jd_tokens:
-        if semantic_token and semantic_token in facts_text:
-            continue
-        if raw_token in html_text or (semantic_token and semantic_token in html_text):
-            unsupported.append(raw_token)
-    unsupported = unsupported[:8]
-    return {
-        "passed": len(unsupported) == 0,
-        "unsupported_tokens": unsupported,
-    }
-
 def _validate_photo_data_url(photo_data_url: str) -> Tuple[bool, str]:
     value = str(photo_data_url or "").strip()
     if not value:
@@ -2127,9 +1991,7 @@ def careerforge_resume_craft_render():
         "photo_token": RESUME_CRAFT_PHOTO_TOKEN,
     }
 
-    fact_audit = {"passed": True, "unsupported_tokens": []}
-
-    def render_and_audit(payload: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
+    def render_html(payload: Dict[str, Any]) -> str:
         raw_html = ai_service.run_resume_craft_html(payload, runtime=runtime)
         rendered_html = _extract_html_document(raw_html)
         if rendered_html and photo_pref == "放照片":
@@ -2138,15 +2000,10 @@ def careerforge_resume_craft_render():
                 processed_photo_data_url,
                 RESUME_CRAFT_PHOTO_TOKEN,
             )
-        audit = (
-            _audit_resume_fact_integrity(rendered_html, confirmed_facts_context, jd_direction_context)
-            if rendered_html
-            else {"passed": True, "unsupported_tokens": []}
-        )
-        return rendered_html, audit
+        return rendered_html
 
     try:
-        report_html, fact_audit = render_and_audit(html_payload)
+        report_html = render_html(html_payload)
     except Exception as e:
         logger.exception("resume-craft render failed")
         return jsonify(
@@ -2165,39 +2022,6 @@ def careerforge_resume_craft_render():
                 "meta": meta,
             }
         ), 502
-
-    if not fact_audit["passed"]:
-        unsupported_tokens = [str(token) for token in fact_audit.get("unsupported_tokens", []) if str(token).strip()]
-        repair_payload = {
-            **html_payload,
-            "extra_instruction": (
-                "上一版 HTML 未通过事实审计。以下词语或短语没有出现在事实白名单中："
-                f"{', '.join(unsupported_tokens)}。请重新输出完整 HTML，删除这些未确认内容及其衍生推断，"
-                "只保留事实白名单中的已确认技术、职责、经历和结果；不要把 JD 中的示例技术、候选方案或要求改写成用户事实；"
-                "职位标题必须逐字使用事实白名单中的目标岗位，不要从 JD 添加‘工程师’等后缀或改写岗位名称。"
-            ),
-        }
-        try:
-            report_html, fact_audit = render_and_audit(repair_payload)
-        except Exception as e:
-            logger.exception("resume-craft fact-bound repair failed")
-            return jsonify(
-                {
-                    "error": "resume_craft_render_failed",
-                    "message": f"简历生成失败，请稍后重试：{str(e)[:240]}",
-                    "meta": meta,
-                }
-            ), 502
-
-        if not fact_audit["passed"]:
-            return jsonify(
-                {
-                    "error": "unsupported_fact_detected",
-                    "message": "检测到疑似超出已确认事实的内容，请在 Step6 继续修订并再次确认后生成。",
-                    "unsupported_tokens": fact_audit.get("unsupported_tokens", []),
-                    "meta": meta,
-                }
-            ), 400
 
     report_name = f"{_build_resume_artifact_stem(step1_profile)}.html"
     pdf_name, pdf_base64, pdf_error = _generate_resume_craft_pdf_artifact(report_html, report_name)
