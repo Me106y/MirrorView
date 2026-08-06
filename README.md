@@ -1,124 +1,97 @@
 # MirrorView
 
-MirrorView is an AI career training website for job seekers. It helps users prepare resumes, analyze a target role, practice interviews, and create application messages through a single web interface.
+MirrorView is an AI career training workspace for job seekers. It brings role analysis, resume preparation, application writing, and interview practice into one continuous workflow.
 
-[English](README.md) | [中文](README_CN.md)
+The goal is not to produce generic career advice. MirrorView helps you turn a target role and your own experience into clearer evidence, stronger application materials, and more deliberate interview practice.
 
-## Use It Through the Website
+[中文](README_CN.md) | English
 
-1. Open a deployed MirrorView site.
-2. In Model Settings, choose a model provider, enter the API key, base URL, and model name, then test and save the connection.
-3. Choose a tool from the home page and provide the requested resume, job description, or experience details.
-4. Review the generated analysis, resume, application letter, or interview conversation. Supported tools can export HTML or PDF files.
+## What We Want To Build
 
-The model API key is stored in the browser and used for model requests. Use a temporary or usage-limited key and revoke it when it is no longer needed. GitHub login is optional and depends on the deployment configuration.
+MirrorView is designed around a practical job-search loop:
 
-<!-- Screenshot placeholder: home page and model settings. -->
+```text
+Understand the role -> improve or create a resume -> write the application message -> practice the interview
+```
 
-## Features
+Each tool can be used on its own, or as part of the same preparation process. The long-term direction is a focused career workspace that helps users move from a job description to a more confident application without repeating the same information at every step.
+
+## Use MirrorView
+
+1. Open the MirrorView website and select **Model Settings**.
+2. Choose the supported model provider, enter your API key, base URL, and model name, then test and save the connection.
+3. Choose a workflow from the home page.
+4. Provide the resume, job description, or experience details requested by that workflow.
+5. Review the result, revise the input when needed, and export supported resume or report outputs as HTML or PDF.
+
+The model API key is stored in the browser and used for your requests. Use a temporary or usage-limited key and revoke it when you no longer need it. Do not include real credentials in screenshots, issue reports, or shared files.
+
+## Product Tour
+
+The home page is the starting point for every workflow:
+
+![MirrorView home page](docs/images/readme-home.jpg)
+
+### Model Settings
+
+Model Settings is a user-facing prerequisite for AI features. The current interface supports DeepSeek. You can set the base URL and model name, test the connection, and save the configuration locally in the browser.
+
+![MirrorView model settings](docs/images/readme-settings.jpg)
 
 ### Resume Match
 
-Upload a PDF resume and provide a target role and job description to receive:
+Upload a PDF resume, enter the target role, and paste the job description. MirrorView uses the role requirements to produce a match assessment, identify strengths and gaps, and suggest concrete resume improvements.
 
-- an overall fit assessment;
-- strengths, gaps, and missing requirements mapped to the role;
-- targeted resume improvement suggestions;
-- an analysis report that can be viewed and exported in the site.
+![Resume match input](docs/images/readme-resume-match.jpg)
 
-<!-- Screenshot placeholder: resume match results. -->
+The result can be reviewed in the site and exported as HTML or PDF when the report is available.
 
 ### AI Resume Craft
 
-Complete a guided flow covering the target role, personal information, education, work or project experience, skills, and certificates. The generated resume supports:
+Resume Craft is a guided resume-building flow:
 
-- multiple resume templates;
-- Chinese, English, or bilingual output;
-- an optional profile photo;
-- HTML and PDF preview/export.
+- Step 1 sets the target role, JD summary, template, language, and optional photo;
+- Step 2 collects personal information and education;
+- Step 3 uses a conversational flow to organize work, project, skills, and certificate information;
+- the final step generates a resume preview that can be revised and exported.
 
-<!-- Screenshot placeholder: resume form and preview. -->
+It currently supports Chinese, English, and bilingual output, multiple templates, optional profile photos, HTML preview, and PDF export.
+
+![Resume Craft setup and guided flow](docs/images/readme-resume-craft.jpg)
 
 ### Cover Letter
 
-Provide a company, job description, and resume content to generate a tailored application message. Email and recruitment-platform chat scenarios are currently supported.
-
-<!-- Screenshot placeholder: cover letter page. -->
+Enter the company name, target job description, and resume text. Select an email or recruitment-chat scenario to generate a tailored application message that connects your experience with the role.
 
 ### Text Mock Interview
 
-Start with a target role or an answer, then continue the conversation with the AI interviewer. The interviewer uses the conversation context for follow-up questions and is suitable for practicing:
+Start with a target role or your first answer. The AI interviewer keeps the conversation context and continues with follow-up questions. It is intended for practice in:
 
 - introductions and motivation;
 - project and behavioral questions;
-- technical, business, and situational answers;
+- technical, business, and situational questions;
 - answer structure and interview communication.
 
 ### Job Search
 
-The job search entry is present in the navigation, but this version is still a placeholder. Live job data sources and the complete asynchronous search workflow are planned for a later phase.
+The Job Search entry is visible in the product navigation, but the current version is still a placeholder. Real job data sources, asynchronous search, and result tracking are planned for a later phase.
 
-## Run Locally
+## Current Status
 
-This section is for self-hosting and development. Regular users only need access to a deployed website.
+| Capability | Current state | What it does today |
+|---|---|---|
+| Resume Match | Available | Analyzes a PDF resume against a target role and JD. |
+| AI Resume Craft | Available | Guides resume creation and supports HTML/PDF output. |
+| Cover Letter | Available | Generates email or recruitment-chat application copy. |
+| Text Mock Interview | Available | Runs a context-aware interview practice conversation. |
+| Job Search | Planned | Navigation placeholder; live job sources are not connected yet. |
 
-### Requirements
+## Important Notes
 
-- Python 3.11+
-- Node.js 20+
-- npm 10+
-
-### Install
-
-The project keeps one Python dependency file and one environment template:
-
-```bash
-pip install -r requirements.txt
-cd web
-npm install
-cd ..
-```
-
-Copy the environment template and configure a model provider:
-
-```bash
-cp .env.example .env
-```
-
-At least one model API key is required. The default example uses DeepSeek:
-
-```dotenv
-PLATFORM_PROVIDER=deepseek
-PLATFORM_MODEL=deepseek-chat
-DEEPSEEK_API_KEY=sk-...
-```
-
-Never commit real credentials.
-
-### Start the Services
-
-Start the backend from the repository root:
-
-```bash
-python -m server.app
-```
-
-In another terminal, start the frontend:
-
-```bash
-cd web
-npm run dev
-```
-
-Default URLs:
-
-- Frontend: `http://localhost:5173`
-- Flask API: `http://localhost:5001`
-
-## Project Status
-
-The currently usable tools are Resume Match, AI Resume Craft, Cover Letter, and Text Mock Interview. Job Search is reserved for a future iteration.
+- AI output is a draft for preparation. Check facts, dates, claims, and formatting before using any material in an application.
+- MirrorView currently relies on the model connection configured by the user. Availability and cost depend on the selected provider and key.
+- A successful resume or report export depends on the relevant workflow completing successfully; exported content remains the user's responsibility to review.
 
 ## License
 
-MIT License. See `LICENSE` for details.
+MIT License. See [LICENSE](LICENSE) for details.
