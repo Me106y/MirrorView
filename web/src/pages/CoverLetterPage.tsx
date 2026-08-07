@@ -128,14 +128,23 @@ export function CoverLetterPage() {
     return id;
   };
 
-  const sendMessage = async (messageOverride?: string, allowEmptyStart = false) => {
+  const sendMessage = async (messageOverride?: string, allowEmptyStart = false, fresh = false) => {
     const message = (messageOverride ?? input).trim();
-    const canStartWithPdf = mode === "pdf" && Boolean(resumeFile) && (messages.length === 0 || allowEmptyStart) && !message;
+    const canStartWithPdf = mode === "pdf" && Boolean(resumeFile) && (messages.length === 0 || allowEmptyStart || fresh) && !message;
     if (loading || (!message && !canStartWithPdf)) return;
 
     if (mode === "pdf" && !resumeFile) {
       setFileError("请先上传 PDF 简历，或切换到没有简历模式。");
       return;
+    }
+
+    if (fresh) {
+      setMessages([]);
+      setFailedMessage("");
+      setFailedMessageId("");
+      setCopyTargetId("");
+      setCopyState("idle");
+      setFileError("");
     }
 
     if (message) {
@@ -147,9 +156,10 @@ export function CoverLetterPage() {
     setFailedMessageId("");
     setCopyState("idle");
 
+    const effectiveHistory = fresh ? [] : history;
     const payload = {
       message,
-      history: JSON.stringify(history),
+      history: JSON.stringify(effectiveHistory),
       jd_text: jdText,
       company_name: companyName,
       scenario,
@@ -167,7 +177,7 @@ export function CoverLetterPage() {
           )
         : await callCareerforgeSkill<CoverLetterResponse>(settings, "/careerforge/cover-letter/chat", {
             ...payload,
-            history,
+            history: effectiveHistory,
           });
       const result = (response.result ?? {}) as Record<string, unknown>;
       const reply = asString(response.reply) || asString(result.reply);
@@ -334,7 +344,7 @@ export function CoverLetterPage() {
             </fieldset>
 
             {mode === "pdf" ? (
-              <button type="button" className="primary-btn cover-letter-start-btn" disabled={loading || !resumeFile} onClick={() => void sendMessage("")}>
+              <button type="button" className="primary-btn cover-letter-start-btn" disabled={loading || !resumeFile} onClick={() => void sendMessage("", false, true)}>
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="m5 12 14-7-4 14-3-6-7-1Z" />
                   <path d="m12 13 3-3" />
