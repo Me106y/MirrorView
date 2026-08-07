@@ -86,6 +86,8 @@ export function CoverLetterPage() {
     })),
     [messages]
   );
+  const showEmptyState = messages.length === 0 && !loading;
+  const showInitialLoadingState = loading && messages.length === 0;
 
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -349,7 +351,14 @@ export function CoverLetterPage() {
             </header>
 
             <div className="cover-letter-chat-log" role="log" aria-live="polite">
-              {messages.length === 0 ? (
+              {showInitialLoadingState ? (
+                <div className="cover-letter-message assistant is-loading cover-letter-message--loading-start">
+                  <div className="cover-letter-message-meta">助手</div>
+                  <div className="cover-letter-loading-line"><span /><span /><span /></div>
+                </div>
+              ) : null}
+
+              {showEmptyState ? (
                 <div className="cover-letter-chat-empty">
                   <span className="cover-letter-empty-mark" aria-hidden="true">✦</span>
                   <h3>{mode === "pdf" ? "材料准备好后开始" : "从你的经历开始"}</h3>
@@ -382,7 +391,7 @@ export function CoverLetterPage() {
                   ) : null}
                 </div>
               ))}
-              {loading ? (
+              {loading && messages.length > 0 ? (
                 <div className="cover-letter-message assistant is-loading">
                   <div className="cover-letter-message-meta">助手</div>
                   <div className="cover-letter-loading-line"><span /><span /><span /></div>

@@ -1032,6 +1032,7 @@ a {
   display: flex;
   flex-direction: column;
   gap: 15px;
+  overflow: hidden;
 }
 
 .cover-letter-context-pills {
@@ -1052,6 +1053,7 @@ a {
 
 .cover-letter-chat-log {
   flex: 1 1 auto;
+  min-height: 0;
   min-height: 430px;
   padding: 18px;
   overflow-y: auto;
@@ -1059,6 +1061,10 @@ a {
   border-radius: 14px;
   background: #f8f8f6;
   scrollbar-gutter: stable;
+}
+
+.cover-letter-message--loading-start {
+  margin-top: 0;
 }
 
 .cover-letter-chat-empty {
@@ -1238,7 +1244,7 @@ a {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
-  align-items: end;
+  align-items: stretch;
 }
 
 .cover-letter-composer textarea {
@@ -1251,8 +1257,14 @@ a {
 
 .cover-letter-send-btn {
   min-width: 84px;
-  min-height: 44px;
+  min-height: 68px;
   margin: 0;
+}
+
+@media (min-width: 1200px) {
+  .cover-letter-chat-panel {
+    height: min(780px, calc(100dvh - 132px));
+  }
 }
 
 @media (max-width: 1199px) {
@@ -3195,6 +3207,12 @@ textarea {
   cursor: not-allowed;
   opacity: 0.58;
   box-shadow: none;
+}
+
+.cover-letter-chat-panel .cover-letter-composer .cover-letter-send-btn {
+  margin-top: 0;
+  align-self: stretch;
+  height: 100%;
 }
 
 /* Force Step2 prev/next to share the same box model and baseline after global button rules */
