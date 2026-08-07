@@ -32,5 +32,23 @@ class CoverLetterAgent(BaseSkillAgent):
         return self._invoke_json_skill("cover-letter", payload, self.RESPONSE_SCHEMA)
 
     def run_cover_letter_chat(self, payload: dict) -> dict:
-        return self._invoke_json_skill("cover-letter", payload, self.RESPONSE_SCHEMA)
-
+        enriched = deepcopy(payload) if isinstance(payload, dict) else payload
+        if isinstance(enriched, dict):
+            latest = enriched.get("message")
+            if not isinstance(latest, str):
+                latest = ""
+            enriched["latest_user_message"] = latest
+            previous_output = ""
+            history = enriched.get("history") or []
+            if isinstance(history, list):
+                for item in reversed(history):
+                    if (
+                        isinstance(item, dict)
+                        and item.get("role") == "assistant"
+                        and isinstance(item.get("output_text"), str)
+                        and item["output_text"].strip()
+                    ):
+                        previous_output = item["output_text"]
+                        break
+            enriched["previous_output_text"] = previous_output
+        return self._invoke_json_skill("cover-letter", enriched, self.RESPONSE_SCHEMA)
