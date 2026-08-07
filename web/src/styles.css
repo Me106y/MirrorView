@@ -972,6 +972,7 @@ a {
 .cover-letter-field textarea {
   min-height: 132px;
   line-height: 1.55;
+  resize: none;
 }
 
 .cover-letter-segmented {
@@ -1168,6 +1169,16 @@ a {
   font-weight: 700;
 }
 
+.cover-letter-output-foot {
+  min-height: 44px;
+  padding: 7px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  border-top: 1px solid var(--line);
+}
+
 .cover-letter-output-block pre {
   max-width: 75ch;
   margin: 0;
@@ -1250,7 +1261,7 @@ a {
 .cover-letter-composer textarea {
   min-height: 68px;
   margin: 0;
-  resize: vertical;
+  resize: none;
   border-radius: 12px;
   line-height: 1.5;
 }
@@ -1259,12 +1270,6 @@ a {
   min-width: 84px;
   min-height: 68px;
   margin: 0;
-}
-
-@media (min-width: 1200px) {
-  .cover-letter-chat-panel {
-    height: min(780px, calc(100dvh - 132px));
-  }
 }
 
 @media (max-width: 1199px) {

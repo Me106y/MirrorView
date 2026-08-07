@@ -374,6 +374,9 @@ export function CoverLetterPage() {
                     <div className="cover-letter-output-block">
                       <div className="cover-letter-output-head">
                         <span>当前版本</span>
+                      </div>
+                      <pre>{message.outputText}</pre>
+                      <div className="cover-letter-output-foot">
                         <button type="button" className="cover-letter-copy-btn" aria-label={getCopyLabel(message.id)} title={getCopyLabel(message.id)} onClick={() => void onCopyOutput(message.id, message.outputText || "")}>
                           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                             <rect x="9" y="9" width="11" height="11" rx="2" />
@@ -381,7 +384,6 @@ export function CoverLetterPage() {
                           </svg>
                         </button>
                       </div>
-                      <pre>{message.outputText}</pre>
                     </div>
                   ) : null}
                   {message.error && failedMessageId === message.id ? (
