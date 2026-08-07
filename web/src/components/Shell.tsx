@@ -103,15 +103,6 @@ export function Shell({ onOpenSettings }: { onOpenSettings: () => void }) {
         <Outlet />
       </main>
 
-      <footer className="footer-bar">
-        {isHome ? <p className="footer-home-note">智能求职训练平台 · 让求职更高效</p> : null}
-        <nav className="footer-links">
-          <NavLink to="/legal/privacy">隐私政策</NavLink>
-          <NavLink to="/legal/terms">服务条款</NavLink>
-          <NavLink to="/legal/ai-disclaimer">AI 免责声明</NavLink>
-          <NavLink to="/legal/byok-risk">BYOK 风险提示</NavLink>
-        </nav>
-      </footer>
     </div>
   );
 }

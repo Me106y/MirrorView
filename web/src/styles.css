@@ -60,10 +60,6 @@ a {
   flex-direction: column;
 }
 
-.app-shell-resume-craft .footer-bar {
-  display: none;
-}
-
 .topbar {
   display: flex;
   justify-content: space-between;
@@ -967,6 +963,10 @@ a {
   margin: 0;
   border-radius: 10px;
   font-size: 0.83rem;
+}
+
+.cover-letter-field.is-invalid textarea {
+  border-color: var(--error);
 }
 
 .cover-letter-field textarea {
@@ -3554,55 +3554,6 @@ textarea {
   border: 1px solid rgba(200, 50, 50, 0.2);
 }
 
-.footer-bar {
-  margin-top: auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  border-top: 1px solid rgba(0, 0, 0, 0.09);
-  padding: 22px 0 12px;
-  color: var(--muted);
-  font-size: 0.9rem;
-}
-
-.footer-home-note {
-  margin: 0;
-  text-align: center;
-  color: var(--subtle);
-  font-size: 0.86rem;
-}
-
-.footer-links {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0;
-}
-
-.footer-links a {
-  position: relative;
-  color: #666666;
-  text-decoration: none;
-  transition: color 120ms ease;
-}
-
-.footer-links a:hover {
-  color: var(--ink);
-}
-
-.footer-links a + a {
-  margin-left: 10px;
-  padding-left: 18px;
-}
-
-.footer-links a + a::before {
-  content: "·";
-  position: absolute;
-  left: 6px;
-  color: #6e6e6e;
-}
-
 .mock-shell .chat-panel {
   min-height: 560px;
   display: flex;
@@ -4008,10 +3959,6 @@ textarea {
     justify-content: flex-start;
     flex-wrap: wrap;
     margin-left: 0;
-  }
-
-  .footer-links {
-    justify-content: center;
   }
 
   .resume-match-page {

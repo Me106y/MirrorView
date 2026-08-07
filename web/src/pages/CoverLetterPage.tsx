@@ -71,6 +71,7 @@ export function CoverLetterPage() {
   const [loading, setLoading] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [fileError, setFileError] = useState("");
+  const [jdError, setJdError] = useState("");
   const [copyTargetId, setCopyTargetId] = useState("");
   const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle");
   const [failedMessage, setFailedMessage] = useState("");
@@ -135,6 +136,11 @@ export function CoverLetterPage() {
 
     if (mode === "pdf" && !resumeFile) {
       setFileError("请先上传 PDF 简历，或切换到没有简历模式。");
+      return;
+    }
+
+    if (!jdText.trim()) {
+      setJdError("请先填写岗位信息。");
       return;
     }
 
@@ -310,10 +316,11 @@ export function CoverLetterPage() {
             )}
             {fileError ? <p className="cover-letter-field-error" role="alert">{fileError}</p> : null}
 
-            <label className="cover-letter-field" htmlFor="cl-jd">
+            <label className={`cover-letter-field${jdError ? " is-invalid" : ""}`} htmlFor="cl-jd">
               <span>岗位信息 <em>必填</em></span>
-              <textarea id="cl-jd" rows={6} value={jdText} onChange={(event) => setJdText(event.target.value)} placeholder="粘贴目标岗位的职责与任职要求" />
+              <textarea id="cl-jd" rows={6} value={jdText} onChange={(event) => { setJdText(event.target.value); if (jdError) setJdError(""); }} placeholder="粘贴目标岗位的职责与任职要求" aria-required="true" />
             </label>
+            {jdError ? <p className="cover-letter-field-error" role="alert">{jdError}</p> : null}
 
             <label className="cover-letter-field" htmlFor="cl-company">
               <span>公司名称 <small>可选</small></span>
@@ -344,7 +351,7 @@ export function CoverLetterPage() {
             </fieldset>
 
             {mode === "pdf" ? (
-              <button type="button" className="primary-btn cover-letter-start-btn" disabled={loading || !resumeFile} onClick={() => void sendMessage("", false, true)}>
+              <button type="button" className="primary-btn cover-letter-start-btn" disabled={loading || !resumeFile || !jdText.trim()} onClick={() => void sendMessage("", false, true)}>
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="m5 12 14-7-4 14-3-6-7-1Z" />
                   <path d="m12 13 3-3" />
