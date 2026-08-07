@@ -442,7 +442,17 @@ class AIService:
             logger.error("run_cover_letter runtime error: %s", e)
             return {
                 "error": "runtime_call_failed",
-                "message": "Model runtime call failed.",
+                "message": "模型运行失败，请稍后重试。",
+            }
+
+    def run_cover_letter_chat(self, payload, runtime: Optional[Dict[str, Any]] = None):
+        try:
+            return self._build_runtime_agent(runtime, feature="cover_letter").run_cover_letter_chat(payload)
+        except Exception as e:
+            logger.error("run_cover_letter_chat runtime error: %s", e)
+            return {
+                "error": "runtime_call_failed",
+                "message": "模型运行失败，请稍后重试。",
             }
 
     def run_job_hunt(self, payload, runtime: Optional[Dict[str, Any]] = None):

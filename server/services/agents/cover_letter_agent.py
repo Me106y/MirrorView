@@ -16,16 +16,21 @@ from utils.logger_handler import logger
 class CoverLetterAgent(BaseSkillAgent):
     SKILL_NAME = "cover-letter"
 
-    def run_cover_letter(self, payload: dict) -> dict:
-        schema = {
-            "scenario": "email|chat",
-            "language": "zh|en",
-            "cover_letter": "string",
-            "greeting_message": "string",
-            "key_points": ["string"],
-            "tailoring_notes": ["string"],
-            "assumptions": ["string"],
-        }
-        return self._invoke_json_skill("cover-letter", payload, schema)
+    RESPONSE_SCHEMA = {
+        "reply": "string",
+        "output_text": "string",
+        "scenario": "email|chat",
+        "language": "zh|en|both",
+        "cover_letter": "string",
+        "greeting_message": "string",
+        "key_points": ["string"],
+        "tailoring_notes": ["string"],
+        "assumptions": ["string"],
+    }
 
+    def run_cover_letter(self, payload: dict) -> dict:
+        return self._invoke_json_skill("cover-letter", payload, self.RESPONSE_SCHEMA)
+
+    def run_cover_letter_chat(self, payload: dict) -> dict:
+        return self._invoke_json_skill("cover-letter", payload, self.RESPONSE_SCHEMA)
 

@@ -5,6 +5,7 @@ interface ApiEnvelope<T> {
   message?: string;
   error?: string;
   reply?: string;
+  output_text?: string;
   meta?: {
     runtime_mode?: string;
     runtime_provider?: string;
@@ -57,7 +58,7 @@ async function postJson<T>(url: string, body: Record<string, unknown>): Promise<
   }
 
   if (!resp.ok) {
-    const message = data.message || data.error || `Request failed (${resp.status})`;
+    const message = data.message || data.error || `请求失败（${resp.status}）`;
     throw new Error(message);
   }
 
@@ -78,7 +79,7 @@ async function postForm<T>(url: string, body: FormData): Promise<ApiEnvelope<T>>
   }
 
   if (!resp.ok) {
-    const message = data.message || data.error || `Request failed (${resp.status})`;
+    const message = data.message || data.error || `请求失败（${resp.status}）`;
     throw new Error(message);
   }
 

@@ -1,102 +1,409 @@
-import { FormEvent, useState } from "react";
+import { ChangeEvent, DragEvent, FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { NavLink } from "react-router-dom";
-import { callCareerforgeSkill } from "../lib/api";
+import { callCareerforgeSkill, callCareerforgeSkillMultipart } from "../lib/api";
 import { useModelSettings } from "../context/ModelSettingsContext";
 import { useCareerFeatureGuard } from "../components/CareerFeatureGuard";
+
+type CoverLetterMode = "pdf" | "conversation";
+type Scenario = "email" | "chat";
+type Language = "zh" | "en" | "both";
+type MessageRole = "user" | "assistant";
+
+type ConversationMessage = {
+  id: string;
+  role: MessageRole;
+  content: string;
+  outputText?: string;
+  error?: boolean;
+};
+
+type HistoryMessage = {
+  role: MessageRole;
+  content: string;
+  output_text?: string;
+};
+
+type CoverLetterResponse = {
+  reply?: string;
+  output_text?: string;
+  result?: Record<string, unknown>;
+  error?: string;
+  message?: string;
+};
+
+const SCENARIO_OPTIONS: Array<{ value: Scenario; label: string; description: string }> = [
+  { value: "email", label: "邮件求职信", description: "完整求职信" },
+  { value: "chat", label: "打招呼短消息", description: "简短有针对性的消息" },
+];
+
+const LANGUAGE_OPTIONS: Array<{ value: Language; label: string }> = [
+  { value: "zh", label: "中文" },
+  { value: "en", label: "英文" },
+  { value: "both", label: "中英文" },
+];
+
+function createMessageId() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function isPdfFile(file: File) {
+  return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+}
+
+function asString(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
 
 export function CoverLetterPage() {
   const { settings } = useModelSettings();
   const featureGuard = useCareerFeatureGuard(settings, "求职信生成");
-  const [resumeText, setResumeText] = useState("");
+  const [mode, setMode] = useState<CoverLetterMode>("pdf");
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [jdText, setJdText] = useState("");
   const [companyName, setCompanyName] = useState("");
-  const [scenario, setScenario] = useState("email");
-  const [output, setOutput] = useState<string>("");
+  const [scenario, setScenario] = useState<Scenario>("email");
+  const [language, setLanguage] = useState<Language>("zh");
+  const [input, setInput] = useState("");
+  const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [loading, setLoading] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [fileError, setFileError] = useState("");
+  const [copyTargetId, setCopyTargetId] = useState("");
   const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle");
+  const [failedMessage, setFailedMessage] = useState("");
+  const [failedMessageId, setFailedMessageId] = useState("");
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const logEndRef = useRef<HTMLDivElement | null>(null);
 
-  const onSubmit = async (e: FormEvent) => {
-    e.preventDefault();
+  const history = useMemo<HistoryMessage[]>(
+    () => messages.map(({ role, content, outputText }) => ({
+      role,
+      content,
+      ...(outputText ? { output_text: outputText } : {}),
+    })),
+    [messages]
+  );
+
+  useEffect(() => {
+    logEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages, loading]);
+
+  const selectResumeFile = (file: File | null) => {
+    if (!file) return;
+    if (!isPdfFile(file)) {
+      setFileError("仅支持 PDF 文件。");
+      setResumeFile(null);
+      return;
+    }
+    setFileError("");
+    setResumeFile(file);
+  };
+
+  const onFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    selectResumeFile(event.target.files?.[0] ?? null);
+    event.target.value = "";
+  };
+
+  const onDropResume = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDragOver(false);
+    selectResumeFile(event.dataTransfer.files?.[0] ?? null);
+  };
+
+  const onDropzoneKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      fileInputRef.current?.click();
+    }
+  };
+
+  const addMessage = (message: Omit<ConversationMessage, "id">) => {
+    const id = createMessageId();
+    setMessages((current) => [...current, { id, ...message }]);
+    return id;
+  };
+
+  const sendMessage = async (messageOverride?: string, allowEmptyStart = false) => {
+    const message = (messageOverride ?? input).trim();
+    const canStartWithPdf = mode === "pdf" && Boolean(resumeFile) && (messages.length === 0 || allowEmptyStart) && !message;
+    if (loading || (!message && !canStartWithPdf)) return;
+
+    if (mode === "pdf" && !resumeFile) {
+      setFileError("请先上传 PDF 简历，或切换到没有简历模式。");
+      return;
+    }
+
+    if (message) {
+      addMessage({ role: "user", content: message });
+      setInput("");
+    }
     setLoading(true);
+    setFailedMessage("");
+    setFailedMessageId("");
     setCopyState("idle");
+
+    const payload = {
+      message,
+      history: JSON.stringify(history),
+      jd_text: jdText,
+      company_name: companyName,
+      scenario,
+      language,
+      resume_source: mode,
+    };
+
     try {
-      const resp = await callCareerforgeSkill(settings, "/careerforge/cover-letter", {
-        resume_text: resumeText,
-        jd_text: jdText,
-        company_name: companyName,
-        scenario,
-        language: "zh"
-      });
-      setOutput(JSON.stringify(resp.result ?? resp, null, 2));
-    } catch (err) {
-      setOutput((err as Error).message);
+      const response = mode === "pdf"
+        ? await callCareerforgeSkillMultipart<CoverLetterResponse>(
+            settings,
+            "/careerforge/cover-letter/chat",
+            payload,
+            { resume: resumeFile }
+          )
+        : await callCareerforgeSkill<CoverLetterResponse>(settings, "/careerforge/cover-letter/chat", {
+            ...payload,
+            history,
+          });
+      const result = (response.result ?? {}) as Record<string, unknown>;
+      const reply = asString(response.reply) || asString(result.reply);
+      const outputText = asString(response.output_text) || asString(result.output_text);
+      const errorMessage = asString(response.error) || asString(response.message) || asString(result.message);
+
+      if (errorMessage && !reply && !outputText) {
+        const errorId = addMessage({ role: "assistant", content: errorMessage, error: true });
+        setFailedMessage(message);
+        setFailedMessageId(errorId);
+        return;
+      }
+
+      if (reply || outputText) {
+        addMessage({ role: "assistant", content: reply, outputText });
+      }
+    } catch (error) {
+      const errorMessage = (error as Error).message || "请求失败，请稍后重试。";
+      const errorId = addMessage({ role: "assistant", content: errorMessage, error: true });
+      setFailedMessage(message);
+      setFailedMessageId(errorId);
     } finally {
       setLoading(false);
     }
   };
 
-  const onCopyOutput = async () => {
-    if (!output) return;
+  const onSubmit = (event: FormEvent) => {
+    event.preventDefault();
+    void sendMessage();
+  };
 
+  const onCopyOutput = async (messageId: string, outputText: string) => {
+    if (!outputText) return;
+    setCopyTargetId(messageId);
     try {
-      await navigator.clipboard.writeText(output);
+      await navigator.clipboard.writeText(outputText);
       setCopyState("copied");
     } catch {
       setCopyState("error");
     }
   };
 
-  const copyLabel = copyState === "copied" ? "已复制" : copyState === "error" ? "复制失败" : "复制结果";
+  const getCopyLabel = (messageId: string) => {
+    if (copyTargetId !== messageId) return "复制结果";
+    return copyState === "copied" ? "已复制" : copyState === "error" ? "复制失败" : "复制结果";
+  };
 
   return (
     <>
       {featureGuard.overlay}
-    <section className="cover-letter-page">
-      <NavLink to="/" className="back-home-btn">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M19 12H5M12 19l-7-7 7-7"/>
-        </svg>
-        返回
-      </NavLink>
-      <div className="card-grid cover-letter-layout">
-        <form className="surface" onSubmit={onSubmit}>
-          <h2>求职信撰写</h2>
-          <label htmlFor="cl-company">公司名</label>
-          <input id="cl-company" value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
-          <label htmlFor="cl-scenario">场景</label>
-          <select id="cl-scenario" value={scenario} onChange={(e) => setScenario(e.target.value)}>
-            <option value="email">email</option>
-            <option value="chat">chat</option>
-          </select>
-          <label htmlFor="cl-resume">简历文本</label>
-          <textarea id="cl-resume" rows={8} value={resumeText} onChange={(e) => setResumeText(e.target.value)} />
-          <label htmlFor="cl-jd">岗位 JD</label>
-          <textarea id="cl-jd" rows={8} value={jdText} onChange={(e) => setJdText(e.target.value)} />
-          <button className="primary-btn" disabled={loading}>
-            {loading ? "生成中..." : "生成求职信"}
-          </button>
-        </form>
-        <article className="surface output-panel">
-          <div className="cover-letter-output-head">
-            <h3>结果</h3>
-            <button
-              type="button"
-              className="cover-letter-output-copy-btn"
-              onClick={() => void onCopyOutput()}
-              disabled={!output}
-              aria-label={copyLabel}
-              title={copyLabel}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <rect x="9" y="9" width="11" height="11" rx="2" />
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-              </svg>
-            </button>
-          </div>
-          <pre>{output || "提交后将在这里显示 JSON 结果"}</pre>
-        </article>
-      </div>
-    </section>
+      <section className="cover-letter-page">
+        <NavLink to="/" className="back-home-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M19 12H5M12 19l-7-7 7-7" />
+          </svg>
+          返回
+        </NavLink>
+
+        <div className="cover-letter-workspace">
+          <aside className="surface cover-letter-materials" aria-label="求职信材料和偏好">
+            <header className="cover-letter-section-head">
+              <div>
+                <p className="cover-letter-kicker">材料</p>
+                <h1>求职信撰写</h1>
+              </div>
+              <span className="cover-letter-status-dot" aria-label="工作区已就绪" title="工作区已就绪" />
+            </header>
+
+            <div className="cover-letter-mode-switch" role="group" aria-label="简历来源">
+              <button type="button" className={mode === "pdf" ? "is-active" : ""} aria-pressed={mode === "pdf"} onClick={() => setMode("pdf")}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <path d="M14 2v6h6M8 13h8M8 17h6" />
+                </svg>
+                <span>已有简历</span>
+              </button>
+              <button type="button" className={mode === "conversation" ? "is-active" : ""} aria-pressed={mode === "conversation"} onClick={() => setMode("conversation")}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M21 11.5a8.38 8.38 0 0 1-9 8.5 8.5 8.5 0 1 1 8.5-9" />
+                  <path d="M21 4v7h-7" />
+                </svg>
+                <span>没有简历</span>
+              </button>
+            </div>
+
+            {mode === "pdf" ? (
+              <div className="cover-letter-upload-wrap">
+                <div
+                  className={`cover-letter-upload${isDragOver ? " is-dragover" : ""}${resumeFile ? " has-file" : ""}`}
+                  role="button"
+                  tabIndex={0}
+                  aria-label="上传 PDF 简历"
+                  onClick={() => fileInputRef.current?.click()}
+                  onKeyDown={onDropzoneKeyDown}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    setIsDragOver(true);
+                  }}
+                  onDragLeave={() => setIsDragOver(false)}
+                  onDrop={onDropResume}
+                >
+                  <input ref={fileInputRef} className="cover-letter-file-input" type="file" accept=".pdf,application/pdf" onChange={onFileChange} />
+                  <span className="cover-letter-upload-icon" aria-hidden="true">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 16V4M7 9l5-5 5 5" />
+                      <path d="M5 20h14" />
+                    </svg>
+                  </span>
+                  <strong>{resumeFile ? "简历文件已就绪" : "上传简历文件"}</strong>
+                  <span>{resumeFile ? resumeFile.name : "点击选择或拖拽到这里"}</span>
+                </div>
+                {resumeFile ? (
+                  <button type="button" className="cover-letter-file-clear" onClick={() => { setResumeFile(null); setFileError(""); }}>
+                    移除当前文件
+                  </button>
+                ) : null}
+              </div>
+            ) : (
+              <div className="cover-letter-conversation-note">
+                <span className="cover-letter-note-icon" aria-hidden="true">i</span>
+                <p>没有简历也可以开始。把经历、优势和职业方向告诉我，剩下的内容会在对话中逐步补齐。</p>
+              </div>
+            )}
+            {fileError ? <p className="cover-letter-field-error" role="alert">{fileError}</p> : null}
+
+            <label className="cover-letter-field" htmlFor="cl-jd">
+              <span>岗位信息 <em>必填</em></span>
+              <textarea id="cl-jd" rows={6} value={jdText} onChange={(event) => setJdText(event.target.value)} placeholder="粘贴目标岗位的职责与任职要求" />
+            </label>
+
+            <label className="cover-letter-field" htmlFor="cl-company">
+              <span>公司名称 <small>可选</small></span>
+              <input id="cl-company" value={companyName} onChange={(event) => setCompanyName(event.target.value)} placeholder="例如：MirrorView" />
+            </label>
+
+            <fieldset className="cover-letter-choice-group">
+              <legend>投递场景</legend>
+              <div className="cover-letter-segmented">
+                {SCENARIO_OPTIONS.map((option) => (
+                  <button key={option.value} type="button" className={scenario === option.value ? "is-active" : ""} aria-pressed={scenario === option.value} onClick={() => setScenario(option.value)}>
+                    <span>{option.label}</span>
+                    <small>{option.description}</small>
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+
+            <fieldset className="cover-letter-choice-group">
+              <legend>输出语言</legend>
+              <div className="cover-letter-segmented cover-letter-language-segmented">
+                {LANGUAGE_OPTIONS.map((option) => (
+                  <button key={option.value} type="button" className={language === option.value ? "is-active" : ""} aria-pressed={language === option.value} onClick={() => setLanguage(option.value)}>
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+
+            {mode === "pdf" ? (
+              <button type="button" className="primary-btn cover-letter-start-btn" disabled={loading || !resumeFile} onClick={() => void sendMessage("")}>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="m5 12 14-7-4 14-3-6-7-1Z" />
+                  <path d="m12 13 3-3" />
+                </svg>
+                {loading ? "处理中..." : "开始撰写"}
+              </button>
+            ) : null}
+          </aside>
+
+          <section className="surface cover-letter-chat-panel" aria-label="求职信对话工作区">
+            <header className="cover-letter-chat-head">
+              <div>
+                <p className="cover-letter-kicker">写作区</p>
+                <h2>写作对话</h2>
+              </div>
+              <div className="cover-letter-context-pills" aria-label="当前写作设置">
+                <span>{scenario === "email" ? "邮件求职信" : "打招呼短消息"}</span>
+                <span>{language === "zh" ? "中文" : language === "en" ? "英文" : "中英文"}</span>
+                {resumeFile ? <span>PDF 已连接</span> : null}
+              </div>
+            </header>
+
+            <div className="cover-letter-chat-log" role="log" aria-live="polite">
+              {messages.length === 0 ? (
+                <div className="cover-letter-chat-empty">
+                  <span className="cover-letter-empty-mark" aria-hidden="true">✦</span>
+                  <h3>{mode === "pdf" ? "材料准备好后开始" : "从你的经历开始"}</h3>
+                  <p>{mode === "pdf" ? "上传简历并填写岗位信息，助手会根据材料开始写作。" : "在下方输入职业身份、相关经历或想申请的方向。"}</p>
+                </div>
+              ) : null}
+
+              {messages.map((message) => (
+                <div key={message.id} className={`cover-letter-message ${message.role}${message.error ? " is-error" : ""}`}>
+                  <div className="cover-letter-message-meta">{message.role === "user" ? "你" : "助手"}</div>
+                  {message.content ? <div className="cover-letter-message-text">{message.content}</div> : null}
+                  {message.outputText ? (
+                    <div className="cover-letter-output-block">
+                      <div className="cover-letter-output-head">
+                        <span>当前版本</span>
+                        <button type="button" className="cover-letter-copy-btn" aria-label={getCopyLabel(message.id)} title={getCopyLabel(message.id)} onClick={() => void onCopyOutput(message.id, message.outputText || "")}>
+                          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <rect x="9" y="9" width="11" height="11" rx="2" />
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                          </svg>
+                        </button>
+                      </div>
+                      <pre>{message.outputText}</pre>
+                    </div>
+                  ) : null}
+                  {message.error && failedMessageId === message.id ? (
+                    <button type="button" className="cover-letter-retry-btn" onClick={() => void sendMessage(failedMessage, failedMessage === "")} disabled={loading}>
+                      重试
+                    </button>
+                  ) : null}
+                </div>
+              ))}
+              {loading ? (
+                <div className="cover-letter-message assistant is-loading">
+                  <div className="cover-letter-message-meta">助手</div>
+                  <div className="cover-letter-loading-line"><span /><span /><span /></div>
+                </div>
+              ) : null}
+              <div ref={logEndRef} />
+            </div>
+
+            <form className="cover-letter-composer" onSubmit={onSubmit}>
+              <textarea value={input} onChange={(event) => setInput(event.target.value)} rows={2} placeholder={mode === "conversation" ? "告诉我你的职业身份、经历或想修改的地方" : "告诉我想如何调整这封信"} aria-label="输入求职信修改或补充内容" />
+              <button type="submit" className="primary-btn cover-letter-send-btn" disabled={loading || !input.trim()}>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="m22 2-7 20-4-9-9-4Z" />
+                  <path d="M22 2 11 13" />
+                </svg>
+                发送
+              </button>
+            </form>
+          </section>
+        </div>
+      </section>
     </>
   );
 }

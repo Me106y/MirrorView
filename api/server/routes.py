@@ -810,6 +810,14 @@ def _coerce_request_data() -> Dict[str, Any]:
     return data
 
 
+def _cover_letter_text_field(data: Dict[str, Any], key: str, default: str = "", limit: Optional[int] = None) -> str:
+    value = data.get(key)
+    if not isinstance(value, str):
+        return default
+    value = value.strip()
+    return value[:limit] if limit else value
+
+
 def _resolve_runtime(data: Dict[str, Any]) -> Tuple[Optional[Dict[str, str]], Optional[Tuple[Dict[str, Any], int]], Dict[str, str]]:
     runtime, runtime_error = parse_runtime_payload(data)
     if runtime_error:
@@ -2103,6 +2111,79 @@ def careerforge_cover_letter():
             ],
         }
     ), 200
+
+
+@api.route('/careerforge/cover-letter/chat', methods=['POST'])
+def careerforge_cover_letter_chat():
+    data = _coerce_request_data()
+    runtime, runtime_error, meta = _resolve_runtime(data)
+    if runtime_error:
+        payload, status = runtime_error
+        return jsonify(payload), status
+
+    guard_error = _guard_high_cost_request("cover-letter", data)
+    if guard_error:
+        payload, status = guard_error
+        return jsonify(payload), status
+
+    history = data.get("history") or []
+    if isinstance(history, str):
+        try:
+            history = json.loads(history)
+        except (TypeError, ValueError):
+            history = []
+    if isinstance(history, list):
+        history = [
+            {
+                "role": item.get("role"),
+                "content": item.get("content", "")[:12000],
+                **({"output_text": item["output_text"][:20000]} if isinstance(item.get("output_text"), str) else {}),
+            }
+            for item in history
+            if isinstance(item, dict)
+            and item.get("role") in {"user", "assistant"}
+            and isinstance(item.get("content"), str)
+        ]
+    else:
+        history = []
+
+    resume_source = _cover_letter_text_field(data, "resume_source")
+    if not resume_source:
+        resume_source = "pdf" if request.files.get("resume") else "conversation"
+    if resume_source not in {"pdf", "conversation"}:
+        resume_source = "conversation"
+
+    resume_text = _extract_resume_text(data) if resume_source == "pdf" else ""
+    if resume_source == "pdf" and request.files.get("resume") and not resume_text:
+        return jsonify({"error": "resume_parse_failed", "message": "PDF 简历无法读取，请更换文件后重试。"}), 400
+    payload = {
+        "message": _cover_letter_text_field(data, "message"),
+        "history": history,
+        "resume_text": resume_text[:20000],
+        "jd_text": _cover_letter_text_field(data, "jd_text", limit=12000),
+        "company_name": _cover_letter_text_field(data, "company_name"),
+        "scenario": _cover_letter_text_field(data, "scenario", default="email"),
+        "language": _cover_letter_text_field(data, "language", default="zh"),
+        "resume_source": resume_source,
+    }
+
+    result = ai_service.run_cover_letter_chat(payload, runtime=runtime)
+    if not isinstance(result, dict):
+        result = {"error": "invalid_skill_output", "message": "模型未返回有效结果。"}
+
+    reply = result.get("reply") if isinstance(result.get("reply"), str) else ""
+    output_text = result.get("output_text") if isinstance(result.get("output_text"), str) else ""
+    status = 502 if result.get("error") else 200
+    return jsonify(
+        {
+            "skill": "cover-letter",
+            "reply": reply,
+            "output_text": output_text,
+            "result": result,
+            "meta": meta,
+            "error": str(result.get("error") or ""),
+        }
+    ), status
 
 
 @api.route('/careerforge/job-hunt', methods=['POST'])
