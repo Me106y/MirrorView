@@ -36,7 +36,7 @@ class ModelFactory:
     _DEFAULT_CONFIG = {
         "deepseek": {
             "base_url": "https://api.deepseek.com/v1",
-            "model": "deepseek-chat",
+            "model": "deepseek-v4-flash",
             "temperature": 0.7,
         },
     }
