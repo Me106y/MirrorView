@@ -318,14 +318,9 @@ export function CoverLetterPage() {
 
             <label className={`cover-letter-field${jdError ? " is-invalid" : ""}`} htmlFor="cl-jd">
               <span>岗位信息 <em>必填</em></span>
-              <textarea id="cl-jd" rows={6} value={jdText} onChange={(event) => { setJdText(event.target.value); if (jdError) setJdError(""); }} placeholder="粘贴目标岗位的职责与任职要求" aria-required="true" />
+              <textarea id="cl-jd" rows={3} value={jdText} onChange={(event) => { setJdText(event.target.value); if (jdError) setJdError(""); }} placeholder="粘贴目标岗位的职责与任职要求" aria-required="true" />
             </label>
             {jdError ? <p className="cover-letter-field-error" role="alert">{jdError}</p> : null}
-
-            <label className="cover-letter-field" htmlFor="cl-company">
-              <span>公司名称 <small>可选</small></span>
-              <input id="cl-company" value={companyName} onChange={(event) => setCompanyName(event.target.value)} placeholder="例如：MirrorView" />
-            </label>
 
             <fieldset className="cover-letter-choice-group">
               <legend>投递场景</legend>
@@ -339,16 +334,23 @@ export function CoverLetterPage() {
               </div>
             </fieldset>
 
-            <fieldset className="cover-letter-choice-group">
-              <legend>输出语言</legend>
-              <div className="cover-letter-segmented cover-letter-language-segmented">
-                {LANGUAGE_OPTIONS.map((option) => (
-                  <button key={option.value} type="button" className={language === option.value ? "is-active" : ""} aria-pressed={language === option.value} onClick={() => setLanguage(option.value)}>
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-            </fieldset>
+            <div className="cover-letter-preference-grid">
+              <label className="cover-letter-field" htmlFor="cl-company">
+                <span>公司名称 <small>可选</small></span>
+                <input id="cl-company" value={companyName} onChange={(event) => setCompanyName(event.target.value)} placeholder="例如：MirrorView" />
+              </label>
+
+              <fieldset className="cover-letter-choice-group">
+                <legend>输出语言</legend>
+                <div className="cover-letter-segmented cover-letter-language-segmented">
+                  {LANGUAGE_OPTIONS.map((option) => (
+                    <button key={option.value} type="button" className={language === option.value ? "is-active" : ""} aria-pressed={language === option.value} onClick={() => setLanguage(option.value)}>
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+            </div>
 
             {mode === "pdf" ? (
               <button type="button" className="primary-btn cover-letter-start-btn" disabled={loading || !resumeFile || !jdText.trim()} onClick={() => void sendMessage("", false, true)}>

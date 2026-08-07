@@ -60,6 +60,14 @@ a {
   flex-direction: column;
 }
 
+.app-shell-cover-letter {
+  max-width: none;
+}
+
+.app-shell-cover-letter .topbar {
+  min-height: 40px;
+}
+
 .topbar {
   display: flex;
   justify-content: space-between;
@@ -685,7 +693,7 @@ a {
 
 .cover-letter-page {
   position: relative;
-  padding: 12px 0 56px;
+  padding: 12px 0 12px;
 }
 
 .cover-letter-page > .back-home-btn {
@@ -697,11 +705,13 @@ a {
 }
 
 .cover-letter-workspace {
-  max-width: 1120px;
+  width: 100%;
+  max-width: none;
   margin: 0 auto;
-  padding-left: 76px;
+  padding: 0 24px 0 76px;
+  min-height: calc(100dvh - 132px);
   display: grid;
-  grid-template-columns: minmax(280px, 0.39fr) minmax(0, 1fr);
+  grid-template-columns: minmax(360px, 0.42fr) minmax(0, 1fr);
   gap: 18px;
   align-items: stretch;
 }
@@ -711,11 +721,14 @@ a {
   min-width: 0;
 }
 
+.cover-letter-page .cover-letter-materials {
+  padding: 14px;
+}
+
 .cover-letter-materials {
-  padding: 22px;
   display: flex;
   flex-direction: column;
-  gap: 17px;
+  gap: 10px;
 }
 
 .cover-letter-section-head,
@@ -774,7 +787,7 @@ a {
 .cover-letter-mode-switch button,
 .cover-letter-segmented button {
   min-width: 0;
-  min-height: 42px;
+  min-height: 38px;
   padding: 8px 9px;
   border: 1px solid transparent;
   border-radius: 9px;
@@ -814,8 +827,8 @@ a {
 }
 
 .cover-letter-upload {
-  min-height: 132px;
-  padding: 18px 14px;
+  min-height: 96px;
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -929,6 +942,13 @@ a {
   line-height: 1.55;
 }
 
+.cover-letter-preference-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  align-items: start;
+}
+
 .cover-letter-field,
 .cover-letter-choice-group {
   display: grid;
@@ -970,7 +990,7 @@ a {
 }
 
 .cover-letter-field textarea {
-  min-height: 132px;
+  min-height: 88px;
   line-height: 1.55;
   resize: none;
 }
@@ -1004,6 +1024,7 @@ a {
 .cover-letter-language-segmented button {
   display: block;
   min-height: 40px;
+  padding: 8px 4px;
   text-align: center;
 }
 
@@ -2237,8 +2258,13 @@ a {
 
   .cover-letter-workspace {
     grid-template-columns: 1fr;
-    padding-left: 0;
+    padding: 0 16px;
     gap: 12px;
+    min-height: 0;
+  }
+
+  .cover-letter-preference-grid {
+    grid-template-columns: 1fr;
   }
 
   .cover-letter-materials,
