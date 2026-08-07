@@ -687,6 +687,70 @@ a {
   z-index: 2;
 }
 
+.cover-letter-page {
+  position: relative;
+  padding: 12px 0 48px;
+}
+
+.cover-letter-page > .back-home-btn {
+  position: absolute;
+  top: 12px;
+  left: 0;
+  margin-bottom: 0;
+  z-index: 2;
+}
+
+.cover-letter-layout {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding-left: 76px;
+  align-items: start;
+}
+
+.cover-letter-output-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.cover-letter-output-head h3 {
+  margin: 0;
+}
+
+.cover-letter-output-copy-btn {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.cover-letter-output-copy-btn:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.cover-letter-output-copy-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.cover-letter-output-copy-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
 @media (max-width: 1199px) {
   .resume-craft-page > .back-home-btn {
     left: 0;
@@ -1638,6 +1702,17 @@ a {
     top: 0;
     left: 0;
     margin-bottom: 8px;
+  }
+
+  .cover-letter-page > .back-home-btn {
+    position: relative;
+    top: 0;
+    left: 0;
+    margin-bottom: 12px;
+  }
+
+  .cover-letter-layout {
+    padding-left: 0;
   }
 }
 
@@ -2628,7 +2703,7 @@ textarea {
   transform: none;
 }
 
-.output-panel pre {
+.cover-letter-layout .output-panel pre {
   margin: 0;
   white-space: pre-wrap;
   word-break: break-word;
@@ -2636,7 +2711,7 @@ textarea {
   border: 1px dashed var(--line);
   border-radius: 12px;
   padding: 12px;
-  min-height: 280px;
+  min-height: 420px;
 }
 
 .single-panel {
