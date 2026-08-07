@@ -713,8 +713,6 @@ a {
 .cover-letter-materials,
 .cover-letter-chat-panel {
   min-width: 0;
-  height: min(780px, calc(100dvh - 132px));
-  min-height: 0;
 }
 
 .cover-letter-materials {
@@ -722,7 +720,6 @@ a {
   display: flex;
   flex-direction: column;
   gap: 17px;
-  overflow-y: auto;
 }
 
 .cover-letter-section-head,
@@ -1028,13 +1025,10 @@ a {
 .cover-letter-start-btn {
   width: 100%;
   margin-top: auto;
-  flex: 0 0 auto;
-  position: sticky;
-  bottom: 0;
-  z-index: 1;
 }
 
 .cover-letter-chat-panel {
+  min-height: 0;
   padding: 22px;
   display: flex;
   flex-direction: column;
@@ -1059,7 +1053,7 @@ a {
 }
 
 .cover-letter-chat-log {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-height: 0;
   padding: 18px;
   overflow-y: auto;
@@ -2250,6 +2244,11 @@ a {
   .cover-letter-materials,
   .cover-letter-chat-panel {
     padding: 16px;
+  }
+
+  .cover-letter-chat-panel {
+    height: min(780px, calc(100dvh - 132px));
+    min-height: 0;
   }
 
   .cover-letter-chat-log {
