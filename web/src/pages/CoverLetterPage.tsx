@@ -170,7 +170,7 @@ export function CoverLetterPage() {
       const result = (response.result ?? {}) as Record<string, unknown>;
       const reply = asString(response.reply) || asString(result.reply);
       const outputText = asString(response.output_text) || asString(result.output_text);
-      const errorMessage = asString(response.error) || asString(response.message) || asString(result.message);
+      const errorMessage = asString(response.message) || asString(result.message) || asString(response.error);
 
       if (errorMessage && !reply && !outputText) {
         const errorId = addMessage({ role: "assistant", content: errorMessage, error: true });

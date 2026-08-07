@@ -2173,7 +2173,6 @@ def careerforge_cover_letter_chat():
 
     reply = result.get("reply") if isinstance(result.get("reply"), str) else ""
     output_text = result.get("output_text") if isinstance(result.get("output_text"), str) else ""
-    status = 502 if result.get("error") else 200
     return jsonify(
         {
             "skill": "cover-letter",
@@ -2181,9 +2180,10 @@ def careerforge_cover_letter_chat():
             "output_text": output_text,
             "result": result,
             "meta": meta,
+            "message": str(result.get("message") or ""),
             "error": str(result.get("error") or ""),
         }
-    ), status
+    ), 200
 
 
 @api.route('/careerforge/job-hunt', methods=['POST'])

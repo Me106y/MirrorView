@@ -74,7 +74,7 @@ def test_cover_letter_chat_infers_pdf_source_for_multipart(monkeypatch):
     assert captured["resume_text"] == "候选人有数据分析经验"
 
 
-def test_cover_letter_chat_returns_bad_gateway_for_agent_error(monkeypatch):
+def test_cover_letter_chat_keeps_agent_error_as_structured_feedback(monkeypatch):
     _disable_guards()
     monkeypatch.setattr(
         routes.ai_service,
@@ -87,5 +87,6 @@ def test_cover_letter_chat_returns_bad_gateway_for_agent_error(monkeypatch):
         json={"message": "开始", "runtime": {"mode": "platform"}},
     )
 
-    assert response.status_code == 502
+    assert response.status_code == 200
     assert response.get_json()["error"] == "runtime_call_failed"
+    assert response.get_json()["message"] == "模型运行失败。"
