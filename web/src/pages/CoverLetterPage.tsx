@@ -199,6 +199,13 @@ export function CoverLetterPage() {
     void sendMessage();
   };
 
+  const onComposerKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+      event.preventDefault();
+      void sendMessage();
+    }
+  };
+
   const onCopyOutput = async (messageId: string, outputText: string) => {
     if (!outputText) return;
     setCopyTargetId(messageId);
@@ -246,8 +253,8 @@ export function CoverLetterPage() {
               </button>
               <button type="button" className={mode === "conversation" ? "is-active" : ""} aria-pressed={mode === "conversation"} onClick={() => setMode("conversation")}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M21 11.5a8.38 8.38 0 0 1-9 8.5 8.5 8.5 0 1 1 8.5-9" />
-                  <path d="M21 4v7h-7" />
+                  <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+                  <circle cx="12" cy="7" r="4" />
                 </svg>
                 <span>没有简历</span>
               </button>
@@ -403,7 +410,7 @@ export function CoverLetterPage() {
             </div>
 
             <form className="cover-letter-composer" onSubmit={onSubmit}>
-              <textarea value={input} onChange={(event) => setInput(event.target.value)} rows={2} placeholder={mode === "conversation" ? "告诉我你的职业身份、经历或想修改的地方" : "告诉我想如何调整这封信"} aria-label="输入求职信修改或补充内容" />
+              <textarea value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={onComposerKeyDown} rows={2} placeholder={mode === "conversation" ? "告诉我你的职业身份、经历或想修改的地方" : "告诉我想如何调整这封信"} aria-label="输入求职信修改或补充内容" />
               <button type="submit" className="primary-btn cover-letter-send-btn" disabled={loading || !input.trim()}>
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="m22 2-7 20-4-9-9-4Z" />
