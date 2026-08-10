@@ -23,18 +23,18 @@ const ENTRIES = [
     tone: "tone-letter"
   },
   {
-    to: "/mock-interview",
-    title: "模拟面试",
-    desc: "AI 模拟真实面试场景，提供即时反馈与改进建议。",
-    icon: "MI",
-    tone: "tone-interview"
-  },
-  {
     to: "/job-hunt",
     title: "岗位搜索",
     desc: "智能发现匹配职位，精准推荐符合您技能的机会。",
     icon: "JH",
     tone: "tone-job"
+  },
+  {
+    to: "/mock-interview",
+    title: "模拟面试",
+    desc: "AI 模拟真实面试场景，提供即时反馈与改进建议。",
+    icon: "MI",
+    tone: "tone-interview"
   },
 ];
 
