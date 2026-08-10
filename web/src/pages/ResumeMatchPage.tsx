@@ -228,12 +228,6 @@ export function ResumeMatchPage() {
   if (showReport && result.kind === "report") {
     return (
       <section className="resume-match-report-page">
-        <NavLink to="/" className="back-home-btn">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M19 12H5M12 19l-7-7 7-7"/>
-          </svg>
-          返回
-        </NavLink>
         <div className="resume-match-report-head">
           <h2>匹配分析报告</h2>
           <div className="resume-match-report-actions">
@@ -274,12 +268,6 @@ export function ResumeMatchPage() {
 
   return (
     <section className="resume-match-page">
-      <NavLink to="/" className="back-home-btn">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M19 12H5M12 19l-7-7 7-7"/>
-        </svg>
-        返回
-      </NavLink>
       {featureGuard.overlay}
       <div className="resume-match-layout">
         <form className="surface resume-match-form" onSubmit={onSubmit}>

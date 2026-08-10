@@ -1138,12 +1138,6 @@ export function ResumeCraftPage() {
     <>
       {featureGuard.overlay}
     <section className={`resume-craft-page ${step === 3 ? "is-chat-page" : ""} ${step === 3 && resumeView === "result" ? "is-result-page" : ""} ${step === 1 ? "is-step1-page" : ""} ${step === 2 ? "is-step2-page" : ""}`}>
-      <NavLink to="/" className="back-home-btn">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M19 12H5M12 19l-7-7 7-7"/>
-        </svg>
-        返回
-      </NavLink>
       <div className="resume-craft-layout">
         <div className={`resume-craft-wizard-viewport ${step === 3 ? "is-chat-viewport" : ""} ${step === 3 && resumeView === "result" ? "is-result-viewport" : ""} ${step === 1 ? "is-step1-viewport" : ""} ${step === 2 ? "is-step2-viewport" : ""}`} style={step === 3 && resumeView !== "result" && viewportHeight ? { height: `${viewportHeight}px` } : undefined}>
           <div className="resume-craft-wizard-track" ref={wizardTrackRef} style={{ transform: `translateX(-${(step - 1) * STEP_SHIFT}%)` }}>
