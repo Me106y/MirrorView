@@ -3418,6 +3418,17 @@ textarea {
 
 .job-hunt-fields-grid > .job-hunt-field--role {
   grid-column: 1 / -1;
+  grid-row: 2;
+}
+
+.job-hunt-fields-grid > .job-hunt-field--resume {
+  grid-column: 1 / span 3;
+  grid-row: 1;
+}
+
+.job-hunt-fields-grid > .job-hunt-field--jd {
+  grid-column: 4 / -1;
+  grid-row: 1;
 }
 
 .job-hunt-upload > span:last-child {
@@ -3772,6 +3783,13 @@ a.job-hunt-title:hover {
   .job-hunt-page .job-hunt-fields-grid > .job-hunt-choice,
   .job-hunt-page .job-hunt-fields-grid > .job-hunt-choice--wide {
     grid-column: 1;
+  }
+
+  .job-hunt-page .job-hunt-fields-grid > .job-hunt-field--resume,
+  .job-hunt-page .job-hunt-fields-grid > .job-hunt-field--jd,
+  .job-hunt-page .job-hunt-fields-grid > .job-hunt-field--role {
+    grid-column: 1;
+    grid-row: auto;
   }
 }
 

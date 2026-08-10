@@ -344,7 +344,7 @@ export function JobHuntPage() {
 
             <div className="job-hunt-fields-grid">
               {mode === "pdf" ? (
-                <div className="job-hunt-upload-wrap">
+                <div className="job-hunt-upload-wrap job-hunt-field--resume">
                   <div
                     className={`job-hunt-upload${isDragOver ? " is-dragover" : ""}${resumeFile ? " has-file" : ""}`}
                     role="button"
@@ -379,7 +379,7 @@ export function JobHuntPage() {
                 <input value={targetRole} onChange={(event) => setTargetRole(event.target.value)} placeholder="例如：数据分析师 / 前端工程师" />
               </label>
 
-              <label className="job-hunt-field">
+              <label className="job-hunt-field job-hunt-field--jd">
                 <span>岗位 JD <small>可选</small></span>
                 <textarea rows={3} value={targetJd} onChange={(event) => setTargetJd(event.target.value)} placeholder="粘贴目标岗位描述，帮助 AI 更精准匹配" />
               </label>
