@@ -64,5 +64,4 @@ out.pcm
 !.env.example
 /test-output/vercel-login-page.png
 /.python-version
-/pyproject.toml
-/uv.lock
+
