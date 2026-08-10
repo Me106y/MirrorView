@@ -67,8 +67,10 @@ export function CoverLetterPage() {
   const [scenario, setScenario] = useState<Scenario>("email");
   const [language, setLanguage] = useState<Language>("zh");
   const [input, setInput] = useState("");
-  const [messages, setMessages] = useState<ConversationMessage[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [messagesByMode, setMessagesByMode] = useState<Record<CoverLetterMode, ConversationMessage[]>>({ pdf: [], conversation: [] });
+  const messages = messagesByMode[mode];
+  const [loadingByMode, setLoadingByMode] = useState<Record<CoverLetterMode, boolean>>({ pdf: false, conversation: false });
+  const loading = loadingByMode[mode];
   const [isDragOver, setIsDragOver] = useState(false);
   const [fileError, setFileError] = useState("");
   const [jdError, setJdError] = useState("");
@@ -125,8 +127,16 @@ export function CoverLetterPage() {
 
   const addMessage = (message: Omit<ConversationMessage, "id">) => {
     const id = createMessageId();
-    setMessages((current) => [...current, { id, ...message }]);
+    setMessagesByMode((current) => ({ ...current, [mode]: [...(current[mode] ?? []), { id, ...message }] }));
     return id;
+  };
+  const switchMode = (nextMode: CoverLetterMode) => {
+    if (nextMode === mode) return;
+    setMode(nextMode);
+    setFailedMessage("");
+    setFailedMessageId("");
+    setCopyTargetId("");
+    setCopyState("idle");
   };
 
   const sendMessage = async (messageOverride?: string, allowEmptyStart = false, fresh = false) => {
@@ -145,7 +155,7 @@ export function CoverLetterPage() {
     }
 
     if (fresh) {
-      setMessages([]);
+      setMessagesByMode((current) => ({ ...current, [mode]: [] }));
       setFailedMessage("");
       setFailedMessageId("");
       setCopyTargetId("");
@@ -157,7 +167,7 @@ export function CoverLetterPage() {
       addMessage({ role: "user", content: message });
       setInput("");
     }
-    setLoading(true);
+    setLoadingByMode((current) => ({ ...current, [mode]: true }));
     setFailedMessage("");
     setFailedMessageId("");
     setCopyState("idle");
@@ -206,7 +216,7 @@ export function CoverLetterPage() {
       setFailedMessage(message);
       setFailedMessageId(errorId);
     } finally {
-      setLoading(false);
+      setLoadingByMode((current) => ({ ...current, [mode]: false }));
     }
   };
 
@@ -253,14 +263,14 @@ export function CoverLetterPage() {
             </header>
 
             <div className="cover-letter-mode-switch" role="group" aria-label="简历来源">
-              <button type="button" className={mode === "pdf" ? "is-active" : ""} aria-pressed={mode === "pdf"} onClick={() => setMode("pdf")}>
+              <button type="button" className={mode === "pdf" ? "is-active" : ""} aria-pressed={mode === "pdf"} onClick={() => switchMode("pdf")}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                   <path d="M14 2v6h6M8 13h8M8 17h6" />
                 </svg>
                 <span>已有简历</span>
               </button>
-              <button type="button" className={mode === "conversation" ? "is-active" : ""} aria-pressed={mode === "conversation"} onClick={() => setMode("conversation")}>
+              <button type="button" className={mode === "conversation" ? "is-active" : ""} aria-pressed={mode === "conversation"} onClick={() => switchMode("conversation")}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
                   <circle cx="12" cy="7" r="4" />
