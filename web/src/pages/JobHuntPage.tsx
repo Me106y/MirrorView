@@ -401,17 +401,17 @@ export function JobHuntPage() {
                 </div>
               </fieldset>
 
-              <label className="job-hunt-field">
+              <label className="job-hunt-field job-hunt-field--city">
                 <span>目标城市 <small>可多填，用逗号分隔</small></span>
                 <input value={citiesText} onChange={(event) => setCitiesText(event.target.value)} placeholder="例如：上海, 北京, 深圳" />
               </label>
 
-              <label className="job-hunt-field">
+              <label className="job-hunt-field job-hunt-field--salary">
                 <span>期望薪资 <small>可选</small></span>
                 <input value={salaryRange} onChange={(event) => setSalaryRange(event.target.value)} placeholder="例如：30-50K / 80-120 万" />
               </label>
 
-              <fieldset className="job-hunt-choice">
+              <fieldset className="job-hunt-choice job-hunt-choice--requirements">
                 <legend>硬性要求 <small>可多选</small></legend>
                 <div className="job-hunt-chips">
                   {REQUIREMENT_OPTIONS.map((option) => (
@@ -446,7 +446,7 @@ export function JobHuntPage() {
                 </div>
               </fieldset>
 
-              <fieldset className="job-hunt-choice">
+              <fieldset className="job-hunt-choice job-hunt-choice--platforms">
                 <legend>搜索平台 <small>可多选</small></legend>
                 <p className="job-hunt-platform-hint">
                   {regions.length ? `已按 ${regions.join("、")} 推荐` : "选择国家后会补充当地常用平台"}

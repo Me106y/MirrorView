@@ -3390,16 +3390,9 @@ textarea {
   gap: 10px 14px;
 }
 
-.job-hunt-fields-grid > .job-hunt-upload-wrap,
 .job-hunt-fields-grid > .job-hunt-field,
 .job-hunt-fields-grid > .job-hunt-choice {
   min-width: 0;
-}
-
-.job-hunt-fields-grid > .job-hunt-upload-wrap,
-.job-hunt-fields-grid > .job-hunt-field:nth-child(2),
-.job-hunt-fields-grid > .job-hunt-field:nth-child(3) {
-  grid-column: span 2;
 }
 
 .job-hunt-fields-grid > .job-hunt-field--wide {
@@ -3410,25 +3403,62 @@ textarea {
   grid-column: 1 / -1;
 }
 
-.job-hunt-fields-grid > .job-hunt-field:nth-last-of-type(2),
-.job-hunt-fields-grid > .job-hunt-field:nth-last-of-type(1),
-.job-hunt-fields-grid > .job-hunt-choice:not(.job-hunt-choice--wide) {
-  grid-column: span 3;
-}
-
 .job-hunt-fields-grid > .job-hunt-field--role {
-  grid-column: 1 / -1;
   grid-row: 2;
+  grid-column: 1 / span 2;
 }
 
 .job-hunt-fields-grid > .job-hunt-field--resume {
   grid-column: 1 / span 3;
   grid-row: 1;
+  margin: 0;
+  min-height: 101px;
 }
 
 .job-hunt-fields-grid > .job-hunt-field--jd {
   grid-column: 4 / -1;
   grid-row: 1;
+  height: 101px;
+  margin: 0;
+}
+
+.job-hunt-fields-grid > .job-hunt-field--city {
+  grid-column: 3 / span 2;
+  grid-row: 2;
+}
+
+.job-hunt-fields-grid > .job-hunt-field--salary {
+  grid-column: 5 / span 2;
+  grid-row: 2;
+}
+
+.job-hunt-fields-grid > .job-hunt-field--role,
+.job-hunt-fields-grid > .job-hunt-field--city,
+.job-hunt-fields-grid > .job-hunt-field--salary {
+  margin: 0;
+}
+
+.job-hunt-fields-grid > .job-hunt-choice--wide {
+  grid-row: 3;
+}
+
+.job-hunt-fields-grid > .job-hunt-choice--requirements {
+  grid-column: 1 / span 3;
+  grid-row: 4;
+}
+
+.job-hunt-fields-grid > .job-hunt-choice--platforms {
+  grid-column: 4 / -1;
+  grid-row: 4;
+}
+
+.job-hunt-fields-grid > .job-hunt-field--jd textarea {
+  min-height: 76px;
+}
+
+.job-hunt-fields-grid > .job-hunt-field--resume .job-hunt-upload {
+  min-height: 101px;
+  box-sizing: border-box;
 }
 
 .job-hunt-upload > span:last-child {
@@ -3783,6 +3813,7 @@ a.job-hunt-title:hover {
   .job-hunt-page .job-hunt-fields-grid > .job-hunt-choice,
   .job-hunt-page .job-hunt-fields-grid > .job-hunt-choice--wide {
     grid-column: 1;
+    grid-row: auto;
   }
 
   .job-hunt-page .job-hunt-fields-grid > .job-hunt-field--resume,
