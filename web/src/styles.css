@@ -3265,6 +3265,445 @@ textarea {
   min-height: 220px;
 }
 
+
+/* ─── Job Hunt ─── */
+.job-hunt-page {
+  padding: 12px 0 32px;
+}
+
+.job-hunt-layout {
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+.job-hunt-form {
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.job-hunt-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.job-hunt-head h2 {
+  margin: 0;
+  color: var(--text-heading);
+  font-size: 1.25rem;
+  line-height: 1.25;
+}
+
+.job-hunt-kicker {
+  margin: 0 0 6px;
+  color: var(--accent-strong);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.job-hunt-guide {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
+.job-hunt-mode-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #f6f7f5;
+}
+
+.job-hunt-mode-switch button {
+  min-height: 40px;
+  padding: 8px 9px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
+}
+
+.job-hunt-mode-switch button.is-active {
+  border-color: rgba(79, 123, 163, 0.22);
+  background: var(--surface);
+  color: var(--accent-strong);
+  box-shadow: 0 2px 7px rgba(41, 50, 57, 0.08);
+}
+
+.job-hunt-upload-wrap {
+  display: grid;
+  gap: 7px;
+}
+
+.job-hunt-upload {
+  min-height: 108px;
+  padding: 16px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px dashed rgba(79, 123, 163, 0.38);
+  border-radius: 14px;
+  background: #f8fbfd;
+  color: var(--text-muted);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+
+.job-hunt-upload:hover,
+.job-hunt-upload.is-dragover {
+  border-color: var(--accent);
+  background: #f0f6fa;
+}
+
+.job-hunt-upload.has-file {
+  border-style: solid;
+  border-color: rgba(79, 155, 115, 0.48);
+  background: #f4faf6;
+}
+
+.job-hunt-upload strong {
+  color: var(--text-heading);
+  font-size: 0.9rem;
+}
+
+.job-hunt-upload > span:last-child {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.job-hunt-file-input {
+  display: none;
+}
+
+.job-hunt-file-clear {
+  justify-self: start;
+  min-height: 34px;
+  padding: 7px 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+
+.job-hunt-file-clear:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.job-hunt-field {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.job-hunt-field > span,
+.job-hunt-choice legend {
+  color: var(--text-body);
+  font-size: 0.81rem;
+  font-weight: 700;
+}
+
+.job-hunt-field em,
+.job-hunt-field small,
+.job-hunt-choice small {
+  margin-left: 5px;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 500;
+}
+
+.job-hunt-field em {
+  color: var(--accent-strong);
+}
+
+.job-hunt-field input,
+.job-hunt-field textarea {
+  margin: 0;
+  border-radius: 10px;
+  font-size: 0.83rem;
+}
+
+.job-hunt-field textarea {
+  min-height: 84px;
+  line-height: 1.55;
+  resize: none;
+}
+
+.job-hunt-choice {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.job-hunt-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.job-hunt-chips button {
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-body);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.job-hunt-chips button:hover {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
+.job-hunt-chips button.is-active {
+  border-color: rgba(79, 123, 163, 0.28);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.job-hunt-chip-add {
+  display: inline-flex;
+  align-items: center;
+}
+
+.job-hunt-chip-add input {
+  width: 132px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px dashed rgba(79, 123, 163, 0.4);
+  border-radius: 999px;
+  background: #f8fbfd;
+  font-size: 0.78rem;
+}
+
+.job-hunt-field-error {
+  margin: 0;
+  color: var(--error);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.job-hunt-submit {
+  width: 100%;
+  margin: 0;
+}
+
+.job-hunt-error {
+  margin-top: 14px;
+  padding: 16px;
+  color: var(--error);
+}
+
+.job-hunt-error h3 {
+  margin: 0 0 6px;
+  font-size: 1rem;
+}
+
+.job-hunt-error p {
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
+/* Report */
+.job-hunt-report-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.job-hunt-report-head h2 {
+  margin: 0;
+  color: var(--text-heading);
+  font-size: 1.25rem;
+  line-height: 1.25;
+}
+
+.job-hunt-report-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.job-hunt-report-actions .primary-btn,
+.job-hunt-report-actions .ghost-btn {
+  margin-top: 0;
+}
+
+.job-hunt-summary {
+  max-width: 75ch;
+  margin: 0 0 14px;
+  color: var(--text-body);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.job-hunt-strategy,
+.job-hunt-next,
+.job-hunt-group {
+  margin-bottom: 14px;
+  padding: 16px;
+}
+
+.job-hunt-strategy h3,
+.job-hunt-next h3,
+.job-hunt-group h3 {
+  margin: 0 0 10px;
+  color: var(--text-heading);
+  font-size: 0.95rem;
+}
+
+.job-hunt-strategy ul,
+.job-hunt-next ul {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-body);
+  font-size: 0.86rem;
+  line-height: 1.6;
+}
+
+.job-hunt-strategy li + li,
+.job-hunt-next li + li {
+  margin-top: 4px;
+}
+
+.job-hunt-group--green h3 { color: #2e7d32; }
+.job-hunt-group--yellow h3 { color: #8a6d1f; }
+.job-hunt-group--orange h3 { color: #b45309; }
+
+.job-hunt-level-mark {
+  margin-right: 6px;
+}
+
+.job-hunt-count {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(41, 50, 57, 0.08);
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.job-hunt-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 10px;
+}
+
+.job-hunt-item {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.job-hunt-group--green .job-hunt-item { border-color: rgba(46, 125, 50, 0.2); background: #f4faf5; }
+.job-hunt-group--yellow .job-hunt-item { border-color: rgba(138, 109, 31, 0.2); background: #fbf9f0; }
+.job-hunt-group--orange .job-hunt-item { border-color: rgba(180, 83, 9, 0.2); background: #fbf5ee; }
+
+.job-hunt-title {
+  color: var(--accent-strong);
+  font-size: 0.92rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+a.job-hunt-title:hover {
+  text-decoration: underline;
+}
+
+.job-hunt-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-top: 6px;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.job-hunt-salary {
+  color: var(--text-body);
+  font-weight: 600;
+}
+
+.job-hunt-reason {
+  margin: 8px 0 0;
+  color: var(--text-body);
+  font-size: 0.84rem;
+  line-height: 1.6;
+}
+
+.job-hunt-assumptions {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+@media (max-width: 767px) {
+  .job-hunt-layout {
+    padding: 0 16px;
+  }
+
+  .job-hunt-form {
+    padding: 16px;
+  }
+
+  .job-hunt-report-head {
+    flex-direction: column;
+  }
+
+  .job-hunt-report-actions {
+    width: 100%;
+  }
+
+  .job-hunt-report-actions .primary-btn,
+  .job-hunt-report-actions .ghost-btn {
+    flex: 1;
+  }
+}
+
+
 /* ─── Settings Modal ─── */
 .settings-overlay {
   position: fixed;

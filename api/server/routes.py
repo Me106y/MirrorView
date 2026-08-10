@@ -845,6 +845,30 @@ def _to_score_int(value: Any) -> Optional[int]:
     return max(0, min(100, score))
 
 
+def _normalize_list_field(value: Any) -> List[str]:
+    """
+    Normalize a job-hunt list field (regions/cities/requirements/platforms)
+    from a list, a JSON-encoded string, or a comma-separated string.
+    """
+    if isinstance(value, list):
+        items = [str(item or "").strip() for item in value]
+    elif isinstance(value, str):
+        raw = value.strip()
+        if not raw:
+            return []
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, list):
+                items = [str(item or "").strip() for item in parsed]
+            else:
+                items = [item.strip() for item in raw.split(",") if item.strip()]
+        except (TypeError, ValueError):
+            items = [item.strip() for item in raw.split(",") if item.strip()]
+    else:
+        return []
+    return [item for item in items if item]
+
+
 def _normalize_resume_match_list(value: Any) -> List[str]:
     if isinstance(value, list):
         items = [str(item or "").strip() for item in value]
@@ -2200,20 +2224,11 @@ def careerforge_job_hunt():
     target_role = (data.get('target_role') or data.get('job_intention') or '').strip()
     target_jd = (data.get('target_jd') or data.get('jd_text') or '').strip()
     work_experience = (data.get('work_experience') or '').strip()
-    target_regions = data.get('target_regions') or data.get('target_region') or []
-    target_cities = data.get('target_cities') or data.get('target_city') or []
+    target_regions = _normalize_list_field(data.get('target_regions') or data.get('target_region') or [])
+    target_cities = _normalize_list_field(data.get('target_cities') or data.get('target_city') or [])
     salary_range = (data.get('salary_range') or '').strip()
-    hard_requirements = data.get('hard_requirements') or []
-    platforms = data.get('platforms') or []
-
-    if isinstance(target_regions, str):
-        target_regions = [target_regions]
-    if isinstance(target_cities, str):
-        target_cities = [target_cities]
-    if isinstance(hard_requirements, str):
-        hard_requirements = [hard_requirements]
-    if isinstance(platforms, str):
-        platforms = [platforms]
+    hard_requirements = _normalize_list_field(data.get('hard_requirements') or [])
+    platforms = _normalize_list_field(data.get('platforms') or [])
 
     if not target_role and not resume_text:
         return jsonify({'message': 'Please provide target_role or resume_text.'}), 400
