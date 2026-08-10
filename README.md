@@ -76,9 +76,10 @@ The Job Search entry is visible in the product navigation, but the current versi
 |---|---|---|
 | Resume Match | Available | Analyzes a PDF resume against a target role and JD. |
 | AI Resume Craft | Available | Guides resume creation and supports HTML/PDF output. |
-| Cover Letter | Planned | Generates email or recruitment-chat application copy. |
-| Text Mock Interview | Planned | Runs a context-aware interview practice conversation. |
+| Cover Letter | Available | Generates email or recruitment-chat application copy. |
 | Job Search | Planned | Navigation placeholder; live job sources are not connected yet. |
+| Text Mock Interview | Planned | Runs a context-aware interview practice conversation. |
+
 
 ## Important Notes
 
