@@ -374,7 +374,7 @@ export function JobHuntPage() {
                 </label>
               )}
 
-              <label className="job-hunt-field">
+              <label className="job-hunt-field job-hunt-field--role">
                 <span>岗位方向 <em>必填</em></span>
                 <input value={targetRole} onChange={(event) => setTargetRole(event.target.value)} placeholder="例如：数据分析师 / 前端工程师" />
               </label>

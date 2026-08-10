@@ -3416,6 +3416,10 @@ textarea {
   grid-column: span 3;
 }
 
+.job-hunt-fields-grid > .job-hunt-field--role {
+  grid-column: 1 / -1;
+}
+
 .job-hunt-upload > span:last-child {
   max-width: 100%;
   overflow: hidden;
