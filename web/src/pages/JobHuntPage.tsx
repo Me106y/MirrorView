@@ -1,4 +1,4 @@
-import { ChangeEvent, DragEvent, FormEvent, KeyboardEvent, useMemo, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { callCareerforgeSkill, callCareerforgeSkillMultipart } from "../lib/api";
 import { useModelSettings } from "../context/ModelSettingsContext";
 import { useCareerFeatureGuard } from "../components/CareerFeatureGuard";
@@ -30,7 +30,20 @@ type ReportState =
 
 const REGION_OPTIONS = ["中国大陆", "澳大利亚", "新西兰", "美国", "加拿大", "英国", "欧洲", "日本", "韩国", "新加坡", "东南亚", "其他"];
 const REQUIREMENT_OPTIONS = ["外企", "国企", "民企", "大厂", "创业公司", "双休", "弹性工作", "远程办公", "签证担保"];
-const PLATFORM_OPTIONS = ["LinkedIn", "Indeed", "Seek", "Boss直聘", "拉勾", "猎聘", "其他"];
+const GLOBAL_PLATFORM_OPTIONS = ["LinkedIn", "Indeed", "Google Jobs", "Glassdoor"];
+const REGION_PLATFORM_OPTIONS: Record<string, string[]> = {
+  中国大陆: ["Boss直聘", "猎聘", "拉勾", "智联招聘", "前程无忧", "牛客网内推帖", "V2EX 招聘帖", "微信公众号招聘"],
+  澳大利亚: ["Seek Australia", "Jora", "Indeed Australia", "Facebook Jobs / Groups"],
+  新西兰: ["Seek New Zealand", "Trade Me Jobs", "Indeed New Zealand"],
+  美国: ["ZipRecruiter", "Monster", "Dice", "USAJobs", "Wellfound"],
+  加拿大: ["ZipRecruiter", "Monster", "Dice", "Job Bank", "Workopolis", "Wellfound"],
+  英国: ["Reed", "Totaljobs", "CV-Library", "Indeed UK"],
+  欧洲: ["StepStone", "XING"],
+  日本: ["Daijob", "GaijinPot Jobs", "Rikunabi"],
+  韩国: ["Saramin", "JobKorea", "WorkNet", "People'n Job"],
+  新加坡: ["MyCareersFuture", "JobStreet Singapore"],
+  东南亚: ["JobStreet", "JobsDB"],
+};
 
 const MATCH_META: Record<string, { label: string; mark: string }> = {
   green: { label: "高度匹配", mark: "🟢" },
@@ -74,6 +87,18 @@ export function JobHuntPage() {
   const [formError, setFormError] = useState("");
   const [report, setReport] = useState<ReportState>({ kind: "idle" });
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const availablePlatforms = useMemo(() => {
+    const platformSet = new Set(GLOBAL_PLATFORM_OPTIONS);
+    regions.forEach((region) => {
+      (REGION_PLATFORM_OPTIONS[region] || []).forEach((platform) => platformSet.add(platform));
+    });
+    return Array.from(platformSet);
+  }, [regions]);
+
+  useEffect(() => {
+    setPlatforms((current) => current.filter((platform) => availablePlatforms.includes(platform)));
+  }, [availablePlatforms]);
 
   const toggleChip = (list: string[], setList: (value: string[]) => void, value: string) => {
     if (list.includes(value)) {
@@ -317,125 +342,130 @@ export function JobHuntPage() {
               </button>
             </div>
 
-            {mode === "pdf" ? (
-              <div className="job-hunt-upload-wrap">
-                <div
-                  className={`job-hunt-upload${isDragOver ? " is-dragover" : ""}${resumeFile ? " has-file" : ""}`}
-                  role="button"
-                  tabIndex={0}
-                  aria-label="上传 PDF 简历"
-                  onClick={() => fileInputRef.current?.click()}
-                  onKeyDown={onDropzoneKeyDown}
-                  onDragOver={(event) => { event.preventDefault(); setIsDragOver(true); }}
-                  onDragLeave={() => setIsDragOver(false)}
-                  onDrop={onDropResume}
-                >
-                  <input ref={fileInputRef} className="job-hunt-file-input" type="file" accept=".pdf,application/pdf" onChange={onFileChange} />
-                  <strong>{resumeFile ? "简历文件已就绪" : "上传简历文件"}</strong>
-                  <span>{resumeFile ? resumeFile.name : "点击选择或拖拽 PDF 到此处"}</span>
+            <div className="job-hunt-fields-grid">
+              {mode === "pdf" ? (
+                <div className="job-hunt-upload-wrap">
+                  <div
+                    className={`job-hunt-upload${isDragOver ? " is-dragover" : ""}${resumeFile ? " has-file" : ""}`}
+                    role="button"
+                    tabIndex={0}
+                    aria-label="上传 PDF 简历"
+                    onClick={() => fileInputRef.current?.click()}
+                    onKeyDown={onDropzoneKeyDown}
+                    onDragOver={(event) => { event.preventDefault(); setIsDragOver(true); }}
+                    onDragLeave={() => setIsDragOver(false)}
+                    onDrop={onDropResume}
+                  >
+                    <input ref={fileInputRef} className="job-hunt-file-input" type="file" accept=".pdf,application/pdf" onChange={onFileChange} />
+                    <strong>{resumeFile ? "简历文件已就绪" : "上传简历文件"}</strong>
+                    <span>{resumeFile ? resumeFile.name : "点击选择或拖拽 PDF 到此处"}</span>
+                  </div>
+                  {resumeFile ? (
+                    <button type="button" className="job-hunt-file-clear" onClick={() => { setResumeFile(null); setUploadHint(""); }}>
+                      移除当前文件
+                    </button>
+                  ) : null}
+                  {uploadHint ? <p className="job-hunt-field-error" role="alert">{uploadHint}</p> : null}
                 </div>
-                {resumeFile ? (
-                  <button type="button" className="job-hunt-file-clear" onClick={() => { setResumeFile(null); setUploadHint(""); }}>
-                    移除当前文件
-                  </button>
-                ) : null}
-                {uploadHint ? <p className="job-hunt-field-error" role="alert">{uploadHint}</p> : null}
-              </div>
-            ) : (
+              ) : (
+                <label className="job-hunt-field job-hunt-field--wide">
+                  <span>背景 / 经历 <small>把你最相关的经历、技能写下来</small></span>
+                  <textarea rows={3} value={backgroundText} onChange={(event) => setBackgroundText(event.target.value)} placeholder="例如：5 年前端开发，主导过组件库建设，熟悉 React 与 TypeScript…" />
+                </label>
+              )}
+
               <label className="job-hunt-field">
-                <span>背景 / 经历 <small>把你最相关的经历、技能写下来</small></span>
-                <textarea rows={4} value={backgroundText} onChange={(event) => setBackgroundText(event.target.value)} placeholder="例如：5 年前端开发，主导过组件库建设，熟悉 React 与 TypeScript…" />
+                <span>岗位方向 <em>必填</em></span>
+                <input value={targetRole} onChange={(event) => setTargetRole(event.target.value)} placeholder="例如：数据分析师 / 前端工程师" />
               </label>
-            )}
 
-            <label className="job-hunt-field">
-              <span>岗位方向 <em>必填</em></span>
-              <input value={targetRole} onChange={(event) => setTargetRole(event.target.value)} placeholder="例如：数据分析师 / 前端工程师" />
-            </label>
+              <label className="job-hunt-field">
+                <span>岗位 JD <small>可选</small></span>
+                <textarea rows={3} value={targetJd} onChange={(event) => setTargetJd(event.target.value)} placeholder="粘贴目标岗位描述，帮助 AI 更精准匹配" />
+              </label>
 
-            <label className="job-hunt-field">
-              <span>岗位 JD <small>可选</small></span>
-              <textarea rows={3} value={targetJd} onChange={(event) => setTargetJd(event.target.value)} placeholder="粘贴目标岗位描述，帮助 AI 更精准匹配" />
-            </label>
+              <fieldset className="job-hunt-choice job-hunt-choice--wide">
+                <legend>目标地区 <small>可多选</small></legend>
+                <div className="job-hunt-chips">
+                  {REGION_OPTIONS.map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      className={regions.includes(option) ? "is-active" : ""}
+                      aria-pressed={regions.includes(option)}
+                      onClick={() => toggleChip(regions, setRegions, option)}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
 
-            <fieldset className="job-hunt-choice">
-              <legend>目标地区 <small>可多选</small></legend>
-              <div className="job-hunt-chips">
-                {REGION_OPTIONS.map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    className={regions.includes(option) ? "is-active" : ""}
-                    aria-pressed={regions.includes(option)}
-                    onClick={() => toggleChip(regions, setRegions, option)}
-                  >
-                    {option}
-                  </button>
-                ))}
-              </div>
-            </fieldset>
+              <label className="job-hunt-field">
+                <span>目标城市 <small>可多填，用逗号分隔</small></span>
+                <input value={citiesText} onChange={(event) => setCitiesText(event.target.value)} placeholder="例如：上海, 北京, 深圳" />
+              </label>
 
-            <label className="job-hunt-field">
-              <span>目标城市 <small>可多填，用逗号分隔</small></span>
-              <input value={citiesText} onChange={(event) => setCitiesText(event.target.value)} placeholder="例如：上海, 北京, 深圳" />
-            </label>
+              <label className="job-hunt-field">
+                <span>期望薪资 <small>可选</small></span>
+                <input value={salaryRange} onChange={(event) => setSalaryRange(event.target.value)} placeholder="例如：30-50K / 80-120 万" />
+              </label>
 
-            <label className="job-hunt-field">
-              <span>期望薪资 <small>可选</small></span>
-              <input value={salaryRange} onChange={(event) => setSalaryRange(event.target.value)} placeholder="例如：30-50K / 80-120 万" />
-            </label>
-
-            <fieldset className="job-hunt-choice">
-              <legend>硬性要求 <small>可多选</small></legend>
-              <div className="job-hunt-chips">
-                {REQUIREMENT_OPTIONS.map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    className={requirements.includes(option) ? "is-active" : ""}
-                    aria-pressed={requirements.includes(option)}
-                    onClick={() => toggleChip(requirements, setRequirements, option)}
-                  >
-                    {option}
-                  </button>
-                ))}
-                <span className="job-hunt-chip-add">
-                  <input
-                    value={customRequirement}
-                    onChange={(event) => setCustomRequirement(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        const value = customRequirement.trim();
-                        if (value && !requirements.includes(value)) {
-                          setRequirements([...requirements, value]);
-                          setCustomRequirement("");
+              <fieldset className="job-hunt-choice">
+                <legend>硬性要求 <small>可多选</small></legend>
+                <div className="job-hunt-chips">
+                  {REQUIREMENT_OPTIONS.map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      className={requirements.includes(option) ? "is-active" : ""}
+                      aria-pressed={requirements.includes(option)}
+                      onClick={() => toggleChip(requirements, setRequirements, option)}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                  <span className="job-hunt-chip-add">
+                    <input
+                      value={customRequirement}
+                      onChange={(event) => setCustomRequirement(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          const value = customRequirement.trim();
+                          if (value && !requirements.includes(value)) {
+                            setRequirements([...requirements, value]);
+                            setCustomRequirement("");
+                          }
                         }
-                      }
-                    }}
-                    placeholder="自定义要求 + 回车"
-                    aria-label="自定义硬性要求"
-                  />
-                </span>
-              </div>
-            </fieldset>
+                      }}
+                      placeholder="自定义要求 + 回车"
+                      aria-label="自定义硬性要求"
+                    />
+                  </span>
+                </div>
+              </fieldset>
 
-            <fieldset className="job-hunt-choice">
-              <legend>搜索平台 <small>可多选</small></legend>
-              <div className="job-hunt-chips">
-                {PLATFORM_OPTIONS.map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    className={platforms.includes(option) ? "is-active" : ""}
-                    aria-pressed={platforms.includes(option)}
-                    onClick={() => toggleChip(platforms, setPlatforms, option)}
-                  >
-                    {option}
-                  </button>
-                ))}
-              </div>
-            </fieldset>
+              <fieldset className="job-hunt-choice">
+                <legend>搜索平台 <small>可多选</small></legend>
+                <p className="job-hunt-platform-hint">
+                  {regions.length ? `已按 ${regions.join("、")} 推荐` : "选择国家后会补充当地常用平台"}
+                </p>
+                <div className="job-hunt-chips">
+                  {availablePlatforms.map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      className={platforms.includes(option) ? "is-active" : ""}
+                      aria-pressed={platforms.includes(option)}
+                      onClick={() => toggleChip(platforms, setPlatforms, option)}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+            </div>
 
             {formError ? <p className="job-hunt-field-error" role="alert">{formError}</p> : null}
 
