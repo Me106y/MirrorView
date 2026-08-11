@@ -3419,6 +3419,19 @@ textarea {
   grid-column: 4 / -1;
   grid-row: 1;
   height: 101px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 0;
+}
+
+.job-hunt-fields-grid > .job-hunt-field--background {
+  grid-column: 1 / span 3;
+  grid-row: 1;
+  height: 101px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
   margin: 0;
 }
 
@@ -3453,7 +3466,15 @@ textarea {
 }
 
 .job-hunt-fields-grid > .job-hunt-field--jd textarea {
-  min-height: 76px;
+  min-height: 0;
+  height: auto;
+  flex: 1 1 auto;
+}
+
+.job-hunt-fields-grid > .job-hunt-field--background textarea {
+  min-height: 0;
+  height: auto;
+  flex: 1 1 auto;
 }
 
 .job-hunt-fields-grid > .job-hunt-field--resume .job-hunt-upload {
@@ -3818,6 +3839,7 @@ a.job-hunt-title:hover {
 
   .job-hunt-page .job-hunt-fields-grid > .job-hunt-field--resume,
   .job-hunt-page .job-hunt-fields-grid > .job-hunt-field--jd,
+  .job-hunt-page .job-hunt-fields-grid > .job-hunt-field--background,
   .job-hunt-page .job-hunt-fields-grid > .job-hunt-field--role {
     grid-column: 1;
     grid-row: auto;

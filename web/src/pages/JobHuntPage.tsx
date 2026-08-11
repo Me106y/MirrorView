@@ -368,7 +368,7 @@ export function JobHuntPage() {
                   {uploadHint ? <p className="job-hunt-field-error" role="alert">{uploadHint}</p> : null}
                 </div>
               ) : (
-                <label className="job-hunt-field job-hunt-field--wide">
+                <label className="job-hunt-field job-hunt-field--background">
                   <span>背景 / 经历 <small>把你最相关的经历、技能写下来</small></span>
                   <textarea rows={3} value={backgroundText} onChange={(event) => setBackgroundText(event.target.value)} placeholder="例如：5 年前端开发，主导过组件库建设，熟悉 React 与 TypeScript…" />
                 </label>
