@@ -2277,6 +2277,8 @@ def careerforge_agent_chat():
     user_id = data.get('user_id')
     message = (data.get('message') or '').strip()
     history = data.get('history') or []
+    conversation_mode = str(data.get('conversation_mode') or '').strip().lower()
+    setup = data.get('setup') or {}
 
     if not message:
         return (
@@ -2310,6 +2312,25 @@ def careerforge_agent_chat():
 
     if not isinstance(history, list):
         history = []
+    if not isinstance(setup, dict):
+        setup = {}
+
+    if conversation_mode == 'mock_interview':
+        result = ai_service.run_mock_interview_turn(
+            {
+                'message': message,
+                'history': history,
+                'setup': setup,
+            },
+            runtime=runtime,
+        )
+        if isinstance(result, dict):
+            result.setdefault('meta', meta)
+
+        status_code = 200
+        if result.get('error'):
+            status_code = 400
+        return jsonify(result), status_code
 
     result = command_agent.handle_chat(
         user_id=user_id,
@@ -2324,6 +2345,44 @@ def careerforge_agent_chat():
     if result.get("error"):
         status_code = 400
     return jsonify(result), status_code
+
+
+@api.route('/careerforge/mock-interview/report', methods=['POST'])
+def careerforge_mock_interview_report():
+    data = _coerce_request_data()
+    runtime, runtime_error, meta = _resolve_runtime(data)
+    if runtime_error:
+        payload, status = runtime_error
+        return jsonify(payload), status
+
+    guard_error = _guard_high_cost_request("mock-interview", data)
+    if guard_error:
+        payload, status = guard_error
+        return jsonify(payload), status
+
+    setup = data.get('setup') or {}
+    history = data.get('history') or []
+
+    if not isinstance(setup, dict):
+        setup = {}
+    if not isinstance(history, list):
+        history = []
+
+    report = ai_service.run_mock_interview_report(
+        {
+            'setup': setup,
+            'history': history,
+        },
+        runtime=runtime,
+    )
+    if isinstance(report, dict) and not report.get('error'):
+        response = {'result': report, 'meta': meta}
+        return jsonify(response), 200
+
+    message = ''
+    if isinstance(report, dict):
+        message = str(report.get('message') or report.get('error') or '').strip()
+    return jsonify({'error': 'mock_interview_report_failed', 'message': message or '生成面试报告失败。', 'meta': meta}), 400
 
 @api.route('/interview/create', methods=['POST'])
 def create_interview():

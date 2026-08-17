@@ -9,7 +9,7 @@ from server.config import Config
 from server.factories.llm_factory import ModelFactory
 from server.services.agents.cover_letter_agent import CoverLetterAgent
 from server.services.agents.job_hunt_agent import JobHuntAgent
-from server.services.agents.mock_interview_agent import MockInterviewAgent
+from server.services.agents.mock_interview_agent import MockInterviewAgent, build_mock_interview_html_report
 from server.services.agents.resume_craft_agent import ResumeCraftAgent
 from server.services.agents.resume_match_agent import ResumeMatchAgent
 from server.services.resume_service import ResumeService
@@ -513,3 +513,54 @@ class AIService:
                 yield "I hit a temporary issue. Let's continue: tell me about your most representative project."
             else:
                 yield "我遇到了一点问题，我们继续：请您讲一个最有代表性的项目经历。"
+
+    def run_mock_interview_turn(self, payload, runtime: Optional[Dict[str, Any]] = None):
+        try:
+            agent = self._build_runtime_agent(runtime, json_output=False, feature="mock_interview")
+            setup = payload.get("setup") if isinstance(payload, dict) else {}
+            setup = setup if isinstance(setup, dict) else {}
+            history = payload.get("history") if isinstance(payload, dict) else []
+            history = history if isinstance(history, list) else []
+            message = self._runtime_text((payload or {}).get("message"))
+            language = self._runtime_text(setup.get("language") or "zh") or "zh"
+            target_role = self._runtime_text(setup.get("targetRole") or "General") or "General"
+            reply = agent.build_mock_interview_reply(
+                messages_list=history,
+                user_input=message,
+                job_position=target_role,
+                language=language,
+            )
+            return {
+                "reply": reply,
+                "result": {
+                    "mode": "text",
+                    "language": language,
+                    "target_role": target_role,
+                },
+                "intent": "mock-interview",
+                "action": "ask_next_question",
+            }
+        except Exception as e:
+            logger.error("run_mock_interview_turn runtime error: %s", e)
+            return {
+                "error": "runtime_call_failed",
+                "message": "模型运行失败，请稍后重试。",
+            }
+
+    def run_mock_interview_report(self, payload, runtime: Optional[Dict[str, Any]] = None):
+        try:
+            agent = self._build_runtime_agent(runtime, json_output=False, feature="mock_interview")
+            setup = payload.get("setup") if isinstance(payload, dict) else {}
+            setup = setup if isinstance(setup, dict) else {}
+            history = payload.get("history") if isinstance(payload, dict) else []
+            history = history if isinstance(history, list) else []
+            report = agent.generate_mock_interview_report(setup, history)
+            if isinstance(report, dict) and not report.get("error"):
+                report["htmlReport"] = str(report.get("htmlReport") or build_mock_interview_html_report(report))
+            return report
+        except Exception as e:
+            logger.error("run_mock_interview_report runtime error: %s", e)
+            return {
+                "error": "runtime_call_failed",
+                "message": "生成面试报告失败，请稍后重试。",
+            }

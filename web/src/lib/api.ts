@@ -150,3 +150,10 @@ export async function callCareerforgeSkillMultipart<T>(
   const url = `${base}${endpoint}`;
   return postForm<T>(url, form);
 }
+
+export async function callMockInterviewReport<T>(
+  settings: ModelSettings,
+  payload: Record<string, unknown>
+): Promise<ApiEnvelope<T>> {
+  return callCareerforgeSkill<T>(settings, "/careerforge/mock-interview/report", payload);
+}

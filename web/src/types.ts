@@ -125,3 +125,92 @@ export interface ResumeCraftConversationMessage {
   };
   backendStep: ResumeCraftBackendStep;
 }
+
+export type MockInterviewLanguage = "zh" | "en";
+export type MockInterviewScope = "full" | "hr" | "business" | "executive" | "focused";
+export type MockInterviewStage = "setup" | "active" | "reporting" | "completed" | "error";
+export type MockInterviewMessageRole = "user" | "assistant";
+export type MockInterviewMessageStatus = "sent" | "streaming" | "error";
+
+export interface MockInterviewSetup {
+  targetRole: string;
+  jdText: string;
+  resumeText: string;
+  companyName: string;
+  language: MockInterviewLanguage;
+  scope: MockInterviewScope;
+  focusTopic: string;
+}
+
+export interface MockInterviewConversationMessage {
+  id: string;
+  role: MockInterviewMessageRole;
+  content: string;
+  createdAt: string;
+  status: MockInterviewMessageStatus;
+}
+
+export interface MockInterviewDimension {
+  key: string;
+  label: string;
+  score: number;
+  comment: string;
+}
+
+export interface MockInterviewQuestionFeedback {
+  question: string;
+  answerSummary: string;
+  score: number;
+  strength: string;
+  gap: string;
+  suggestion: string;
+  sampleAnswer: string;
+}
+
+export interface MockInterviewRound {
+  key: string;
+  label: string;
+  score: number;
+  status: "completed" | "partial" | "not_started";
+  summary: string;
+  questions: MockInterviewQuestionFeedback[];
+}
+
+export interface MockInterviewQuestionBankItem {
+  round: string;
+  question: string;
+  focus: string;
+  score: number;
+}
+
+export interface MockInterviewActionItem {
+  title: string;
+  priority: "high" | "medium" | "low";
+  details: string;
+}
+
+export interface MockInterviewReport {
+  candidateName: string;
+  targetRole: string;
+  companyName: string;
+  language: MockInterviewLanguage;
+  scope: MockInterviewScope;
+  overallScore: number;
+  hireRecommendation: string;
+  summary: string;
+  dimensions: MockInterviewDimension[];
+  rounds: MockInterviewRound[];
+  questionBank: MockInterviewQuestionBankItem[];
+  actionItems: MockInterviewActionItem[];
+  htmlReport?: string;
+}
+
+export interface MockInterviewSession {
+  stage: MockInterviewStage;
+  setup: MockInterviewSetup;
+  messages: MockInterviewConversationMessage[];
+  startedAt: string;
+  busy: boolean;
+  errorMessage?: string;
+  report?: MockInterviewReport | null;
+}
