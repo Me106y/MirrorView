@@ -136,6 +136,7 @@ export interface MockInterviewSetup {
   targetRole: string;
   jdText: string;
   resumeText: string;
+  resumeFileName?: string;
   companyName: string;
   language: MockInterviewLanguage;
   scope: MockInterviewScope;

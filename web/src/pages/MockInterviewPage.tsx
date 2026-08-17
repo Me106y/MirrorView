@@ -1,5 +1,5 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { callCareerforgeSkill, callMockInterviewReport } from "../lib/api";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { callCareerforgeSkill, callCareerforgeSkillMultipart, callMockInterviewReport } from "../lib/api";
 import { useModelSettings } from "../context/ModelSettingsContext";
 import { useCareerFeatureGuard } from "../components/CareerFeatureGuard";
 import type {
@@ -43,6 +43,7 @@ const INITIAL_SETUP: MockInterviewSetup = {
   targetRole: "",
   jdText: "",
   resumeText: "",
+  resumeFileName: "",
   companyName: "",
   language: "zh",
   scope: "full",
@@ -64,6 +65,10 @@ function createId() {
     return crypto.randomUUID();
   }
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function isPdfFile(file: File) {
+  return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
 }
 
 function formatTime(iso: string) {
@@ -141,6 +146,9 @@ export function MockInterviewPage() {
   const [input, setInput] = useState("");
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [showTranscript, setShowTranscript] = useState(false);
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
+  const [resumeUploadBusy, setResumeUploadBusy] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const logEndRef = useRef<HTMLDivElement | null>(null);
 
   const activeMessages = session.messages;
@@ -174,7 +182,7 @@ export function MockInterviewPage() {
     const nextErrors: Record<string, string> = {};
     if (!session.setup.targetRole.trim()) nextErrors.targetRole = "请填写目标岗位。";
     if (!session.setup.jdText.trim()) nextErrors.jdText = "请粘贴目标岗位 JD。";
-    if (!session.setup.resumeText.trim()) nextErrors.resumeText = "请粘贴简历内容或经历摘要。";
+    if (!session.setup.resumeText.trim()) nextErrors.resumeText = "请先上传 PDF 简历。";
     if (session.setup.scope === "focused" && !session.setup.focusTopic.trim()) {
       nextErrors.focusTopic = "请选择专项训练方向。";
     }
@@ -296,6 +304,8 @@ export function MockInterviewPage() {
     setInput("");
     setFormErrors({});
     setShowTranscript(false);
+    setResumeFile(null);
+    setResumeUploadBusy(false);
     setSession(INITIAL_SESSION);
   };
 
@@ -317,6 +327,79 @@ export function MockInterviewPage() {
       },
     }));
     setFormErrors((current) => ({ ...current, [key]: "" }));
+  };
+
+  const clearResumeFile = () => {
+    setResumeFile(null);
+    setResumeUploadBusy(false);
+    setSession((current) => ({
+      ...current,
+      setup: {
+        ...current.setup,
+        resumeText: "",
+        resumeFileName: "",
+      },
+    }));
+    setFormErrors((current) => ({ ...current, resumeText: "" }));
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const uploadResumeFile = async (file: File | null) => {
+    if (!file) {
+      return;
+    }
+    if (!isPdfFile(file)) {
+      setFormErrors((current) => ({ ...current, resumeText: "仅支持上传 PDF 简历。" }));
+      setResumeFile(null);
+      return;
+    }
+
+    setResumeUploadBusy(true);
+    setFormErrors((current) => ({ ...current, resumeText: "" }));
+
+    try {
+      const response = await callCareerforgeSkillMultipart<{ resume_text?: string; resume_file_name?: string }>(
+        settings,
+        "/careerforge/mock-interview/prepare",
+        {},
+        { resume: file }
+      );
+      const parsedResumeText = String(response.result?.resume_text || "").trim();
+      if (!parsedResumeText) {
+        throw new Error("PDF 简历无法读取，请更换文件后重试。");
+      }
+      setResumeFile(file);
+      setSession((current) => ({
+        ...current,
+        setup: {
+          ...current.setup,
+          resumeText: parsedResumeText,
+          resumeFileName: String(response.result?.resume_file_name || file.name),
+        },
+      }));
+    } catch (error) {
+      setResumeFile(null);
+      setSession((current) => ({
+        ...current,
+        setup: {
+          ...current.setup,
+          resumeText: "",
+          resumeFileName: "",
+        },
+      }));
+      setFormErrors((current) => ({ ...current, resumeText: (error as Error).message || "简历上传失败，请稍后重试。" }));
+    } finally {
+      setResumeUploadBusy(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
+  const onResumeFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    void uploadResumeFile(event.target.files?.[0] ?? null);
   };
 
   const renderSetup = () => (
@@ -362,15 +445,31 @@ export function MockInterviewPage() {
               {formErrors.jdText ? <em>{formErrors.jdText}</em> : <small>建议保留岗位目标、能力要求与业务上下文，AI 会据此生成更贴近真实场景的问题。</small>}
             </label>
 
-            <label className="mock-interview-field mock-interview-field--full">
-              <span>简历文本 / 经历摘要</span>
-              <textarea
-                value={session.setup.resumeText}
-                onChange={(event) => updateSetup("resumeText", event.target.value)}
-                placeholder="粘贴简历全文，或至少提供核心项目、职责、成果与转岗背景"
-              />
-              {formErrors.resumeText ? <em>{formErrors.resumeText}</em> : <small>当前页面先使用文本输入。后续可再接已有简历资产做自动预填。</small>}
-            </label>
+            <div className="mock-interview-field mock-interview-field--full">
+              <span>上传简历 PDF</span>
+              <div className={`mock-interview-upload${resumeFile ? " has-file" : ""}${resumeUploadBusy ? " is-busy" : ""}`}>
+                <div className="mock-interview-upload-copy">
+                  <strong>{resumeFile ? "简历文件已就绪" : "通过按钮上传 PDF 简历"}</strong>
+                  <span>
+                    {resumeUploadBusy
+                      ? "正在解析简历内容，请稍候…"
+                      : session.setup.resumeFileName || "上传后会自动提取文本，供面试生成与报告复盘使用"}
+                  </span>
+                </div>
+                <div className="mock-interview-upload-actions">
+                  <input ref={fileInputRef} type="file" accept=".pdf,application/pdf" className="sr-only" onChange={onResumeFileChange} />
+                  <button type="button" className="ghost-btn mock-interview-upload-btn" onClick={() => fileInputRef.current?.click()} disabled={resumeUploadBusy}>
+                    {resumeFile ? "重新上传 PDF" : "上传 PDF"}
+                  </button>
+                  {resumeFile ? (
+                    <button type="button" className="mock-interview-file-clear" onClick={clearResumeFile} disabled={resumeUploadBusy}>
+                      移除文件
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+              {formErrors.resumeText ? <em>{formErrors.resumeText}</em> : <small>不再手动粘贴简历文本；请直接上传 PDF 文件。</small>}
+            </div>
           </div>
 
           <div className="mock-interview-option-row">
@@ -425,9 +524,12 @@ export function MockInterviewPage() {
 
         <aside className="surface mock-interview-panel mock-interview-panel--brief">
           <div className="mock-interview-brief-head">
-            <p className="mock-interview-kicker">本次训练说明</p>
-            <h2>{scopeLabel(session.setup.scope)}</h2>
-            <p>AI 会根据你的回答自然追问，不在途中打断给反馈。结束后统一输出结构化复盘报告。</p>
+            <div>
+              <p className="mock-interview-kicker">本次训练说明</p>
+              <h2>{scopeLabel(session.setup.scope)}</h2>
+              <p>AI 会根据你的回答自然追问，不在途中打断给反馈。结束后统一输出结构化复盘报告。</p>
+            </div>
+            <span className="mock-interview-brief-badge">文字版 · 报告可导出</span>
           </div>
 
           <div className="mock-interview-track">
@@ -452,7 +554,7 @@ export function MockInterviewPage() {
             </ul>
           </div>
 
-          <button type="button" className="primary-btn mock-interview-start-btn" onClick={startInterview} disabled={featureGuard.blocked || session.busy}>
+          <button type="button" className="primary-btn mock-interview-start-btn" onClick={startInterview} disabled={featureGuard.blocked || session.busy || resumeUploadBusy}>
             开始模拟面试
           </button>
         </aside>

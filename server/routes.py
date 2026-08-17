@@ -2384,6 +2384,42 @@ def careerforge_mock_interview_report():
         message = str(report.get('message') or report.get('error') or '').strip()
     return jsonify({'error': 'mock_interview_report_failed', 'message': message or '生成面试报告失败。', 'meta': meta}), 400
 
+
+@api.route('/careerforge/mock-interview/prepare', methods=['POST'])
+def careerforge_mock_interview_prepare():
+    data = _coerce_request_data()
+    runtime, runtime_error, meta = _resolve_runtime(data)
+    if runtime_error:
+        payload, status = runtime_error
+        return jsonify(payload), status
+
+    guard_error = _guard_high_cost_request("mock-interview", data)
+    if guard_error:
+        payload, status = guard_error
+        return jsonify(payload), status
+
+    if 'resume' not in request.files:
+        return jsonify({'error': 'missing_resume', 'message': '请先上传 PDF 简历。', 'meta': meta}), 400
+
+    file = request.files['resume']
+    if not file or not file.filename:
+        return jsonify({'error': 'missing_resume', 'message': '未检测到有效简历文件。', 'meta': meta}), 400
+
+    if not str(file.filename).lower().endswith('.pdf'):
+        return jsonify({'error': 'invalid_resume_type', 'message': '仅支持上传 PDF 简历。', 'meta': meta}), 400
+
+    resume_text = _extract_resume_text(data)
+    if not resume_text:
+        return jsonify({'error': 'resume_parse_failed', 'message': 'PDF 简历无法读取，请更换文件后重试。', 'meta': meta}), 400
+
+    return jsonify({
+        'result': {
+            'resume_text': resume_text[:20000],
+            'resume_file_name': file.filename,
+        },
+        'meta': meta,
+    }), 200
+
 @api.route('/interview/create', methods=['POST'])
 def create_interview():
     data = request.get_json(silent=True) or {}

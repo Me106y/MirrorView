@@ -5620,7 +5620,7 @@ a.job-hunt-title:hover {
 
 .mock-interview-setup-grid {
   grid-template-columns: minmax(0, 1.18fr) minmax(320px, 0.82fr);
-  align-items: start;
+  align-items: stretch;
 }
 
 .mock-interview-workspace {
@@ -5647,6 +5647,24 @@ a.job-hunt-title:hover {
   padding: 20px;
 }
 
+.mock-interview-panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.mock-interview-panel--form {
+  gap: 18px;
+}
+
+.mock-interview-panel--brief {
+  justify-content: space-between;
+  gap: 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(250, 248, 242, 0.98)),
+    var(--surface);
+}
+
 .mock-interview-panel-head,
 .mock-interview-brief-head,
 .mock-interview-sidebar-head,
@@ -5655,6 +5673,21 @@ a.job-hunt-title:hover {
   display: flex;
   justify-content: space-between;
   gap: 18px;
+}
+
+.mock-interview-brief-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(45, 107, 95, 0.08);
+  color: #2d6b5f;
+  border: 1px solid rgba(45, 107, 95, 0.14);
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .mock-interview-kicker {
@@ -5764,6 +5797,72 @@ a.job-hunt-title:hover {
   min-height: 168px;
   resize: vertical;
   line-height: 1.65;
+}
+
+.mock-interview-upload {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 104px;
+  padding: 16px 18px;
+  border-radius: 16px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: linear-gradient(180deg, #fcfbf7, #f8f6ef);
+}
+
+.mock-interview-upload.has-file {
+  border-color: rgba(45, 107, 95, 0.24);
+  background: linear-gradient(180deg, rgba(232, 244, 240, 0.9), rgba(255, 255, 255, 0.98));
+}
+
+.mock-interview-upload.is-busy {
+  border-color: rgba(79, 123, 163, 0.28);
+}
+
+.mock-interview-upload-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mock-interview-upload-copy strong {
+  color: var(--text-heading);
+  font-size: 0.98rem;
+}
+
+.mock-interview-upload-copy span {
+  color: var(--text-muted);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.mock-interview-upload-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.mock-interview-upload-btn,
+.mock-interview-file-clear {
+  min-height: 42px;
+  border-radius: 10px;
+}
+
+.mock-interview-file-clear {
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: #ffffff;
+  color: var(--text-body);
+  padding: 0 14px;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.mock-interview-file-clear:hover:not(:disabled) {
+  background: #f4f4f4;
+  border-color: rgba(0, 0, 0, 0.18);
 }
 
 .mock-interview-option-row {
@@ -5896,11 +5995,11 @@ a.job-hunt-title:hover {
 }
 
 .mock-interview-rule-list {
-  margin-top: 18px;
+  margin-top: 0;
   padding: 16px;
   border-radius: 16px;
-  background: #fbfaf6;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(0, 0, 0, 0.07);
 }
 
 .mock-interview-rule-list ul {
@@ -5918,7 +6017,8 @@ a.job-hunt-title:hover {
 
 .mock-interview-start-btn {
   width: 100%;
-  margin-top: 18px;
+  margin-top: auto;
+  box-shadow: 0 14px 28px rgba(45, 107, 95, 0.14);
 }
 
 .mock-interview-meta-card,
@@ -5964,6 +6064,7 @@ a.job-hunt-title:hover {
   display: flex;
   flex-direction: column;
   min-height: calc(100dvh - 140px);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(249, 247, 242, 0.98));
 }
 
 .mock-interview-chat-log {
@@ -6446,6 +6547,18 @@ a.job-hunt-title:hover {
   .mock-interview-report-hero {
     padding-left: 18px;
     padding-right: 18px;
+  }
+
+  .mock-interview-upload,
+  .mock-interview-upload-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .mock-interview-file-clear,
+  .mock-interview-upload-btn,
+  .mock-interview-brief-badge {
+    width: 100%;
   }
 }
 
