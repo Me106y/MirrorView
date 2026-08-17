@@ -1,3 +1,4 @@
+import os
 from typing import Any, Dict, Optional
 
 from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
@@ -55,6 +56,9 @@ class AIService:
         if provider == "deepseek":
             kwargs["base_url"] = Config.DEEPSEEK_BASE_URL
             kwargs["api_key"] = Config.DEEPSEEK_API_KEY
+        elif provider == "ccswitch":
+            kwargs["base_url"] = "https://modelsell.com/v1"
+            kwargs["api_key"] = os.environ.get("CCSWITCH_API_KEY", "")
         elif provider == "openai":
             kwargs["api_key"] = Config.OPENAI_API_KEY
         elif provider == "anthropic":
@@ -125,6 +129,9 @@ class AIService:
             kwargs["extra_body"] = {"thinking": {"type": "disabled"}}
             if json_output:
                 kwargs["response_format"] = {"type": "json_object"}
+        elif provider == "ccswitch":
+            kwargs["api_key"] = api_key or os.environ.get("CCSWITCH_API_KEY", "")
+            kwargs["base_url"] = base_url or "https://modelsell.com/v1"
         elif provider == "openai":
             kwargs["api_key"] = api_key or Config.OPENAI_API_KEY
             if base_url:

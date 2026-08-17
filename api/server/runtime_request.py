@@ -5,11 +5,12 @@ from typing import Any, Dict, Optional, Tuple
 
 from server.config import Config
 
-ALLOWED_BYOK_PROVIDERS = {"openai", "deepseek", "anthropic"}
+ALLOWED_BYOK_PROVIDERS = {"openai", "deepseek", "anthropic", "ccswitch"}
 DEFAULT_PROVIDER_MODELS = {
     "openai": "gpt-4o-mini",
     "deepseek": Config.DEEPSEEK_MODEL or "deepseek-chat",
     "anthropic": "claude-3-5-sonnet-latest",
+    "ccswitch": "deepseek-v4-flash",
 }
 
 
@@ -21,7 +22,7 @@ def _as_text(value: Any) -> str:
 
 def default_platform_runtime() -> Dict[str, str]:
     provider = (Config.PLATFORM_PROVIDER or "deepseek").strip().lower()
-    if provider not in {"deepseek", "openai", "anthropic"}:
+    if provider not in {"deepseek", "openai", "anthropic", "ccswitch"}:
         provider = "deepseek"
     model = (Config.PLATFORM_MODEL or "").strip()
     if not model:
@@ -72,7 +73,7 @@ def parse_runtime_payload(payload: Optional[Dict[str, Any]]) -> Tuple[Optional[D
 
     provider = _as_text(raw.get("provider")).lower()
     if provider not in ALLOWED_BYOK_PROVIDERS:
-        return None, "runtime.provider must be one of: openai, deepseek, anthropic."
+        return None, "runtime.provider must be one of: openai, deepseek, anthropic, ccswitch."
 
     api_key = _as_text(raw.get("api_key"))
     if not api_key:

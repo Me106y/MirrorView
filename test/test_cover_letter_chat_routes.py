@@ -62,6 +62,7 @@ def test_cover_letter_chat_infers_pdf_source_for_multipart(monkeypatch):
         "/api/careerforge/cover-letter/chat",
         data={
             "message": "开始撰写",
+            "history": "[]",
             "jd_text": "负责数据分析",
             "runtime": '{"mode":"platform"}',
             "resume": (BytesIO(b"pdf"), "resume.pdf"),

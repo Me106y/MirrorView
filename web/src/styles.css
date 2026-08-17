@@ -4057,6 +4057,41 @@ a.job-hunt-title:hover {
   color: #a8a8a8;
 }
 
+
+/* Settings panel: model select (dropdown) */
+.settings-field select.settings-model-select {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 0.9rem;
+  background: var(--surface-raised, #fff);
+  color: var(--ink);
+  transition: border-color 150ms;
+  box-sizing: border-box;
+  font-family: inherit;
+  cursor: pointer;
+  appearance: auto;
+}
+.settings-field select.settings-model-select:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.settings-model-loading {
+  padding: 10px 14px;
+  font-size: 0.85rem;
+  color: var(--text-secondary, #888);
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  background: var(--surface-raised, #fafafa);
+}
+
+.settings-model-hint {
+  margin: 6px 0 0 0;
+  font-size: 0.75rem;
+  color: var(--text-secondary, #888);
+}
 /* Action buttons */
 .settings-actions {
   display: flex;

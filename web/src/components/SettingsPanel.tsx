@@ -3,18 +3,34 @@ import { useModelSettings } from "../context/ModelSettingsContext";
 import { testCareerforgeRuntime } from "../lib/api";
 import { createRuntimeStatus, loadRuntimeStatus, saveRuntimeStatus, type PersistedRuntimeStatus } from "../lib/runtimeStatus";
 
-type Provider = 'deepseek' | 'openai';
+type Provider = 'deepseek' | 'openai' | 'ccswitch';
 
 const PROVIDER_CONFIG: Record<Provider, { baseUrl: string; model: string }> = {
-  deepseek: { baseUrl: 'https://api.deepseek.com', model: 'deepseek-chat' },
-  openai:   { baseUrl: 'https://api.openai.com',   model: 'gpt-4o-mini'   },
+  deepseek:  { baseUrl: 'https://api.deepseek.com', model: 'deepseek-chat' },
+  openai:    { baseUrl: 'https://api.openai.com',   model: 'gpt-4o-mini'   },
+  ccswitch:  { baseUrl: 'https://modelsell.com/v1',  model: 'deepseek-v4-flash' },
 };
 
 function detectProvider(baseUrl: string): Provider {
-  if (baseUrl.toLowerCase().includes('openai')) return 'openai';
+  const lower = baseUrl.toLowerCase();
+  if (lower.includes('openai')) return 'openai';
+  if (lower.includes('modelsell')) return 'ccswitch';
   return 'deepseek';
 }
 
+interface CcSwitchModel {
+  id: string;
+  object: string;
+  created: number;
+  owned_by: string;
+  supported_endpoint_types: string[];
+}
+
+type ModelListState =
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "loaded"; models: CcSwitchModel[] }
+  | { kind: "error"; message: string };
 
 type TestState =
   | { kind: "idle" }
@@ -33,11 +49,14 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
   const [testState, setTestState] = useState<TestState>({ kind: "idle" });
   const [persistedStatus, setPersistedStatus] = useState<PersistedRuntimeStatus | null>(() => loadRuntimeStatus());
   const [saveFlash, setSaveFlash] = useState(false);
+  const [modelListState, setModelListState] = useState<ModelListState>({ kind: "idle" });
+  const modelListCache = useRef<Record<string, CcSwitchModel[]>>({});
 
   function selectProvider(p: Provider) {
     setProvider(p);
     setDraftBaseUrl(PROVIDER_CONFIG[p].baseUrl);
     setDraftModel(PROVIDER_CONFIG[p].model);
+    setModelListState({ kind: "idle" });
   }
 
   // Sync draft when settings change externally
@@ -56,6 +75,61 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
       setPersistedStatus(loadRuntimeStatus());
     }
   }, [open]);
+
+  // Fetch model list when CC Switch is selected and API key is available
+  useEffect(() => {
+    if (provider !== 'ccswitch') return;
+    const key = draftApiKey.trim();
+    if (!key) return;
+
+    const baseUrl = draftBaseUrl.trim().replace(/\/+$/, '');
+    const cacheKey = `${baseUrl}|${key}`;
+
+    // Check cache
+    if (modelListCache.current[cacheKey]) {
+      setModelListState({ kind: "loaded", models: modelListCache.current[cacheKey] });
+      // If model is still the default, select first from list
+      setDraftModel((prev) => {
+        if (prev === PROVIDER_CONFIG.ccswitch.model && modelListCache.current[cacheKey].length > 0) {
+          return modelListCache.current[cacheKey][0].id;
+        }
+        return prev;
+      });
+      return;
+    }
+
+    let cancelled = false;
+    setModelListState({ kind: "loading" });
+
+    const url = `${baseUrl}/models`;
+    fetch(url, {
+      headers: { "Authorization": `Bearer ${key}` }
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json() as Promise<{ data: CcSwitchModel[] }>;
+      })
+      .then((json) => {
+        if (cancelled) return;
+        const models = (json.data || []).filter(
+          (m) => m.supported_endpoint_types && m.supported_endpoint_types.includes("openai")
+        );
+        if (models.length === 0) {
+          setModelListState({ kind: "error", message: "未找到支持 OpenAI 聊天格式的模型。" });
+          return;
+        }
+        modelListCache.current[cacheKey] = models;
+        setModelListState({ kind: "loaded", models });
+        // Select first model
+        setDraftModel(models[0].id);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setModelListState({ kind: "error", message: `加载模型列表失败: ${err instanceof Error ? err.message : '未知错误'}` });
+      });
+
+    return () => { cancelled = true; };
+  }, [provider, draftApiKey, draftBaseUrl]);
 
   // Focus trap + Escape
   useEffect(() => {
@@ -96,6 +170,7 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
 
   const handleSave = () => {
     updateSettings({
+      provider: provider,
       model: draftModel,
       apiKey: draftApiKey,
       baseUrl: draftBaseUrl,
@@ -106,15 +181,18 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
 
   const handleClear = () => {
     updateSettings({
+      provider: "deepseek",
       model: "deepseek-chat",
       apiKey: "",
       baseUrl: "",
     });
+    setProvider("deepseek");
     setDraftModel("deepseek-chat");
     setDraftApiKey("");
     setDraftBaseUrl("");
     setTestState({ kind: "idle" });
     setPersistedStatus(null);
+    setModelListState({ kind: "idle" });
     saveRuntimeStatus(null);
   };
 
@@ -126,7 +204,7 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
     setTestState({ kind: "loading" });
     try {
       const resp = await testCareerforgeRuntime({
-        provider: provider === "openai" ? "openai" : "deepseek",
+        provider: provider,
         model: draftModel.trim() || "deepseek-chat",
         apiKey: draftApiKey.trim(),
         baseUrl: draftBaseUrl.trim(),
@@ -138,7 +216,7 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
       }
 
       const next = createRuntimeStatus({
-        provider: provider === "openai" ? "openai" : "deepseek",
+        provider: provider,
         model: draftModel.trim() || "deepseek-chat",
         apiKey: draftApiKey.trim(),
         baseUrl: draftBaseUrl.trim(),
@@ -149,7 +227,7 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
     } catch (err) {
       saveRuntimeStatus(null);
       setPersistedStatus(null);
-      setTestState({ kind: "error", message: (err as Error).message || "连接失败，请检查配置。" });
+      setTestState({ kind: "error", message: err instanceof Error ? err.message : "连接失败，请检查配置。" });
     }
   };
 
@@ -181,7 +259,7 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
 
         {/* Description */}
         <p className="settings-description">
-          当前仅支持 DeepSeek 模型。API 密钥仅保存在浏览器本地，请求经服务端中转后直接调用模型，不做任何存储或日志记录，用完即走。
+          DeepSeek 和 CC Switch 模型可用。API 密钥仅保存在浏览器本地，请求经服务端中转后直接调用模型，不做任何存储或日志记录，用完即走。
         </p>
 
         {/* Warning */}
@@ -208,6 +286,13 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
           >
             OpenAI
             <span className="provider-btn-badge">敬请期待</span>
+          </button>
+          <button
+            type="button"
+            className={`provider-btn${provider === 'ccswitch' ? ' active' : ''}`}
+            onClick={() => selectProvider('ccswitch')}
+          >
+            CC Switch
           </button>
         </div>
 
@@ -241,15 +326,61 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
           />
         </div>
 
-        <div className="settings-field">
-          <label htmlFor="sp-model">Model</label>
-          <input
-            id="sp-model"
-            value={draftModel}
-            onChange={(e) => setDraftModel(e.target.value)}
-            placeholder="deepseek-chat"
-          />
-        </div>
+        {/* Model field: dropdown for CC Switch, text input for others */}
+        {provider === 'ccswitch' ? (
+          <div className="settings-field">
+            <label htmlFor="sp-model">Model</label>
+            {modelListState.kind === "loading" && (
+              <div className="settings-model-loading">正在加载模型列表…</div>
+            )}
+            {modelListState.kind === "error" && (
+              <>
+                <div className="settings-test-result settings-test-result--error">
+                  ✕ {modelListState.message}
+                </div>
+                <input
+                  id="sp-model"
+                  value={draftModel}
+                  onChange={(e) => setDraftModel(e.target.value)}
+                  placeholder="deepseek-v4-flash"
+                />
+              </>
+            )}
+            {modelListState.kind === "loaded" && (
+              <>
+                <select
+                  id="sp-model"
+                  className="settings-model-select"
+                  value={draftModel}
+                  onChange={(e) => setDraftModel(e.target.value)}
+                >
+                  {modelListState.models.map((m) => (
+                    <option key={m.id} value={m.id}>{m.id}</option>
+                  ))}
+                </select>
+                <p className="settings-model-hint">仅显示支持 OpenAI 聊天格式的模型</p>
+              </>
+            )}
+            {modelListState.kind === "idle" && (
+              <input
+                id="sp-model"
+                value={draftModel}
+                onChange={(e) => setDraftModel(e.target.value)}
+                placeholder="deepseek-v4-flash"
+              />
+            )}
+          </div>
+        ) : (
+          <div className="settings-field">
+            <label htmlFor="sp-model">Model</label>
+            <input
+              id="sp-model"
+              value={draftModel}
+              onChange={(e) => setDraftModel(e.target.value)}
+              placeholder="deepseek-chat"
+            />
+          </div>
+        )}
 
         {/* Inline test feedback */}
         {testState.kind === "loading" && (

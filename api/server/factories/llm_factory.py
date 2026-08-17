@@ -8,6 +8,7 @@ Supports:
 - Anthropic — generic
 - Ollama — local
 - Boson.ai Higgs Audio v3 (TTS)
+- CC Switch — OpenAI-compatible proxy
 
 Usage:
     from server.factories.llm_factory import ModelFactory
@@ -30,13 +31,19 @@ class ModelFactory:
         "anthropic": ("langchain_anthropic", "ChatAnthropic"),
         "dashscope": ("langchain_community.chat_models.tongyi", "ChatTongyi"),
         "ollama":    ("langchain_ollama", "ChatOllama"),
+        "ccswitch":  None,  # handled specially — OpenAI-compatible
     }
 
     # Default provider configs
     _DEFAULT_CONFIG = {
         "deepseek": {
             "base_url": "https://api.deepseek.com/v1",
-            "model": "deepseek-chat",
+            "model": "deepseek-v4-flash",
+            "temperature": 0.7,
+        },
+        "ccswitch": {
+            "base_url": "https://modelsell.com/v1",
+            "model": "deepseek-v4-flash",
             "temperature": 0.7,
         },
     }
@@ -72,7 +79,7 @@ class ModelFactory:
         Create a LangChain chat model instance.
 
         Args:
-            provider: "deepseek" | "openai" | "anthropic" | "dashscope" | "ollama"
+            provider: "deepseek" | "openai" | "anthropic" | "dashscope" | "ollama" | "ccswitch"
             model_name: Model identifier
             **kwargs: Overrides (temperature, base_url, api_key, etc.)
 
@@ -91,6 +98,23 @@ class ModelFactory:
 
             api_key = kwargs.pop("api_key", os.environ.get("DEEPSEEK_API_KEY", ""))
             base_url = kwargs.pop("base_url", "https://api.deepseek.com/v1")
+
+            return ChatOpenAI(
+                model=model_name,
+                openai_api_key=api_key,
+                openai_api_base=base_url,
+                temperature=kwargs.pop("temperature", 0.7),
+                max_tokens=kwargs.pop("max_tokens", 2048),
+                streaming=kwargs.pop("streaming", True),
+                **kwargs,
+            )
+
+        # ── CC Switch (OpenAI-compatible proxy) ──
+        if provider == "ccswitch":
+            ChatOpenAI = cls._get_chat_openai_cls()
+
+            api_key = kwargs.pop("api_key", os.environ.get("CCSWITCH_API_KEY", ""))
+            base_url = kwargs.pop("base_url", "https://modelsell.com/v1")
 
             return ChatOpenAI(
                 model=model_name,

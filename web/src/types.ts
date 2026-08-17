@@ -1,5 +1,5 @@
 export type RuntimeMode = "platform" | "byok";
-export type ModelProvider = "deepseek" | "openai" | "anthropic";
+export type ModelProvider = "deepseek" | "openai" | "anthropic" | "ccswitch";
 
 export interface ModelSettings {
   mode: RuntimeMode;

@@ -34,7 +34,7 @@ function normalizeApiBaseUrl(value: string): string {
 export function buildRuntime(settings: ModelSettings) {
   return {
     mode: "platform",
-    provider: "deepseek",
+    provider: settings.provider,
     model: settings.model || "deepseek-chat",
     api_key: settings.apiKey.trim(),
     base_url: settings.baseUrl.trim()
