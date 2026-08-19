@@ -567,18 +567,27 @@ export function MockInterviewPage() {
       <div className="mock-interview-workspace">
         <aside className="surface mock-interview-sidebar">
           <div className="mock-interview-sidebar-head">
-            <p className="mock-interview-kicker">Interview Status</p>
-            <h1>{session.setup.targetRole || "模拟面试"}</h1>
-            <p>{languageLabel(session.setup.language)} · {scopeLabel(session.setup.scope)} · AI 将依据回答自动推进轮次</p>
+            <div>
+              <p className="mock-interview-kicker">Interview Status</p>
+              <h1 title={session.setup.targetRole || "模拟面试"}>{session.setup.targetRole || "模拟面试"}</h1>
+              <p>{languageLabel(session.setup.language)} · {scopeLabel(session.setup.scope)} · AI 将依据回答自动推进轮次</p>
+            </div>
+            <span className={`mock-interview-presence${session.busy ? " is-busy" : ""}`}>{session.busy ? "进行中" : "待作答"}</span>
           </div>
 
           <div className="mock-interview-meta-card">
-            <span>岗位</span>
-            <strong>{session.setup.targetRole || "未填写"}</strong>
-            <span>公司</span>
-            <strong>{session.setup.companyName || "未指定"}</strong>
-            <span>开始时间</span>
-            <strong>{session.startedAt ? formatTime(session.startedAt) : "刚刚"}</strong>
+            <div className="mock-interview-meta-item">
+              <span>公司</span>
+              <strong>{session.setup.companyName || "未指定"}</strong>
+            </div>
+            <div className="mock-interview-meta-item">
+              <span>语言</span>
+              <strong>{languageLabel(session.setup.language)}</strong>
+            </div>
+            <div className="mock-interview-meta-item">
+              <span>开始时间</span>
+              <strong>{session.startedAt ? formatTime(session.startedAt) : "刚刚"}</strong>
+            </div>
           </div>
 
           <div className="mock-interview-track mock-interview-track--stacked">
