@@ -5773,6 +5773,37 @@ a.job-hunt-title:hover {
   line-height: 1.12;
 }
 
+.mock-interview-side-section {
+  margin-top: 12px;
+}
+
+.mock-interview-side-section h3 {
+  margin: 0 0 8px;
+  color: var(--text-heading);
+  font-size: 0.96rem;
+  font-weight: 700;
+}
+
+.mock-interview-side-section--scope {
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.mock-interview-side-section--scope .mock-interview-scope-grid {
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+
+.mock-interview-side-section--scope .mock-interview-toggle {
+  padding: 10px 12px;
+}
+
+.mock-interview-side-section--scope .mock-interview-toggle small,
+.mock-interview-side-section--scope .mock-interview-toggle b {
+  font-size: 0.8rem;
+}
+
 .mock-interview-panel-head p:last-child {
   font-size: 0.92rem;
 }

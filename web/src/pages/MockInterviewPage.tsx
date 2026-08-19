@@ -430,7 +430,7 @@ export function MockInterviewPage() {
               />
             </label>
 
-            <div className="mock-interview-option-row mock-interview-option-row--inline mock-interview-field--full">
+            <div className="mock-interview-field mock-interview-field--full mock-interview-language-block">
               <div className="mock-interview-toggle-group" role="radiogroup" aria-label="面试语言">
                 <strong>面试语言</strong>
                 <div>
@@ -443,24 +443,6 @@ export function MockInterviewPage() {
                     >
                       <span>{option.label}</span>
                       <small>{option.description}</small>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="mock-interview-toggle-group" role="radiogroup" aria-label="面试范围">
-                <strong>训练范围</strong>
-                <div className="mock-interview-scope-grid">
-                  {SCOPE_OPTIONS.map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      className={`mock-interview-toggle mock-interview-toggle--scope${session.setup.scope === option.value ? " is-active" : ""}`}
-                      onClick={() => updateSetup("scope", option.value)}
-                    >
-                      <span>{option.label}</span>
-                      <small>{option.description}</small>
-                      <b>{option.eta}</b>
                     </button>
                   ))}
                 </div>
@@ -486,7 +468,7 @@ export function MockInterviewPage() {
                 onChange={(event) => updateSetup("jdText", event.target.value)}
                 placeholder="粘贴岗位职责、任职要求、加分项等内容"
               />
-              {formErrors.jdText ? <em>{formErrors.jdText}</em> : <small>建议保留岗位目标、能力要求与业务上下文，AI 会据此生成更贴近真实场景的问题。</small>}
+              {formErrors.jdText ? <em>{formErrors.jdText}</em> : null}
             </label>
 
             <div className="mock-interview-field mock-interview-field--full">
@@ -495,9 +477,7 @@ export function MockInterviewPage() {
                 <div className="mock-interview-upload-copy">
                   <strong>{resumeFile ? "简历文件已就绪" : "通过按钮上传 PDF 简历"}</strong>
                   <span>
-                    {resumeUploadBusy
-                      ? "正在解析简历内容，请稍候…"
-                      : session.setup.resumeFileName || "上传后会自动提取文本，供面试生成与报告复盘使用"}
+                    {resumeUploadBusy ? "正在解析简历内容，请稍候…" : session.setup.resumeFileName || ""}
                   </span>
                 </div>
                 <div className="mock-interview-upload-actions">
@@ -512,7 +492,7 @@ export function MockInterviewPage() {
                   ) : null}
                 </div>
               </div>
-              {formErrors.resumeText ? <em>{formErrors.resumeText}</em> : <small>不再手动粘贴简历文本；请直接上传 PDF 文件。</small>}
+              {formErrors.resumeText ? <em>{formErrors.resumeText}</em> : null}
             </div>
           </div>
         </article>
@@ -526,6 +506,24 @@ export function MockInterviewPage() {
             <span className="mock-interview-status-chip">{currentScope?.eta}</span>
           </div>
 
+          <div className="mock-interview-side-section mock-interview-side-section--scope" role="radiogroup" aria-label="面试范围">
+            <h3>训练范围</h3>
+            <div className="mock-interview-scope-grid">
+              {SCOPE_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={`mock-interview-toggle mock-interview-toggle--scope${session.setup.scope === option.value ? " is-active" : ""}`}
+                  onClick={() => updateSetup("scope", option.value)}
+                >
+                  <span>{option.label}</span>
+                  <small>{option.description}</small>
+                  <b>{option.eta}</b>
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="mock-interview-track">
             {ROUND_TRACK.map((item, index) => (
               <article key={item.key} className={`mock-interview-track-item${session.setup.scope !== "full" && session.setup.scope !== item.key ? " is-muted" : ""}`}>
@@ -536,16 +534,6 @@ export function MockInterviewPage() {
                 </div>
               </article>
             ))}
-          </div>
-
-          <div className="mock-interview-rule-list">
-            <h3>规则与快捷操作</h3>
-            <ul>
-              <li>一题一题问答，必要时会继续深挖同一题。</li>
-              <li>面试过程中不即时点评，保证更接近真实场景。</li>
-              <li>可以随时使用：跳过、暂停、继续、结束并生成报告。</li>
-              <li>当前轮次由 AI 根据上下文自动推进，前端不强行猜测。</li>
-            </ul>
           </div>
 
           <button type="button" className="primary-btn mock-interview-start-btn" onClick={startInterview} disabled={featureGuard.blocked || session.busy || resumeUploadBusy}>
