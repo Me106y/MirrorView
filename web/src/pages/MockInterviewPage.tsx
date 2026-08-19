@@ -406,13 +406,8 @@ export function MockInterviewPage() {
     <section className="mock-interview-page mock-interview-page--setup">
       <div className="mock-interview-setup-grid">
         <article className="surface mock-interview-panel mock-interview-panel--form">
-          <div className="mock-interview-panel-head">
-            <div>
-              <p className="mock-interview-kicker">Mock Interview Workspace</p>
-              <h1>开始一场更像真实现场的文字面试</h1>
-              <p>先整理岗位、JD 和简历信息，再进入逐题问答。当前版本聚焦文字面试，不包含旁听或视频链路。</p>
-            </div>
-            <span className="mock-interview-status-chip">{currentScope?.eta}</span>
+          <div className="mock-interview-panel-head mock-interview-panel-head--setup">
+            <p className="mock-interview-kicker">Mock Interview Workspace</p>
           </div>
 
           <div className="mock-interview-form-grid">
@@ -434,6 +429,55 @@ export function MockInterviewPage() {
                 placeholder="例如：字节跳动 / 月之暗面"
               />
             </label>
+
+            <div className="mock-interview-option-row mock-interview-option-row--inline mock-interview-field--full">
+              <div className="mock-interview-toggle-group" role="radiogroup" aria-label="面试语言">
+                <strong>面试语言</strong>
+                <div>
+                  {LANGUAGE_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={`mock-interview-toggle${session.setup.language === option.value ? " is-active" : ""}`}
+                      onClick={() => updateSetup("language", option.value)}
+                    >
+                      <span>{option.label}</span>
+                      <small>{option.description}</small>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mock-interview-toggle-group" role="radiogroup" aria-label="面试范围">
+                <strong>训练范围</strong>
+                <div className="mock-interview-scope-grid">
+                  {SCOPE_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={`mock-interview-toggle mock-interview-toggle--scope${session.setup.scope === option.value ? " is-active" : ""}`}
+                      onClick={() => updateSetup("scope", option.value)}
+                    >
+                      <span>{option.label}</span>
+                      <small>{option.description}</small>
+                      <b>{option.eta}</b>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {session.setup.scope === "focused" ? (
+              <label className="mock-interview-field mock-interview-field--full">
+                <span>专项训练方向</span>
+                <input
+                  value={session.setup.focusTopic}
+                  onChange={(event) => updateSetup("focusTopic", event.target.value)}
+                  placeholder="例如：项目经历深挖 / 英文自我介绍 / 压力面应对"
+                />
+                {formErrors.focusTopic ? <em>{formErrors.focusTopic}</em> : <small>写得越具体，专项追问越集中。</small>}
+              </label>
+            ) : null}
 
             <label className="mock-interview-field mock-interview-field--full">
               <span>岗位 JD</span>
@@ -471,55 +515,6 @@ export function MockInterviewPage() {
               {formErrors.resumeText ? <em>{formErrors.resumeText}</em> : <small>不再手动粘贴简历文本；请直接上传 PDF 文件。</small>}
             </div>
           </div>
-
-          <div className="mock-interview-option-row">
-            <div className="mock-interview-toggle-group" role="radiogroup" aria-label="面试语言">
-              <strong>面试语言</strong>
-              <div>
-                {LANGUAGE_OPTIONS.map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    className={`mock-interview-toggle${session.setup.language === option.value ? " is-active" : ""}`}
-                    onClick={() => updateSetup("language", option.value)}
-                  >
-                    <span>{option.label}</span>
-                    <small>{option.description}</small>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="mock-interview-toggle-group" role="radiogroup" aria-label="面试范围">
-              <strong>训练范围</strong>
-              <div className="mock-interview-scope-grid">
-                {SCOPE_OPTIONS.map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    className={`mock-interview-toggle mock-interview-toggle--scope${session.setup.scope === option.value ? " is-active" : ""}`}
-                    onClick={() => updateSetup("scope", option.value)}
-                  >
-                    <span>{option.label}</span>
-                    <small>{option.description}</small>
-                    <b>{option.eta}</b>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {session.setup.scope === "focused" ? (
-            <label className="mock-interview-field mock-interview-field--full">
-              <span>专项训练方向</span>
-              <input
-                value={session.setup.focusTopic}
-                onChange={(event) => updateSetup("focusTopic", event.target.value)}
-                placeholder="例如：项目经历深挖 / 英文自我介绍 / 压力面应对"
-              />
-              {formErrors.focusTopic ? <em>{formErrors.focusTopic}</em> : <small>写得越具体，专项追问越集中。</small>}
-            </label>
-          ) : null}
         </article>
 
         <aside className="surface mock-interview-panel mock-interview-panel--brief">
@@ -527,9 +522,8 @@ export function MockInterviewPage() {
             <div>
               <p className="mock-interview-kicker">本次训练说明</p>
               <h2>{scopeLabel(session.setup.scope)}</h2>
-              <p>AI 会根据你的回答自然追问，不在途中打断给反馈。结束后统一输出结构化复盘报告。</p>
             </div>
-            <span className="mock-interview-brief-badge">文字版 · 报告可导出</span>
+            <span className="mock-interview-status-chip">{currentScope?.eta}</span>
           </div>
 
           <div className="mock-interview-track">
