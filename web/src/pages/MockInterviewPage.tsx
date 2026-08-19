@@ -472,7 +472,7 @@ export function MockInterviewPage() {
             </label>
 
             <div className="mock-interview-field mock-interview-field--full">
-              <span>上传简历 PDF</span>
+              <span className="sr-only">上传简历 PDF</span>
               <div className={`mock-interview-upload${resumeFile ? " has-file" : ""}${resumeUploadBusy ? " is-busy" : ""}`}>
                 <div className="mock-interview-upload-copy">
                   <strong>{resumeFile ? "简历文件已就绪" : "通过按钮上传 PDF 简历"}</strong>
