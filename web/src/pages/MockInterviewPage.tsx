@@ -449,18 +449,6 @@ export function MockInterviewPage() {
               </div>
             </div>
 
-            {session.setup.scope === "focused" ? (
-              <label className="mock-interview-field mock-interview-field--full">
-                <span>专项训练方向</span>
-                <input
-                  value={session.setup.focusTopic}
-                  onChange={(event) => updateSetup("focusTopic", event.target.value)}
-                  placeholder="例如：项目经历深挖 / 英文自我介绍 / 压力面应对"
-                />
-                {formErrors.focusTopic ? <em>{formErrors.focusTopic}</em> : <small>写得越具体，专项追问越集中。</small>}
-              </label>
-            ) : null}
-
             <label className="mock-interview-field mock-interview-field--full">
               <span>岗位 JD</span>
               <textarea
@@ -494,6 +482,38 @@ export function MockInterviewPage() {
               </div>
               {formErrors.resumeText ? <em>{formErrors.resumeText}</em> : null}
             </div>
+
+            <div className="mock-interview-field mock-interview-field--full mock-interview-scope-block">
+              <div className="mock-interview-toggle-group" role="radiogroup" aria-label="面试范围">
+                <strong>训练范围</strong>
+                <div className="mock-interview-scope-grid mock-interview-scope-grid--compact">
+                  {SCOPE_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={`mock-interview-toggle mock-interview-toggle--scope${session.setup.scope === option.value ? " is-active" : ""}`}
+                      onClick={() => updateSetup("scope", option.value)}
+                    >
+                      <span>{option.label}</span>
+                      <small>{option.description}</small>
+                      <b>{option.eta}</b>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {session.setup.scope === "focused" ? (
+              <label className="mock-interview-field mock-interview-field--full">
+                <span>专项训练方向</span>
+                <input
+                  value={session.setup.focusTopic}
+                  onChange={(event) => updateSetup("focusTopic", event.target.value)}
+                  placeholder="例如：项目经历深挖 / 英文自我介绍 / 压力面应对"
+                />
+                {formErrors.focusTopic ? <em>{formErrors.focusTopic}</em> : <small>写得越具体，专项追问越集中。</small>}
+              </label>
+            ) : null}
           </div>
         </article>
 
@@ -504,24 +524,6 @@ export function MockInterviewPage() {
               <h2>{scopeLabel(session.setup.scope)}</h2>
             </div>
             <span className="mock-interview-status-chip">{currentScope?.eta}</span>
-          </div>
-
-          <div className="mock-interview-side-section mock-interview-side-section--scope" role="radiogroup" aria-label="面试范围">
-            <h3>训练范围</h3>
-            <div className="mock-interview-scope-grid">
-              {SCOPE_OPTIONS.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  className={`mock-interview-toggle mock-interview-toggle--scope${session.setup.scope === option.value ? " is-active" : ""}`}
-                  onClick={() => updateSetup("scope", option.value)}
-                >
-                  <span>{option.label}</span>
-                  <small>{option.description}</small>
-                  <b>{option.eta}</b>
-                </button>
-              ))}
-            </div>
           </div>
 
           <div className="mock-interview-track">

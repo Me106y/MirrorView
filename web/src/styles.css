@@ -5885,9 +5885,18 @@ a.job-hunt-title:hover {
 }
 
 .mock-interview-field textarea {
-  min-height: 100px;
-  resize: vertical;
+  height: 72px;
+  min-height: 72px;
+  max-height: 72px;
+  resize: none;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
   line-height: 1.65;
+}
+
+.mock-interview-scope-block {
+  margin-top: 2px;
 }
 
 .mock-interview-upload {
@@ -5928,6 +5937,10 @@ a.job-hunt-title:hover {
   font-size: 0.82rem;
   line-height: 1.45;
   overflow-wrap: anywhere;
+}
+
+.mock-interview-upload-copy span:empty {
+  display: none;
 }
 
 .mock-interview-upload-actions {
@@ -5983,12 +5996,34 @@ a.job-hunt-title:hover {
   gap: 6px;
 }
 
-.mock-interview-toggle-group > div {
+.mock-interview-toggle-group > div:not(.mock-interview-scope-grid) {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .mock-interview-scope-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.mock-interview-scope-grid--compact {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.mock-interview-scope-grid--compact .mock-interview-toggle {
+  min-width: 0;
+  min-height: 68px;
+  padding: 7px 6px;
+  border-radius: 11px;
+}
+
+.mock-interview-scope-grid--compact .mock-interview-toggle span {
+  font-size: 0.82rem;
+}
+
+.mock-interview-scope-grid--compact .mock-interview-toggle small,
+.mock-interview-scope-grid--compact .mock-interview-toggle b {
+  font-size: 0.68rem;
+  line-height: 1.25;
 }
 
 .mock-interview-toggle {
@@ -6039,7 +6074,7 @@ a.job-hunt-title:hover {
 .mock-interview-track {
   display: grid;
   gap: 6px;
-  margin-top: 10px;
+  margin-top: 12px;
 }
 
 .mock-interview-track--stacked {
@@ -6345,7 +6380,9 @@ a.job-hunt-title:hover {
   }
 
   .mock-interview-field textarea {
-    min-height: 88px;
+    height: 64px;
+    min-height: 64px;
+    max-height: 64px;
   }
 
   .mock-interview-upload {
@@ -6730,6 +6767,10 @@ a.job-hunt-title:hover {
   }
 
   .mock-interview-scope-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mock-interview-scope-grid--compact {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
